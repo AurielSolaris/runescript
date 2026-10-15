@@ -12,9 +12,8 @@ language tag, `lang="he"`, which browsers and screen readers expect.)
 | বাংলা (Bengali) | [`bn/`](bn/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
 | עברית (Hebrew) | [`heb/`](heb/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
 
-**Status:** the README, the guide index, and chapters 1–6 are translated in
-both languages; chapters 7–14 are in progress and link readers to the English
-pages until then.
+**Status:** the README, the guide index, and all 14 chapters are translated
+in both languages.
 
 **Help is appreciated.** If you speak one of these languages, corrections
 and better wording are very welcome; so are new languages. Open an issue or

@@ -119,7 +119,7 @@ Hello, RuneScript!
 |---|---|
 | `runescript run <file>` | בודקת את התוכנית ואז מריצה אותה |
 | `runescript check <file>` | מדווחת על שגיאות הידור בלי להריץ |
-| `runescript build [-o out.js] <file>` | מהדרת למודול JavaScript ([פרק 11](../../../../docs/guide/11-javascript.md)) |
+| `runescript build [-o out.js] <file>` | מהדרת למודול JavaScript ([פרק 11](11-javascript.md)) |
 | `runescript version` | מדפיסה את הגרסה |
 
 ## קוד היציאה

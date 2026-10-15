@@ -22,7 +22,7 @@ public void main() {
 <div dir="rtl">
 
 שמות חבילות הם מזהים המופרדים בנקודות. תוכנית יכולה להתפרש על פני כמה קבצים
-(ראו [חבילות וקבצים](../../../../docs/guide/12-packages-and-files.md)).
+(ראו [חבילות וקבצים](12-packages-and-files.md)).
 
 ## שימוש בחבילות: `use`
 
@@ -44,11 +44,11 @@ public void main() {
 <div dir="rtl">
 
 את הפונקציות קוראים אחר כך דרך המזהה של החבילה (החלק האחרון בשמה). ראו
-[הספרייה הסטנדרטית: std:string](../../../../docs/guide/10-std-string.md).
+[הספרייה הסטנדרטית: std:string](10-std-string.md).
 
 `use` טוען גם חבילות RuneScript אחרות (`use "games.engine";`) וקבצים
 (`use "./lib/helpers.rsc";`), כך שתוכנית יכולה להתפרש על פני כמה קבצים. ראו
-[חבילות וקבצים](../../../../docs/guide/12-packages-and-files.md). חבילות Go (`use "go:<package>";`)
+[חבילות וקבצים](12-packages-and-files.md). חבילות Go (`use "go:<package>";`)
 מתוכננות, וכיום הן מניבות `ASX-USE-003`.
 
 ## הערות

@@ -64,20 +64,20 @@ protected int main() {
 - ספרייה סטנדרטית: `use "std:string";` נותן את הפונקציות של `strings` מ-Go, למשל `string.toUpper(s)`
 - תוכניות מרובות קבצים: `use "geom";` טוען את החבילה שב-`geom/*.rsm`, ו-
   `use "./lib/x.rsc";` טוען קובץ אחד; `public`/`protected`/`private` נאכפים
-  ([מדריך](../../docs/guide/12-packages-and-files.md))
+  ([מדריך](docs/guide/12-packages-and-files.md))
 - `float` (כברירת מחדל float32, מתרחב בלי לאבד ערך), `float32`, `float64`;
   IEEE 754 עם `NaN` ו-`Infinity`, כמו ב-ActionScript
 - המרות בדוקות בסגנון C: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
-  ([מדריך](../../docs/guide/13-floats-and-conversions.md))
+  ([מדריך](docs/guide/13-floats-and-conversions.md))
 - שגיאות בסגנון ActionScript: `throw new RangeError("…")`,
   `try`/`catch (Error e)`/`catch (e)`/`finally`; אפשר לתפוס גם שגיאות זמן ריצה
-  ([מדריך](../../docs/guide/14-errors.md))
+  ([מדריך](docs/guide/14-errors.md))
 - בדיקת טיפוסים בזמן הידור עם הודעות שמצביעות על המיקום המדויק, כולל דחיית השמה
   של ערך עם סימן למשתנה בלי סימן
 - גלישה של מספרים שלמים וחלוקה באפס מדווחות כשגיאות זמן ריצה, ולעולם אינן
   "מתגלגלות" בשקט
 - הידור ל-JavaScript (`runescript build`): מודול ES2022 שרץ בדפדפנים וב-Node.js
-  ומתנהג בדיוק כמו המפרש ([מדריך](../../docs/guide/11-javascript.md))
+  ומתנהג בדיוק כמו המפרש ([מדריך](docs/guide/11-javascript.md))
 
 **עדיין לא מומש:** מחלקות, מבנים (structs), מערכים, `char`, שרשור מחרוזות,
 חבילות `go:`, `std:math`, `std:symrs`, וחבילת הגרפיקה המקורית המתוכננת. ראו את
@@ -156,10 +156,10 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 
 - [מדריך](docs/guide/README.md): סיור בכל התכונות, עם דוגמאות (כולן מתקמפלות בבדיקות)
 - [מפרט השפה](../../docs/LANGUAGE_SPEC.md) (באנגלית): הדקדוק והכללים, ומצב המימוש של כל כלל
-- [הספרייה הסטנדרטית: std:string](../../docs/guide/10-std-string.md)
-- [הידור ל-JavaScript](../../docs/guide/11-javascript.md)
-- [מדריך הודעות האבחון](../../docs/guide/08-diagnostics.md)
-- [למי שמגיע מ-ActionScript 3](../../docs/guide/09-coming-from-actionscript.md)
+- [הספרייה הסטנדרטית: std:string](docs/guide/10-std-string.md)
+- [הידור ל-JavaScript](docs/guide/11-javascript.md)
+- [מדריך הודעות האבחון](docs/guide/08-diagnostics.md)
+- [למי שמגיע מ-ActionScript 3](docs/guide/09-coming-from-actionscript.md)
 - [מפת הדרכים](../../docs/ROADMAP.md) (באנגלית)
 
 ## מבנה המאגר

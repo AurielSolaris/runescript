@@ -55,21 +55,21 @@ protected int main() {
 - স্ট্যান্ডার্ড লাইব্রেরি: `use "std:string";` দিয়ে Go-র `strings` ফাংশনগুলো পাওয়া যায়, যেমন `string.toUpper(s)`
 - একাধিক ফাইলের প্রোগ্রাম: `use "geom";` লোড করে `geom/*.rsm`-এর প্যাকেজ, আর
   `use "./lib/x.rsc";` লোড করে একটি ফাইল; `public`/`protected`/`private` প্রয়োগ
-  করা হয় ([গাইড](../../docs/guide/12-packages-and-files.md))
+  করা হয় ([গাইড](docs/guide/12-packages-and-files.md))
 - `float` (ডিফল্ট float32, মান না হারিয়ে প্রশস্ত হয়), `float32`, `float64`;
   ActionScript-এর মতোই `NaN` ও `Infinity` সহ IEEE 754
 - যাচাইকৃত C-ধাঁচের রূপান্তর: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
-  ([গাইড](../../docs/guide/13-floats-and-conversions.md))
+  ([গাইড](docs/guide/13-floats-and-conversions.md))
 - ActionScript-ধাঁচের এরর: `throw new RangeError("…")`,
   `try`/`catch (Error e)`/`catch (e)`/`finally`; রানটাইম এররও ধরা (catch) যায়
-  ([গাইড](../../docs/guide/14-errors.md))
+  ([গাইড](docs/guide/14-errors.md))
 - অবস্থান-সহ ডায়াগনস্টিক দিয়ে কম্পাইল-টাইম টাইপ-চেকিং, যার মধ্যে সাইনড → আনসাইনড
   অ্যাসাইনমেন্ট প্রত্যাখ্যানও আছে
 - পূর্ণসংখ্যার ওভারফ্লো ও শূন্য দিয়ে ভাগ রানটাইম এরর হিসেবে জানানো হয়, কখনো
   নিঃশব্দে ঘুরে (wrap) যায় না
 - JavaScript-এ কম্পাইল (`runescript build`): একটি ES2022 মডিউল, যা ব্রাউজার ও
   Node.js-এ চলে এবং ইন্টারপ্রেটারের মতো হুবহু আচরণ করে
-  ([গাইড](../../docs/guide/11-javascript.md))
+  ([গাইড](docs/guide/11-javascript.md))
 
 **এখনো তৈরি হয়নি:** ক্লাস, স্ট্রাক্ট, অ্যারে, `char`, স্ট্রিং জোড়া লাগানো
 (concatenation), `go:` প্যাকেজ, `std:math`, `std:symrs`, এবং পরিকল্পিত নেটিভ
@@ -137,10 +137,10 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 
 - [গাইড](docs/guide/README.md): উদাহরণসহ প্রতিটি বৈশিষ্ট্যের পরিচয় (সবগুলো টেস্টে কম্পাইল হয়)
 - [ভাষার স্পেসিফিকেশন](../../docs/LANGUAGE_SPEC.md) (ইংরেজিতে): ব্যাকরণ ও নিয়ম, প্রতিটি নিয়ম কতটা বাস্তবায়িত তা সহ
-- [স্ট্যান্ডার্ড লাইব্রেরি: std:string](../../docs/guide/10-std-string.md)
-- [JavaScript-এ কম্পাইল](../../docs/guide/11-javascript.md)
-- [ডায়াগনস্টিক তালিকা](../../docs/guide/08-diagnostics.md)
-- [ActionScript 3 থেকে আসছেন?](../../docs/guide/09-coming-from-actionscript.md)
+- [স্ট্যান্ডার্ড লাইব্রেরি: std:string](docs/guide/10-std-string.md)
+- [JavaScript-এ কম্পাইল](docs/guide/11-javascript.md)
+- [ডায়াগনস্টিক তালিকা](docs/guide/08-diagnostics.md)
+- [ActionScript 3 থেকে আসছেন?](docs/guide/09-coming-from-actionscript.md)
 - [রোডম্যাপ](../../docs/ROADMAP.md) (ইংরেজিতে)
 
 ## রিপোজিটরির গঠন

@@ -14,14 +14,14 @@ RuneScript-এর যেসব বৈশিষ্ট্য **আজ** আছে,
 4. [অপারেটর](04-operators.md): গাণিতিক, তুলনা, লজিক
 5. [কন্ট্রোল ফ্লো](05-control-flow.md): `if`, `while`, `for`, `break`, `continue`
 6. [ফাংশন](06-functions.md): প্যারামিটার, রিটার্ন মান, রিকার্শন
-7. [`trace` দিয়ে আউটপুট](../../../../docs/guide/07-trace.md)
-8. [ডায়াগনস্টিক তালিকা](../../../../docs/guide/08-diagnostics.md): প্রতিটি এরর কোড
-9. [ActionScript 3 থেকে আসছেন?](../../../../docs/guide/09-coming-from-actionscript.md)
-10. [স্ট্যান্ডার্ড লাইব্রেরি: `std:string`](../../../../docs/guide/10-std-string.md): RuneScript-এ Go-র `strings`
-11. [JavaScript-এ কম্পাইল](../../../../docs/guide/11-javascript.md): `runescript build`, এবং কঠোর টাইপিং কীভাবে বজায় থাকে
-12. [প্যাকেজ ও ফাইল](../../../../docs/guide/12-packages-and-files.md): `use`, একাধিক ফাইলের প্রোগ্রাম, দৃশ্যমানতা
-13. [ফ্লোট ও রূপান্তর](../../../../docs/guide/13-floats-and-conversions.md): `float`, `float32`, `float64`, `(int) x`
-14. [এরর](../../../../docs/guide/14-errors.md): `throw`, `try`, `catch`, `finally`, এবং রানটাইম এরর ধরা
+7. [`trace` দিয়ে আউটপুট](07-trace.md)
+8. [ডায়াগনস্টিক তালিকা](08-diagnostics.md): প্রতিটি এরর কোড
+9. [ActionScript 3 থেকে আসছেন?](09-coming-from-actionscript.md)
+10. [স্ট্যান্ডার্ড লাইব্রেরি: `std:string`](10-std-string.md): RuneScript-এ Go-র `strings`
+11. [JavaScript-এ কম্পাইল](11-javascript.md): `runescript build`, এবং কঠোর টাইপিং কীভাবে বজায় থাকে
+12. [প্যাকেজ ও ফাইল](12-packages-and-files.md): `use`, একাধিক ফাইলের প্রোগ্রাম, দৃশ্যমানতা
+13. [ফ্লোট ও রূপান্তর](13-floats-and-conversions.md): `float`, `float32`, `float64`, `(int) x`
+14. [এরর](14-errors.md): `throw`, `try`, `catch`, `finally`, এবং রানটাইম এরর ধরা
 
 সূক্ষ্ম নিয়মের জন্য দেখুন [ভাষার স্পেসিফিকেশন](../../../../docs/LANGUAGE_SPEC.md) (ইংরেজিতে)।
 সামনে কী আসছে তা জানতে দেখুন [রোডম্যাপ](../../../../docs/ROADMAP.md) (ইংরেজিতে)।

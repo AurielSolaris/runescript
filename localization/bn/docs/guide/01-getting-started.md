@@ -93,7 +93,7 @@ Hello, RuneScript!
 |---|---|
 | `runescript run <file>` | প্রোগ্রামটি যাচাই করে, তারপর চালায় |
 | `runescript check <file>` | না চালিয়ে কম্পাইল-টাইম এরর জানায় |
-| `runescript build [-o out.js] <file>` | একটি JavaScript মডিউলে কম্পাইল করে ([অধ্যায় ১১](../../../../docs/guide/11-javascript.md)) |
+| `runescript build [-o out.js] <file>` | একটি JavaScript মডিউলে কম্পাইল করে ([অধ্যায় ১১](11-javascript.md)) |
 | `runescript version` | সংস্করণ দেখায় |
 
 ## এক্সিট স্ট্যাটাস
