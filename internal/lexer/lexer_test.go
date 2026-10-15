@@ -134,3 +134,15 @@ func TestZeroIsAValidLiteral(t *testing.T) {
 		t.Errorf("got %v %v", toks, diags)
 	}
 }
+
+// A file that is not UTF-8 is rejected at its first invalid byte, with the
+// column counted in code points.
+func TestInvalidUTF8(t *testing.T) {
+	toks, diags := Lex([]byte("package p;\n// é then \xe9 (Windows-1252)\n"))
+	if len(diags) != 1 || diags[0].Code != diagnostics.LexInvalidUTF8 || diags[0].Span.Start.String() != "2:11" {
+		t.Fatalf("diagnostics: %v", diags)
+	}
+	if len(toks) != 1 || toks[0].Kind != EOF {
+		t.Errorf("tokens: %v", toks)
+	}
+}

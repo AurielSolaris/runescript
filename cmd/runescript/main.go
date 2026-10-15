@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
+	"runtime/debug"
 	"strings"
 
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
@@ -42,7 +44,7 @@ func main() {
 
 func cli(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 1 && args[0] == "version" {
-		fmt.Fprintf(stdout, "runescript %s\n", Version)
+		fmt.Fprintf(stdout, "runescript %s%s\n", Version, buildDetails())
 		return 0
 	}
 	if len(args) >= 1 && args[0] == "build" {
@@ -52,7 +54,7 @@ func cli(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, usage)
 		return exitUsage
 	}
-	in, err := input(args[1])
+	in, err := input(args[1], stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage
@@ -88,9 +90,38 @@ func cli(args []string, stdout, stderr io.Writer) int {
 
 // input is the program whose entry file is path. Uses are resolved
 // against the working directory. Any file extension is accepted.
-func input(path string) (driver.Input, error) {
+func input(path string, notes io.Writer) (driver.Input, error) {
 	dir, err := os.Getwd()
-	return driver.Input{Path: path, Dir: dir}, err
+	return driver.Input{Path: path, Dir: dir, Notes: notes}, err
+}
+
+// buildDetails describes the build from what the Go toolchain recorded:
+// " (commit 9609a35, go1.25.11 windows/amd64)" for a build from a checkout,
+// or the module version for `go install ...@version`.
+func buildDetails() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	settings := map[string]string{}
+	for _, s := range info.Settings {
+		settings[s.Key] = s.Value
+	}
+	var parts []string
+	switch rev := settings["vcs.revision"]; {
+	case rev != "":
+		if len(rev) > 7 {
+			rev = rev[:7]
+		}
+		if settings["vcs.modified"] == "true" {
+			rev += ", modified"
+		}
+		parts = append(parts, "commit "+rev)
+	case info.Main.Version != "" && info.Main.Version != "(devel)":
+		parts = append(parts, info.Main.Version)
+	}
+	parts = append(parts, goruntime.Version()+" "+goruntime.GOOS+"/"+goruntime.GOARCH)
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 // build implements `runescript build`.
@@ -115,7 +146,7 @@ func build(args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "runescript: the output file %s would overwrite the source; choose another with -o\n", *out)
 		return exitUsage
 	}
-	in, err := input(path)
+	in, err := input(path, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage

@@ -26,6 +26,7 @@ import (
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/lexer"
 	"github.com/AurielSolaris/runescript/internal/parser"
+	"github.com/AurielSolaris/runescript/internal/srcenc"
 )
 
 // ModuleExt is the extension of the files that make up a package
@@ -171,6 +172,7 @@ func (l *loader) finish() (*Program, []*diagnostics.Diagnostic, error) {
 
 // load parses src and adds it to the program.
 func (l *loader) load(src *diagnostics.Source, info os.FileInfo) *File {
+	src.Text, src.ConvertedFrom = srcenc.Decode(src.Text)
 	src.Index = len(l.prog.Files)
 	f := &File{Source: src}
 	l.prog.Files = append(l.prog.Files, f)

@@ -3,8 +3,10 @@
 package driver
 
 import (
+	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/AurielSolaris/runescript/internal/checker"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
@@ -21,6 +23,9 @@ type Input struct {
 	Path   string
 	Source *diagnostics.Source
 	Dir    string
+	// Notes, if set, receives a line for each file that was converted to
+	// UTF-8 from another encoding.
+	Notes io.Writer
 }
 
 // Memory is an in-memory entry file named name, with uses resolved
@@ -43,6 +48,12 @@ func CheckInput(in Input) (*checker.Info, []*diagnostics.Diagnostic, error) {
 		var err error
 		if prog, diags, err = loader.Load(in.Path, in.Dir); err != nil {
 			return nil, nil, err
+		}
+	}
+	for _, f := range prog.Files {
+		// A UTF-8 byte-order mark is dropped silently: it changes nothing.
+		if in.Notes != nil && f.Source.ConvertedFrom != "" && !strings.HasPrefix(f.Source.ConvertedFrom, "UTF-8") {
+			fmt.Fprintf(in.Notes, "runescript: note: %s is %s; it was read as UTF-8\n", f.Source.Name, f.Source.ConvertedFrom)
 		}
 	}
 	for _, f := range prog.Files {

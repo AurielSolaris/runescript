@@ -91,9 +91,6 @@ random non-ASCII text.
 - **Very long strings.** JavaScript engines cap string length (around
   2<sup>29</sup>–2<sup>30</sup> UTF-16 units). Exceeding it inside
   `string.repeat` or `string.replace` is reported as `ASX-RUN-004`.
-- **String literals must be valid UTF-8.** A literal containing invalid
-  UTF-8 bytes can't become a JavaScript string, so it's rejected with
-  `ASX-TARGET-001`.
 - **No JavaScript interop yet.** A program can't call JavaScript functions
   or the DOM, and JavaScript can call only `run`. Calling into JavaScript
   is planned as `use "js:<module>";` with typed declarations whose values

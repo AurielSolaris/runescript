@@ -108,6 +108,17 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [x] Interpreter and JavaScript target behave identically (differential
   tests), and error unwinding stays linear in the call depth
 - [ ] `std:math`
+
+### Installation and source text ✅
+- [x] `install.sh` (Linux, macOS) and `install.ps1` (Windows): check Go
+  (found, ≥ 1.25, working), build the CLI, install it per user, add it to
+  PATH and set `RUNESCRIPT_HOME`, verify with a test program; uninstall;
+  tested in scratch locations
+- [x] `runescript version` reports the commit or module version and the Go
+  toolchain
+- [x] Source encodings: UTF-16/UTF-32 (and a UTF-8 byte-order mark) are
+  converted; other non-UTF-8 files are rejected (`ASX-LEX-007`) on every
+  target
 - [ ] `runescript` flag to resolve uses from a directory other than the
   working directory, if wanted
 

@@ -133,6 +133,36 @@ public int main() {
 	}
 }
 
+// A UTF-16 source file is converted, with a note; a file in a legacy 8-bit
+// encoding is rejected.
+func TestSourceEncodings(t *testing.T) {
+	dir := t.TempDir()
+	src := "package main;\npublic int main() {\n    trace(\"héllo €\");\n    return 0;\n}\n"
+	utf16le := []byte{0xFF, 0xFE}
+	for _, r := range src { // the program is in the Basic Multilingual Plane
+		utf16le = append(utf16le, byte(r), byte(r>>8))
+	}
+	wide := filepath.Join(dir, "wide.rsc")
+	latin := filepath.Join(dir, "latin.rsc")
+	if err := os.WriteFile(wide, utf16le, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(latin, []byte("package main;\npublic int main() {\n    trace(\"h\xe9llo\");\n    return 0;\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr strings.Builder
+	if code := cli([]string{"run", wide}, &stdout, &stderr); code != 0 || stdout.String() != "héllo €\n" ||
+		!strings.Contains(stderr.String(), "is UTF-16LE; it was read as UTF-8") {
+		t.Errorf("UTF-16: exit %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := cli([]string{"run", latin}, &stdout, &stderr); code != exitCompileError ||
+		!strings.Contains(stderr.String(), "latin.rsc:3:13: error ASX-LEX-007: the file is not valid UTF-8: byte 0xE9") {
+		t.Errorf("Windows-1252: exit %d, stderr %q", code, stderr.String())
+	}
+}
+
 // build refuses to overwrite its own source.
 func TestBuildDoesNotOverwriteSource(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "app.js")

@@ -450,9 +450,9 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		return strconv.FormatInt(e.Value, 10), precCall
 	case *ir.StringConst:
 		if !utf8.ValidString(e.Value) {
-			g.diags = append(g.diags, diagnostics.New(diagnostics.TargetUnsupported, e.Span,
-				"string literal is not valid UTF-8, which the JavaScript target cannot represent").
-				WithHelp("save the source file as UTF-8"))
+			// The lexer accepts only UTF-8 source, and no operation makes
+			// a string invalid.
+			panic(fmt.Sprintf("jsgen: internal compiler error: string at %s is not valid UTF-8", e.Span.Start))
 		}
 		return quote(e.Value), precCall
 	case *ir.BoolConst:

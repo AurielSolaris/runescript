@@ -69,13 +69,6 @@ public int main() { int var = delete(1); return var; }
 	}
 }
 
-func TestInvalidUTF8StringIsRejected(t *testing.T) {
-	_, diags := generate(t, "package p;\npublic void main() { trace(\"bad \xff byte\"); }\n")
-	if len(diags) != 1 || diags[0].Code != diagnostics.TargetUnsupported || diags[0].Span.Start.String() != "2:28" {
-		t.Fatalf("diagnostics: %v", diags)
-	}
-}
-
 func TestQuote(t *testing.T) {
 	cases := map[string]string{
 		"plain":         `"plain"`,

@@ -27,6 +27,7 @@ const (
 	LexUnterminatedBlock  Code = "LEX-004"
 	LexInvalidNumber      Code = "LEX-005"
 	LexUnsupportedLiteral Code = "LEX-006"
+	LexInvalidUTF8        Code = "LEX-007"
 
 	ParseUnexpected     Code = "PARSE-001"
 	ParseNotImplemented Code = "PARSE-002"
@@ -91,9 +92,6 @@ const (
 	RunUncaught     Code = "RUN-005" // a thrown error that nothing caught
 	RunConversion   Code = "RUN-006" // a (Type) x conversion that failed
 
-	// TargetUnsupported reports a valid program that a code-generation
-	// target cannot represent.
-	TargetUnsupported Code = "TARGET-001"
 )
 
 // Source is one source file of a program.
@@ -104,6 +102,9 @@ type Source struct {
 	// Index is the file's position in the program's load order; it orders
 	// diagnostics from different files.
 	Index int
+	// ConvertedFrom names the encoding the file was converted from to
+	// UTF-8 when it was read (see internal/srcenc), or is "".
+	ConvertedFrom string
 }
 
 // NewSource returns a source with the given display name.

@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/srcenc"
 )
 
 // Kind classifies a token.
@@ -96,8 +97,20 @@ func Lex(src []byte) ([]Token, []*diagnostics.Diagnostic) {
 }
 
 // LexSource tokenizes a source file; every position records the file.
+// Source text must be UTF-8 (other Unicode encodings are converted when
+// files are read, see internal/srcenc); a file that is not is rejected as a
+// whole, at its first invalid byte.
 func LexSource(file *diagnostics.Source) ([]Token, []*diagnostics.Diagnostic) {
 	l := &lexer{file: file, src: file.Text, line: 1, col: 1}
+	if bad := srcenc.FirstInvalid(file.Text); bad >= 0 {
+		for l.off < bad {
+			l.advance()
+		}
+		l.errorf(diagnostics.LexInvalidUTF8, l.pos(), "the file is not valid UTF-8: byte 0x%02X cannot appear here", file.Text[bad]).
+			WithHelp("save the file as UTF-8; UTF-16 and UTF-32 files are also read")
+		l.emit(EOF, "", l.pos())
+		return l.toks, l.diags
+	}
 	l.run()
 	return l.toks, l.diags
 }

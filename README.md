@@ -69,9 +69,25 @@ protected int main() {
 concatenation, `go:` packages, `std:math`, `std:symrs`, and the planned native
 graphics package. See the [roadmap](docs/ROADMAP.md).
 
-## Build and run
+## Install
 
-Requires Go 1.25+.
+Requires Go 1.25+ ([go.dev/dl](https://go.dev/dl/)); the installer checks it,
+builds the `runescript` CLI, and adds it to your PATH.
+
+```sh
+# Linux, macOS
+curl -fsSL https://raw.githubusercontent.com/AurielSolaris/runescript/main/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/AurielSolaris/runescript/main/install.ps1 | iex
+```
+
+Options, uninstalling, and installing from a clone are in the
+[getting-started guide](docs/guide/01-getting-started.md).
+
+## Build and run from source
 
 ```sh
 go build -o runescript ./cmd/runescript

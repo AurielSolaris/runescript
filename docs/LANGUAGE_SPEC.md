@@ -21,7 +21,14 @@ from AS3, RuneScript's design wins. §10 summarises the differences.
 
 ## 1. Source text
 
-- **[v0.1]** Source files are UTF-8.
+- **[v0.1]** Source files are UTF-8. **[v0.3, decided: "try to convert,
+  else reject"]** A file in another Unicode encoding that can be recognised
+  with certainty is converted when it is read: UTF-8 with a byte-order mark
+  (dropped), UTF-16 or UTF-32 with a byte-order mark, and UTF-16 without
+  one (NUL bytes beside ASCII characters). The CLI notes each conversion.
+  Any other file that is not valid UTF-8 is rejected with `ASX-LEX-007` at
+  its first invalid byte, on every target. Legacy 8-bit encodings are not
+  guessed. So every RuneScript string is valid UTF-8.
 - **[v0.3, decided]** Programs conventionally use `.rsc`, and the files of a
   package directory use `.rsm` (§4.2). As in Perl, the extension is a
   convention, not a rule: a file named on the command line or in a file
@@ -573,7 +580,7 @@ file.rsc:LINE:COL: error CODE: message
 
 The `ASX` code prefix is **provisional**. Each code is
 `ASX-<STAGE>-<NNN>`, where the stages are `LEX`, `PARSE`, `NAME`, `TYPE`,
-`FLOW`, `USE`, `ENTRY`, `RUN`, and `TARGET` (code generation, §12). The full list is in `docs/guide/08-diagnostics.md`.
+`FLOW`, `USE`, `ENTRY`, and `RUN`. The full list is in `docs/guide/08-diagnostics.md`.
 
 The checker reports every semantic error it finds. The parser stops at the
 first syntax error. A runtime error that nothing catches (§7.6) ends the
@@ -663,8 +670,6 @@ The one exception is listed under host limits below.
 - **[v0.2, decided]** Widening (OQ-NUM-01) is still undecided. The
   JavaScript target traps on overflow exactly like the interpreter. If
   64-bit widening is adopted, the JavaScript target will need `BigInt`.
-- **[v0.2]** A string literal that isn't valid UTF-8 can't be represented
-  and is rejected with `ASX-TARGET-001`.
 - **[v0.2] Host limits.** If the JavaScript host's stack runs out before
   the 10,000-call limit, the program stops with `ASX-RUN-001` at a call
   site inside the recursion. That site may differ from the interpreter's.

@@ -22,6 +22,7 @@ same.
 | `ASX-LEX-004` | A `/*` comment that is never closed |
 | `ASX-LEX-005` | An invalid number: leading zero (`007`), letters attached (`12abc`), too many dots (`1.2.3`), or too large or too small (`1e999`, `1e-999`) |
 | `ASX-LEX-006` | A literal kind that isn't supported yet: chars (`'a'`) |
+| `ASX-LEX-007` | The file isn't valid UTF-8 (e.g. it was saved as Windows-1252). UTF-16 and UTF-32 files are converted instead |
 
 ## Syntax errors
 
@@ -114,14 +115,5 @@ error has already been printed.
 
 On the JavaScript target, `ASX-RUN-001` is also reported when the host's own
 stack runs out before 10,000 calls (see [chapter 11](11-javascript.md)).
-
-## Code-generation errors
-
-These come from `runescript build`, for programs that are valid but can't
-be represented on the chosen target.
-
-| Code | Meaning |
-|---|---|
-| `ASX-TARGET-001` | The target can't represent the program, e.g. a string literal that isn't valid UTF-8 on the JavaScript target |
 
 Next: [Coming from ActionScript 3](09-coming-from-actionscript.md)
