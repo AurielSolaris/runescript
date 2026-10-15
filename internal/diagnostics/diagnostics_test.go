@@ -11,11 +11,11 @@ func TestFormat(t *testing.T) {
 	}, "Cannot assign signed integer '%s' to unsigned integer '%s'.", "sint", "uint").
 		WithHelp("Use an explicit checked conversion, or change the destination type.")
 
-	want := "f.rs:3:11: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsigned integer 'uint'.\n" +
+	want := "f.rsc:3:11: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsigned integer 'uint'.\n" +
 		"     uint u = signedValue;\n" +
 		"              ^^^^^^^^^^^\n" +
 		"  help: Use an explicit checked conversion, or change the destination type.\n"
-	if got := Format(d, "f.rs", src); got != want {
+	if got := Format(d, "f.rsc", src); got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }

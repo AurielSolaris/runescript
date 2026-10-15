@@ -72,6 +72,10 @@ const (
 	RunOverflow     Code = "RUN-002"
 	RunDivideByZero Code = "RUN-003"
 	RunNativeFailed Code = "RUN-004"
+
+	// TargetUnsupported reports a valid program that a code-generation
+	// target cannot represent.
+	TargetUnsupported Code = "TARGET-001"
 )
 
 // Pos is a position in a source file. Line and Col are 1-based; Col counts
@@ -116,7 +120,7 @@ func (d *Diagnostic) WithHelp(help string) *Diagnostic {
 
 // Format renders d with the offending source line and a caret underline:
 //
-//	file.rs:3:10: error ASX-TYPE-004: message
+//	file.rsc:3:10: error ASX-TYPE-004: message
 //	    uint u = s;
 //	             ^
 //	  help: ...

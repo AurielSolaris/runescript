@@ -1,7 +1,7 @@
 // This program is intentionally rejected: nested functions and lambdas do
 // not capture the variables of the function around them.
 //
-//   runescript check examples/boundary_error.rs
+//   runescript check examples/boundary_error.rsc
 package examples.errors;
 
 public int main() {

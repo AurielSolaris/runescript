@@ -111,7 +111,7 @@ use "std:string";
 public void main() {
     trace(string.trim("!!hello!!", "!"));                 // hello
     trace(string.trimLeft("xxhixx", "x"));                // hixx
-    trace(string.trimSuffix("game.rs", ".rs"));           // game
+    trace(string.trimSuffix("game.rsc", ".rsc"));           // game
 }
 ```
 
@@ -137,4 +137,4 @@ have yet:
 There's also no length function yet, because Go uses its built-in `len`.
 A length operation is planned alongside arrays.
 
-Next: back to the [guide index](README.md)
+Next: [Compiling to JavaScript](11-javascript.md)

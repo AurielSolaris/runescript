@@ -22,8 +22,8 @@ from AS3, RuneScript's design wins. §10 summarises the differences.
 ## 1. Source text
 
 - **[v0.1]** Source files are UTF-8.
-- **[v0.1, provisional]** The extension is undecided. `.rs` is the candidate,
-  but it is also Rust's extension. The CLI accepts any file name.
+- **[v0.2]** Source files use the `.rsc` extension. The CLI accepts any file
+  name and does not check the extension.
 - **[v0.1]** Positions in diagnostics are `line:column`, both 1-based.
   Columns count Unicode code points.
 
@@ -389,7 +389,7 @@ error (`ASX-RUN-004`).
 Format:
 
 ```text
-file.rs:LINE:COL: error CODE: message
+file.rsc:LINE:COL: error CODE: message
     <source line>
     <caret underline>
   help: <suggestion>
@@ -397,7 +397,7 @@ file.rs:LINE:COL: error CODE: message
 
 The `ASX` code prefix is **provisional**. Each code is
 `ASX-<STAGE>-<NNN>`, where the stages are `LEX`, `PARSE`, `NAME`, `TYPE`,
-`FLOW`, `USE`, `ENTRY`, and `RUN`. The full list is in `docs/guide/08-diagnostics.md`.
+`FLOW`, `USE`, `ENTRY`, `RUN`, and `TARGET` (code generation, §12). The full list is in `docs/guide/08-diagnostics.md`.
 
 The checker reports every semantic error it finds. The parser stops at the
 first syntax error. A runtime error ends the program with exit status 1 and
@@ -451,3 +451,43 @@ metadata, E4X XML, `Vector.<T>` (vs. `Array<T>` generics), type inference,
 2. **Open-questions file.** CLAUDE.md §6 and §9 list
    `docs/OPEN_QUESTIONS.md` as a repository file. The owner has asked that
    it stay local and uncommitted.
+
+## 12. JavaScript target **[v0.2]**
+
+`runescript build [--target js] [-o out.js] file.rsc` compiles a program to
+a single ES2022 module (owner decision). The module exports
+`run(options)`, which calls `main` and returns the exit code, and
+`RuneScriptError`. Run directly with Node.js (`node out.js`), the module
+calls `run` itself.
+
+**Semantics are the language's, not JavaScript's.** A program that checks
+behaves identically on the interpreter and on the JavaScript target: same
+output, same exit code, same runtime errors (code, message, position).
+The one exception is listed under host limits below.
+
+- **[v0.2]** Static safety: code is generated from a typed intermediate
+  representation (`internal/ir`) in which every expression has a concrete
+  type. The IR is re-verified independently of the checker before code is
+  generated. Types are then erased: no value of the wrong type can reach a
+  variable, parameter, or return, so no per-value tag checks are needed.
+- **[v0.2]** Dynamic safety: wherever JavaScript would differ, the
+  generated code calls the runtime instead of using a JavaScript operator.
+  Integer `+ - * / %` is range-checked (§5.4, OQ-NUM-01), `/` truncates,
+  division by zero traps, results are normalized (no `-0`), and call depth
+  is counted (§9).
+- **[v0.2, decided]** `std:string` keeps UTF-8 byte offsets (§5.1) on the
+  JavaScript target. Case mapping, case folding, and white space use
+  tables generated from Go's `unicode` package.
+- **[v0.2, decided]** Widening (OQ-NUM-01) is still undecided. The
+  JavaScript target traps on overflow exactly like the interpreter. If
+  64-bit widening is adopted, the JavaScript target will need `BigInt`.
+- **[v0.2]** A string literal that isn't valid UTF-8 can't be represented
+  and is rejected with `ASX-TARGET-001`.
+- **[v0.2] Host limits.** If the JavaScript host's stack runs out before
+  the 10,000-call limit, the program stops with `ASX-RUN-001` at a call
+  site inside the recursion. That site may differ from the interpreter's.
+  Engine string-length limits surface as `ASX-RUN-004` inside `std:string`.
+- **[decided; planned]** No JavaScript interop in the first milestone.
+  Planned: `use "js:<module>";` with typed prototypes, where every value
+  entering RuneScript from JavaScript is checked against its declared type.
+- **[planned]** Source maps.

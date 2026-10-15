@@ -23,7 +23,7 @@ conditionals, loops, and basic functions.
 - [x] Exact integer arithmetic; overflow and division by zero are located runtime errors (never silent wraparound)
 - [x] `trace(...)`
 - [x] Tree-walking interpreter; `main()` result becomes the exit code
-- [x] CLI: `runescript run|check|version`
+- [x] CLI: `runescript run|check|version` (`build` added in v0.2)
 - [x] Examples (`examples/`), with golden-output tests
 - [x] Logo: `assets/runescript.svg` and an icon variant, rasterized to PNG via headless Edge (`scripts/render-logo.sh`)
 - [x] Docs: specification, user guide, roadmap
@@ -35,7 +35,7 @@ conditionals, loops, and basic functions.
 - [x] Native-package registry in `stdlib/`: Go-implemented functions with checked RuneScript signatures
 - [x] `std:string`: all 25 functions from Go's `strings` package expressible with
   `string`/`int`/`bool`, camelCase names, byte offsets
-- [x] Docs (`docs/guide/10-std-string.md`) and an example (`examples/strings.rs`)
+- [x] Docs (`docs/guide/10-std-string.md`) and an example (`examples/strings.rsc`)
 
 ### Functions ✅
 - [x] Required access modifier on every function: `public|private|protected <type> <name>(…)`
@@ -44,23 +44,33 @@ conditionals, loops, and basic functions.
 - [x] Function types `int(int, int)`, function values, callbacks, functions returning functions
 - [x] Lambdas `(int a) => a + 1` and `(int a) => { … }`
 - [x] Function boundaries: no capture of enclosing variables
-- [x] Docs (guide chapter 6) and an example (`examples/callbacks.rs`)
+- [x] Docs (guide chapter 6) and an example (`examples/callbacks.rsc`)
 - [ ] Enforce `private` (file) and `protected` (package) once multi-file programs exist (v0.3)
 
 ### Tests and examples ✅
 - [x] Fuzz tests for the parser/checker and the interpreter (no crashes on arbitrary input)
 - [x] Golden error programs for functions and `use`; runtime-error golden programs with expected partial output
 - [x] Diagnostics are reported in source order
-- [x] Examples: `callbacks.rs`, `primes.rs`, `strings.rs`, `boundary_error.rs`, plus `examples/README.md`
+- [x] Examples: `callbacks.rsc`, `primes.rsc`, `strings.rsc`, `boundary_error.rsc`, plus `examples/README.md`
 
 ### Settle v0.1 provisional rules
-- [ ] Final source file extension (`.rs` conflicts with Rust)
+- [x] Final source file extension: `.rsc` (`.rs` was Rust's)
 - [ ] Final diagnostic prefix (currently `ASX`)
 - [ ] Integer widening model, overflow behaviour, and the width of `uint`
 - [ ] Explicit checked conversion syntax
 - [ ] Unsigned → signed and mixed-signedness rules
 - [ ] Entry-point rules and visibility semantics for top-level functions
 - [ ] Confirm or relax: required initializers, read-only parameters, no shadowing, mandatory braces
+
+### JavaScript target ✅
+- [x] Typed IR (`internal/ir`) lowered from the checked AST, with an independent verifier
+- [x] `internal/jsgen`: ES2022 module output with checked integer arithmetic, call-depth limit, and located runtime errors
+- [x] `std:string` in JavaScript with UTF-8 byte offsets and Go-derived Unicode tables
+- [x] `runescript build [--target js] [-o out.js]`; modules run with `node` or `import { run }`
+- [x] Differential tests (interpreter vs. Node.js) for every example and runtime program, and randomized `std:string` conformance
+- [ ] Source maps
+- [ ] JavaScript interop: `use "js:<module>";` with typed prototypes, checked at the boundary
+- [ ] Measure generated-code performance before optimizing (e.g. inlining range checks)
 
 ## v0.3: `use` for packages and files
 

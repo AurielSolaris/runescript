@@ -127,7 +127,7 @@ public int main() {
 ```
 
 ```text
-main.rs:5:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsigned integer 'uint'.
+main.rsc:5:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsigned integer 'uint'.
         uint unsignedValue = signedValue;
                              ^^^^^^^^^^^
   help: Use an explicit checked conversion (syntax not yet specified), or change the destination type.

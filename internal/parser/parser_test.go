@@ -149,13 +149,13 @@ func TestParseErrors(t *testing.T) {
 func TestParseUseAndQualifiedCalls(t *testing.T) {
 	f := mustParse(t, `package p;
 use "std:string";
-use "lib/x.rs";
+use "lib/x.rsc";
 public void f() {
     string s = string.toUpper("a");
     string.trimSpace(s);
     trace(string.index(s, "A") + 1);
 }`)
-	if len(f.Uses) != 2 || f.Uses[0].Path != "std:string" || f.Uses[1].Path != "lib/x.rs" {
+	if len(f.Uses) != 2 || f.Uses[0].Path != "std:string" || f.Uses[1].Path != "lib/x.rsc" {
 		t.Fatalf("uses = %+v", f.Uses)
 	}
 	stmts := f.Funcs[0].Body.Stmts

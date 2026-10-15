@@ -1,7 +1,7 @@
 // This program is intentionally rejected: RuneScript never silently
 // converts a signed integer to an unsigned one.
 //
-//   runescript check examples/signedness_error.rs
+//   runescript check examples/signedness_error.rsc
 package examples.errors;
 
 public int main() {

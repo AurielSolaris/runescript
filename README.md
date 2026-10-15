@@ -16,6 +16,8 @@ semicolons are required. Its type checking is strict: nothing is implicitly `any
 signed and unsigned integers never mix silently.
 
 It runs as a standalone program: no browser, no HTML, no Flash Player.
+It can also compile to a JavaScript module for the web, with the same
+strict typing and the same runtime errors.
 It is **not** source-compatible with ActionScript 3.
 
 ```actionscript
@@ -49,6 +51,9 @@ protected int main() {
   of signed → unsigned assignment
 - Integer overflow and division by zero are reported as runtime errors and
   never wrap silently
+- Compilation to JavaScript (`runescript build`): an ES2022 module that runs
+  in browsers and Node.js and behaves exactly like the interpreter
+  ([guide](docs/guide/11-javascript.md))
 
 **Not yet implemented:** classes, structs, arrays, floats, `char`, string
 concatenation, `use` for files and non-standard packages, type conversions, `std:math`, `std:symrs`, and the planned native
@@ -60,13 +65,14 @@ Requires Go 1.25+.
 
 ```sh
 go build -o runescript ./cmd/runescript
-./runescript run examples/hello.rs
-./runescript check examples/signedness_error.rs   # shows a compile-time error
+./runescript run examples/hello.rsc
+./runescript check examples/signedness_error.rsc   # shows a compile-time error
+./runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
+node examples/fizzbuzz.js                         # runs it (Node.js 24+)
 go test ./...
 ```
 
-> The `.rs` file extension is provisional, since it clashes with Rust. The
-> CLI accepts any file name.
+> RuneScript files use the `.rsc` extension. The CLI accepts any file name.
 
 ## Tests
 
@@ -82,6 +88,8 @@ The suite includes:
 - error programs whose expected diagnostics are written inline as
   `// expect: CODE line:col`;
 - runtime-error programs;
+- differential tests that run every program on both the interpreter and
+  Node.js and require identical results (skipped if `node` is missing);
 - a check that every program in the documentation compiles.
 
 ## Examples
@@ -96,6 +104,7 @@ checked by the test suite.
 - [Guide](docs/guide/README.md): tour of every feature, with examples (all compiled by the tests)
 - [Language specification](docs/LANGUAGE_SPEC.md): grammar and rules, with each rule's implementation status
 - [Standard library: std:string](docs/guide/10-std-string.md)
+- [Compiling to JavaScript](docs/guide/11-javascript.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)
 - [Coming from ActionScript 3](docs/guide/09-coming-from-actionscript.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -103,13 +112,15 @@ checked by the test suite.
 ## Repository layout
 
 ```text
-cmd/runescript/        CLI (run, check, version)
+cmd/runescript/        CLI (run, check, build, version)
 internal/lexer/        tokens and source positions
 internal/parser/       recursive-descent parser → AST
 internal/ast/          syntax tree
 internal/types/        semantic types
 internal/checker/      name resolution and type checking
 internal/runtime/      tree-walking interpreter
+internal/ir/           typed intermediate representation and its verifier
+internal/jsgen/        JavaScript code generator and its inlined runtime
 internal/diagnostics/  error codes and formatting
 internal/driver/       wires the stages together
 stdlib/                standard library packages (std:string), implemented in Go

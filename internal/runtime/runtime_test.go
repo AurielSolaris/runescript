@@ -128,7 +128,7 @@ public void main() {
     trace(string.toValidUTF8("a\tb", "?"));
     trace(string.trim("¡¡¡Hello, Gophers!!!", "!¡"));
     trace(string.trimLeft("xxhixx", "x"), string.trimRight("xxhixx", "x"));
-    trace(string.trimPrefix("prefix-body", "prefix-"), string.trimSuffix("body.rs", ".rs"));
+    trace(string.trimPrefix("prefix-body", "prefix-"), string.trimSuffix("body.rsc", ".rsc"));
     trace(string.trimSpace("  hi  "), "|");
 }
 `

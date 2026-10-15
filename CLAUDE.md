@@ -47,9 +47,8 @@ implementing a feature:
     heritage; C++-style declarations and blocks; Kotlin-inspired
     reduction of unnecessary boilerplate and selected modern type-system
     conveniences.
--   **Executable file extension:** `.rs` is a candidate, but must be
-    checked for naming conflicts and finalized before the CLI depends on
-    it. Do not assume the extension is settled.
+-   **Executable file extension:** `.rsc` (decided by the owner; `.rs`
+    was rejected because it is Rust's extension).
 -   **CLI name:** `runescript` is the preferred command name, subject to
     repository/package naming constraints.
 
@@ -399,8 +398,7 @@ Requirements:
 
 The first milestone is complete when RuneScript can:
 
-1.  Read a `.rs`-style source file (final extension still to be
-    decided).
+1.  Read a `.rsc` source file.
 2.  Parse a package declaration and a function using the chosen
     declaration syntax.
 3.  Parse basic integer/string literals, local declarations, function

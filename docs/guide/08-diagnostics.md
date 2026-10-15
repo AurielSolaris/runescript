@@ -3,7 +3,7 @@
 Every error points at the exact source location:
 
 ```text
-prog.rs:9:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsigned integer 'uint'.
+prog.rsc:9:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsigned integer 'uint'.
         uint unsignedValue = signedValue;
                              ^^^^^^^^^^^
   help: Use an explicit checked conversion (syntax not yet specified), or change the destination type.
@@ -95,5 +95,17 @@ error has already been printed.
 | `ASX-RUN-002` | Integer overflow: the result doesn't fit its type |
 | `ASX-RUN-003` | Integer division or remainder by zero |
 | `ASX-RUN-004` | A standard library function failed, e.g. `string.repeat` with a negative count |
+
+On the JavaScript target, `ASX-RUN-001` is also reported when the host's own
+stack runs out before 10,000 calls (see [chapter 11](11-javascript.md)).
+
+## Code-generation errors
+
+These come from `runescript build`, for programs that are valid but can't
+be represented on the chosen target.
+
+| Code | Meaning |
+|---|---|
+| `ASX-TARGET-001` | The target can't represent the program, e.g. a string literal that isn't valid UTF-8 on the JavaScript target |
 
 Next: [Coming from ActionScript 3](09-coming-from-actionscript.md)

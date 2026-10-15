@@ -206,7 +206,7 @@ func TestStdStringRejected(t *testing.T) {
 		code diagnostics.Code
 		pos  string
 	}{
-		{"file use", "package p;\nuse \"lib/x.rs\";\npublic void main() { }", diagnostics.UseUnsupported, "2:5"},
+		{"file use", "package p;\nuse \"lib/x.rsc\";\npublic void main() { }", diagnostics.UseUnsupported, "2:5"},
 		{"go use", "package p;\nuse \"go:strings\";\npublic void main() { }", diagnostics.UseUnsupported, "2:5"},
 		{"unknown std package", "package p;\nuse \"std:math\";\npublic void main() { }", diagnostics.UseUnknownPackage, "2:5"},
 		{"duplicate use", "package p;\nuse \"std:string\";\nuse \"std:string\";\npublic void main() { }", diagnostics.UseDuplicate, "3:1"},

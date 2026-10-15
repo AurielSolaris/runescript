@@ -9,7 +9,7 @@ import (
 
 func write(t *testing.T, src string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "prog.rs")
+	path := filepath.Join(t.TempDir(), "prog.rsc")
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -32,11 +32,14 @@ func TestCLI(t *testing.T) {
 		{"check ok", []string{"check", ok}, 0, "", ""},
 		{"v0.2 features", []string{"run", v02}, 7, "RUNE\n", ""},
 		{"check bad", []string{"check", bad}, exitCompileError, "", "error ASX-TYPE-004"},
-		{"run bad", []string{"run", bad}, exitCompileError, "", "prog.rs:4:14"},
+		{"run bad", []string{"run", bad}, exitCompileError, "", "prog.rsc:4:14"},
 		{"runtime error", []string{"run", crash}, exitRuntimeError, "", "error ASX-RUN-003"},
-		{"missing file", []string{"run", filepath.Join(t.TempDir(), "nope.rs")}, exitUsage, "", "runescript:"},
+		{"missing file", []string{"run", filepath.Join(t.TempDir(), "nope.rsc")}, exitUsage, "", "runescript:"},
 		{"no args", nil, exitUsage, "", "usage:"},
-		{"unknown command", []string{"build", ok}, exitUsage, "", "usage:"},
+		{"unknown command", []string{"frobnicate", ok}, exitUsage, "", "usage:"},
+		{"build bad", []string{"build", bad}, exitCompileError, "", "error ASX-TYPE-004"},
+		{"build unknown target", []string{"build", "--target", "wasm", ok}, exitUsage, "", "unknown target"},
+		{"build no file", []string{"build"}, exitUsage, "", "usage:"},
 		{"version", []string{"version"}, 0, "runescript " + Version, ""},
 	}
 	for _, c := range cases {
@@ -53,5 +56,29 @@ func TestCLI(t *testing.T) {
 				t.Errorf("stderr %q does not contain %q", stderr.String(), c.stderr)
 			}
 		})
+	}
+}
+
+func TestBuild(t *testing.T) {
+	src := write(t, "package main;\npublic int main() {\n    trace(\"hi\");\n    return 0;\n}\n")
+	var stdout, stderr strings.Builder
+	if code := cli([]string{"build", src}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	js, err := os.ReadFile(strings.TrimSuffix(src, ".rsc") + ".js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"from prog.rsc", "export function run(", `$trace("hi")`} {
+		if !strings.Contains(string(js), want) {
+			t.Errorf("output lacks %q", want)
+		}
+	}
+	out := filepath.Join(t.TempDir(), "custom.mjs")
+	if code := cli([]string{"build", "--target", "js", "-o", out, src}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Error(err)
 	}
 }

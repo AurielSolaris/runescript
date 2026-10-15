@@ -1,10 +1,10 @@
 // Package tests holds end-to-end golden tests that run whole programs.
 //
-// Every examples/*.rs file is either run and compared against
+// Every examples/*.rsc file is either run and compared against
 // testdata/examples/<name>.out, or, if its name ends in "_error", checked
 // for the diagnostics listed in its `// expect: CODE line:col` comments.
-// testdata/errors/*.rs files follow the same "expect" convention, and
-// testdata/runtime/*.rs files must fail at run time (see
+// testdata/errors/*.rsc files follow the same "expect" convention, and
+// testdata/runtime/*.rsc files must fail at run time (see
 // TestRuntimeErrorPrograms).
 package tests
 
@@ -23,12 +23,12 @@ import (
 var expectRE = regexp.MustCompile(`// expect: (\S+) (\d+:\d+)`)
 
 func TestExamples(t *testing.T) {
-	files, err := filepath.Glob("../examples/*.rs")
+	files, err := filepath.Glob("../examples/*.rsc")
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no examples found: %v", err)
 	}
 	for _, path := range files {
-		name := strings.TrimSuffix(filepath.Base(path), ".rs")
+		name := strings.TrimSuffix(filepath.Base(path), ".rsc")
 		t.Run(name, func(t *testing.T) {
 			src := read(t, path)
 			if strings.HasSuffix(name, "_error") {
@@ -52,7 +52,7 @@ func TestExamples(t *testing.T) {
 }
 
 func TestErrorPrograms(t *testing.T) {
-	files, _ := filepath.Glob("testdata/errors/*.rs")
+	files, _ := filepath.Glob("testdata/errors/*.rsc")
 	if len(files) == 0 {
 		t.Fatal("no error programs found")
 	}
@@ -96,11 +96,11 @@ func normalize(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
 
 var runtimeErrRE2 = regexp.MustCompile(`// expect runtime error: (ASX-RUN-\d+) (\d+:\d+)`)
 
-// TestRuntimeErrorPrograms runs testdata/runtime/*.rs. Each must compile,
+// TestRuntimeErrorPrograms runs testdata/runtime/*.rsc. Each must compile,
 // print exactly <name>.out, then stop with the runtime error named in its
 // `// expect runtime error: CODE line:col` comment.
 func TestRuntimeErrorPrograms(t *testing.T) {
-	files, _ := filepath.Glob("testdata/runtime/*.rs")
+	files, _ := filepath.Glob("testdata/runtime/*.rsc")
 	if len(files) == 0 {
 		t.Fatal("no runtime error programs found")
 	}
@@ -123,7 +123,7 @@ func TestRuntimeErrorPrograms(t *testing.T) {
 			if got := re.Diag.Code.String() + " " + re.Diag.Span.Start.String(); got != m[1]+" "+m[2] {
 				t.Errorf("got %s, want %s %s", got, m[1], m[2])
 			}
-			want := normalize(string(read(t, strings.TrimSuffix(path, ".rs")+".out")))
+			want := normalize(string(read(t, strings.TrimSuffix(path, ".rsc")+".out")))
 			if out.String() != want {
 				t.Errorf("output before the error:\ngot:\n%s\nwant:\n%s", out.String(), want)
 			}

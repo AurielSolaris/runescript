@@ -14,6 +14,7 @@ complete program in these pages is compiled by the test suite
 8. [Diagnostics reference](08-diagnostics.md): every error code
 9. [Coming from ActionScript 3](09-coming-from-actionscript.md)
 10. [Standard library: `std:string`](10-std-string.md): Go's `strings`, in RuneScript
+11. [Compiling to JavaScript](11-javascript.md): `runescript build`, and how strict typing is kept
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).

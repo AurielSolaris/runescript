@@ -1,12 +1,16 @@
-// Package driver connects the compiler stages: parse, check, and run.
+// Package driver connects the compiler stages: parse, check, and run or
+// compile.
 package driver
 
 import (
 	"io"
 	"sort"
 
+	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/checker"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/ir"
+	"github.com/AurielSolaris/runescript/internal/jsgen"
 	"github.com/AurielSolaris/runescript/internal/parser"
 	"github.com/AurielSolaris/runescript/internal/runtime"
 )
@@ -14,15 +18,20 @@ import (
 // Check parses and type-checks src. Diagnostics are returned sorted by
 // source position; info is nil when there are any.
 func Check(src []byte) (*checker.Info, []*diagnostics.Diagnostic) {
+	_, info, diags := parse(src)
+	return info, diags
+}
+
+func parse(src []byte) (*ast.File, *checker.Info, []*diagnostics.Diagnostic) {
 	file, diags := parser.Parse(src)
 	if len(diags) > 0 {
-		return nil, sorted(diags)
+		return nil, nil, sorted(diags)
 	}
 	info, diags := checker.Check(file)
 	if len(diags) > 0 {
-		return nil, sorted(diags)
+		return nil, nil, sorted(diags)
 	}
-	return info, nil
+	return file, info, nil
 }
 
 func sorted(diags []*diagnostics.Diagnostic) []*diagnostics.Diagnostic {
@@ -41,4 +50,15 @@ func Run(src []byte, out io.Writer) (int, []*diagnostics.Diagnostic, error) {
 	}
 	code, err := runtime.Run(info, out)
 	return code, nil, err
+}
+
+// BuildJS checks src and compiles it to a JavaScript module. It returns
+// the module, compile-time diagnostics, or an internal compiler error.
+func BuildJS(src []byte, opts jsgen.Options) ([]byte, []*diagnostics.Diagnostic, error) {
+	file, info, diags := parse(src)
+	if diags != nil {
+		return nil, diags, nil
+	}
+	out, diags, err := jsgen.Generate(ir.Lower(file, info), opts)
+	return out, sorted(diags), err
 }

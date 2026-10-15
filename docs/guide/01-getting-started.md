@@ -11,12 +11,12 @@ go build -o runescript ./cmd/runescript     # runescript.exe on Windows
 Or run it without installing:
 
 ```sh
-go run ./cmd/runescript run examples/hello.rs
+go run ./cmd/runescript run examples/hello.rsc
 ```
 
 ## Your first program
 
-Save this as `hello.rs`:
+Save this as `hello.rsc`:
 
 ```actionscript
 package main;
@@ -30,12 +30,11 @@ protected int main() {
 Run it:
 
 ```text
-$ runescript run hello.rs
+$ runescript run hello.rsc
 Hello, RuneScript!
 ```
 
-> The `.rs` extension is provisional (it is also Rust's extension). The CLI
-> accepts any file name.
+> RuneScript files use the `.rsc` extension. The CLI accepts any file name.
 
 ## Commands
 
