@@ -19,15 +19,17 @@ public void main() {
 Every variable **must** be initialised when it's declared. There are no
 implicit default values in v0.1.
 
-## The v0.1 types
+## The basic types
 
-| Type | Holds | Range in v0.1 |
+| Type | Holds | Range |
 |---|---|---|
 | `int` | Signed whole numbers | −2147483648 … 2147483647 |
 | `sint` | **Exactly the same type as `int`.** Use it when you want to say "signed" explicitly. | same as `int` |
 | `uint` | Unsigned whole numbers | 0 … 4294967295 |
+| `float`, `float32`, `float64` | Floating-point numbers ([chapter 13](13-floats-and-conversions.md)) | |
 | `bool` | `true` or `false` | |
 | `string` | Text, e.g. `"hello\n"` | |
+| `Error` and its kinds | Errors ([chapter 14](14-errors.md)) | |
 | `void` | No value; used only as a function's return type | |
 
 `int` and `sint` can be mixed freely:

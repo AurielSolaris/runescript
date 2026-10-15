@@ -17,7 +17,7 @@ var (
 	fenceRE        = regexp.MustCompile("(?s)```actionscript\r?\n(.*?)```")
 	compileErrRE   = regexp.MustCompile(`// error: (ASX-[A-Z]+-\d+)`)
 	runtimeErrRE   = regexp.MustCompile(`// runtime error: (ASX-RUN-\d+)`)
-	docSourceGlobs = []string{"../README.md", "../docs/*.md", "../docs/guide/*.md"}
+	docSourceGlobs = []string{"../README.md", "../docs/*.md", "../docs/guide/*.md", "../localization/*/README.md", "../localization/*/docs/guide/*.md"}
 )
 
 // TestDocExamples keeps the documentation honest: every ```actionscript
@@ -39,7 +39,7 @@ func TestDocExamples(t *testing.T) {
 					continue
 				}
 				total++
-				name := filepath.Base(path) + "#" + string(rune('A'+i%26))
+				name := strings.TrimPrefix(filepath.ToSlash(path), "../") + "#" + string(rune('A'+i%26))
 				t.Run(name, func(t *testing.T) { checkDocProgram(t, src) })
 			}
 		}

@@ -22,11 +22,12 @@ public void main() {
 
 Both operands must have the same signedness: `int`/`sint` with
 `int`/`sint`, or `uint` with `uint`. A number literal adapts to the other
-operand, so `u + 1` works when `u` is a `uint`.
+operand, so `u + 1` works when `u` is a `uint`. The same operators (except
+`%`) work on floats; see [Floats and conversions](13-floats-and-conversions.md).
 
 ### Overflow never wraps silently
 
-In v0.1, if a result doesn't fit its type, the program stops with a runtime
+If an integer result doesn't fit its type, the program stops with a runtime
 error that points at the operation. It never wraps around:
 
 ```actionscript
@@ -38,14 +39,15 @@ public void main() {
 }
 ```
 
-The language design calls for numbers to *widen* automatically. Widening
-isn't designed yet, so v0.1 stops instead of guessing. Dividing by zero is
-also a runtime error (`ASX-RUN-003`).
+The language design calls for numbers to *widen* automatically. Integer
+widening isn't designed yet, so RuneScript stops instead of guessing.
+Dividing an integer by zero is also a runtime error (`ASX-RUN-003`). Both are
+`RangeError`s, which a `try` statement can catch (see [Errors](14-errors.md)).
 
 ## Comparison
 
-`==  !=  <  <=  >  >=` compare two integers of the same signedness and
-produce a `bool`. `==` and `!=` also work on two `bool`s or two `string`s.
+`==  !=  <  <=  >  >=` compare two integers of the same signedness, or two
+floats of the same type, and produce a `bool`. `==` and `!=` also work on two `bool`s or two `string`s.
 
 ```actionscript
 package main;
@@ -83,7 +85,7 @@ public void main() {
 From tightest to loosest binding:
 
 1. `( … )`, calls
-2. unary `-`, `!`
+2. unary `-`, `!`, conversions `(T) x`
 3. `*`, `/`, `%`
 4. `+`, `-`
 5. `<`, `<=`, `>`, `>=`
@@ -93,7 +95,7 @@ From tightest to loosest binding:
 
 All binary operators are left-associative: `10 - 4 - 3` is `(10 - 4) - 3`.
 
-## Not available in v0.1
+## Not available yet
 
 String concatenation with `+`, bitwise operators, shifts, `?:`, `?.`, and
 `??`. To print several values together, pass them all to `trace` (see
