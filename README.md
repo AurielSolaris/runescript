@@ -6,6 +6,8 @@
 
 <p align="center">A statically typed, general-purpose language inspired by ActionScript, implemented in Go.</p>
 
+<p align="center"><strong>English</strong> · <a href="localization/bn/README.md" lang="bn">বাংলা</a> (Bengali) · <a href="localization/he/README.md" lang="he">עברית</a> (Hebrew)</p>
+
 ---
 
 RuneScript keeps ActionScript's identity (`package`, `trace`, `int`/`uint`,
@@ -158,6 +160,23 @@ assets/                logo: SVG source and PNGs generated from it
 scripts/               render-logo.sh: SVG → PNG via headless Edge/Chrome
 ```
 
+## Translations
+
+English is the original: this README and [`docs/`](docs/) are the source of
+truth. Translations live in [`localization/`](localization/README.md), one
+folder per language:
+
+| Language | Folder | Covers |
+|---|---|---|
+| বাংলা (Bengali) | [`localization/bn/`](localization/bn/README.md) | README and the guide |
+| עברית (Hebrew) | [`localization/he/`](localization/he/README.md) | README and the guide |
+
+The Bengali and Hebrew translations are maintained with AI and checked by
+hand by the author. **Help is appreciated:** corrections from native
+speakers, and new languages, are very welcome. See
+[localization/README.md](localization/README.md) for how translations are
+organised and kept in step with the English docs.
+
 ## Logo
 
 `assets/runescript.svg` (README) and `assets/runescript-icon.svg` (small
@@ -167,3 +186,7 @@ them:
 ```sh
 scripts/render-logo.sh     # needs Microsoft Edge or Chrome; override with BROWSER=...
 ```
+
+## License
+
+RuneScript is released under the [MIT License](LICENSE).

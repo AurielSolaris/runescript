@@ -46,7 +46,7 @@ public void main() {
 
 ## Stricter integers
 
-| | AS3 | RuneScript |
+| Code | AS3 | RuneScript |
 |---|---|---|
 | `var u:uint = -1;` | Becomes 4294967295 | Compile error `ASX-TYPE-007` |
 | `uint` ← `int` variable | Converted silently | Compile error `ASX-TYPE-004` |
