@@ -1,0 +1,13 @@
+0.30000000000000004 0.30000000000000004 1.5 -0.1 true
+64 1e+21 1e-7 0.000001 123.456 0
+0.1 0.3 0.10000000149011612 0.30000000000000004 16777216
+64 -64 3 2147483647
+3.5 3 3
+64.7 -42 7 0.1 true
+1.5 42 true 0
+2 true true true
+Infinity -Infinity NaN false true false true
+Infinity false true true -Infinity
+Infinity Infinity true Infinity
+NaN -Infinity NaN Infinity Infinity
+3

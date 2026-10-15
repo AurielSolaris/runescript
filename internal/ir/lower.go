@@ -206,6 +206,22 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 			return &Break{}
 		}
 		return &Continue{}
+	case *ast.ThrowStmt:
+		return &Throw{X: l.expr(s.Value), Site: s.Span}
+	case *ast.TryStmt:
+		t := &Try{Body: l.block(s.Body)}
+		for _, cl := range s.Catches {
+			l.scopes = append(l.scopes, map[string]*Var{})
+			ct := l.info.CatchTypes[cl]
+			c := &Catch{T: ct, Var: l.declare(cl.Name.Name, ct, false)}
+			c.Body = l.block(cl.Body)
+			l.scopes = l.scopes[:len(l.scopes)-1]
+			t.Catches = append(t.Catches, c)
+		}
+		if s.Finally != nil {
+			t.Finally = l.block(s.Finally)
+		}
+		return t
 	}
 	l.ice("unexpected statement %T", s)
 	return nil
@@ -226,7 +242,7 @@ func (l *lowerer) ifStmt(s *ast.IfStmt) *If {
 
 // concrete returns t, which must be a fully resolved type.
 func (l *lowerer) concrete(e ast.Expr, t *types.Type) *types.Type {
-	if t == nil || t.Kind == types.Invalid || t.Kind == types.UntypedInt {
+	if t == nil || t.Kind == types.Invalid || t.Kind == types.UntypedInt || t.Kind == types.UntypedFloat {
 		l.ice("expression at %s has no concrete type", e.NodeSpan().Start)
 	}
 	return t
@@ -236,7 +252,25 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 	if v, ok := l.info.Consts[e]; ok {
 		return &IntConst{T: l.concrete(e, l.info.Types[e]), Value: v}
 	}
+	if v, ok := l.info.FloatConsts[e]; ok {
+		return &FloatConst{T: l.concrete(e, l.info.Types[e]), Value: v}
+	}
 	switch e := e.(type) {
+	case *ast.FloatLit:
+		l.ice("float literal at %s was not given a type", e.Span.Start)
+	case *ast.CastExpr:
+		return &Convert{X: l.expr(e.X), To: l.concrete(e, l.info.Types[e]), Site: e.Span}
+	case *ast.NewExpr:
+		n := &NewError{T: l.concrete(e, l.info.Types[e])}
+		if len(e.Args) > 0 {
+			n.Message = l.expr(e.Args[0])
+		}
+		if len(e.Args) > 1 {
+			n.ID = l.expr(e.Args[1])
+		}
+		return n
+	case *ast.SelectorExpr:
+		return &Field{X: l.expr(e.X), Name: e.Name.Name, T: l.concrete(e, l.info.Types[e])}
 	case *ast.ParenExpr:
 		return l.expr(e.X)
 	case *ast.StringLit:
@@ -260,6 +294,9 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 			return &Not{X: x}
 		}
 		t := x.Type()
+		if t.Kind == types.Float {
+			return &Neg{X: x}
+		}
 		return &Arith{Op: "-", T: t, X: &IntConst{T: t}, Y: x, Site: e.Span}
 	case *ast.BinaryExpr:
 		x, y := l.expr(e.X), l.expr(e.Y)
@@ -292,6 +329,9 @@ func (l *lowerer) call(e *ast.CallExpr) Expr {
 	}
 	if sym, ok := l.info.Callees[e]; ok {
 		return &CallFunc{Func: l.fn(sym), Args: args, Site: e.Span}
+	}
+	if name, ok := l.info.Builtins[e]; ok {
+		return &FloatTest{Name: name, X: args[0]}
 	}
 	if e.Fn.Name == "trace" {
 		return &Trace{Args: args}

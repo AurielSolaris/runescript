@@ -2,10 +2,12 @@ package checker
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 
 	"github.com/AurielSolaris/runescript/internal/ast"
+	"github.com/AurielSolaris/runescript/internal/conv"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/loader"
 	"github.com/AurielSolaris/runescript/internal/types"
@@ -34,20 +36,32 @@ func (c *checker) assign(dst *types.Type, e ast.Expr, verb string) {
 	span := e.NodeSpan()
 	switch {
 	case src.typ.Kind == types.UntypedInt:
-		if !types.IsInteger(dst) {
+		if !types.IsNumeric(dst) {
 			c.errorf(diagnostics.TypeMismatch, span, "Cannot %s integer constant to '%s'.", verbs[verb], dst)
 			return
 		}
 		c.convertConst(e, src.konst, dst)
+	case src.typ.Kind == types.UntypedFloat:
+		if dst.Kind != types.Float {
+			d := c.errorf(diagnostics.TypeMismatch, span, "Cannot %s float constant to '%s'.", verbs[verb], dst)
+			if types.IsInteger(dst) {
+				d.WithHelp(fmt.Sprintf("convert it explicitly, e.g. (%s) %s, which truncates toward zero", dst, conv.FormatFloat(*src.fconst, 64)))
+			}
+			return
+		}
+		c.convertFloatConst(e, *src.fconst, dst)
 	case src.typ.Kind == types.Void:
 		c.errorf(diagnostics.TypeVoidValue, span, "expression has type 'void' and cannot be used as a value")
-	case types.Identical(src.typ, dst):
+	case types.IsSubtype(src.typ, dst):
 	case src.typ.Kind == types.Signed && dst.Kind == types.Unsigned:
 		c.errorf(diagnostics.TypeSignedToUnsigned, span, "Cannot %s signed integer '%s' to unsigned integer '%s'.", verbs[verb], src.typ, dst).
-			WithHelp("Use an explicit checked conversion (syntax not yet specified), or change the destination type.")
+			WithHelp(fmt.Sprintf("Use an explicit checked conversion, (%s) x, or change the destination type.", dst))
 	case src.typ.Kind == types.Unsigned && dst.Kind == types.Signed:
 		c.errorf(diagnostics.TypeUnsignedToSigned, span, "Cannot %s unsigned integer '%s' to signed integer '%s'.", verbs[verb], src.typ, dst).
-			WithHelp("Unsigned-to-signed conversion rules are not yet specified; change the destination type.")
+			WithHelp(fmt.Sprintf("Use an explicit checked conversion, (%s) x, or change the destination type.", dst))
+	case types.IsNumeric(src.typ) && types.IsNumeric(dst):
+		c.errorf(diagnostics.TypeMismatch, span, "Cannot %s '%s' to '%s'.", verbs[verb], src.typ, dst).
+			WithHelp(fmt.Sprintf("numbers are not converted implicitly; write (%s) x", dst))
 	default:
 		c.errorf(diagnostics.TypeMismatch, span, "Cannot %s '%s' to '%s'.", verbs[verb], src.typ, dst)
 	}
@@ -80,10 +94,19 @@ func unparen(e ast.Expr) ast.Expr {
 	}
 }
 
-// convertConst gives an untyped constant the concrete integer type dst,
-// recording its value for the runtime.
+// convertConst gives an untyped integer constant the concrete numeric type
+// dst, recording its value for the runtime.
 func (c *checker) convertConst(e ast.Expr, v *big.Int, dst *types.Type) bool {
 	span := e.NodeSpan()
+	if dst.Kind == types.Float {
+		f, acc := new(big.Float).SetInt(v).Float64()
+		if acc != big.Exact {
+			c.errorf(diagnostics.TypeInexactFloat, span, "constant %s cannot be represented exactly as '%s'", v, dst).
+				WithHelp(fmt.Sprintf("write (%s) %s to round it", dst, v))
+			return false
+		}
+		return c.convertFloatConst(e, f, dst)
+	}
 	if dst.Kind == types.Unsigned && v.Sign() < 0 {
 		c.errorf(diagnostics.TypeNegativeToUnsigned, span, "Cannot convert negative constant %s to unsigned integer '%s'.", v, dst).
 			WithHelp("An unsigned integer cannot hold a negative value; change the destination type.")
@@ -106,14 +129,61 @@ func rangeHelp(t *types.Type) string {
 	return "'int' is currently 32 bits (-2147483648 to 2147483647); widening is not yet implemented"
 }
 
-// defaulted checks e and converts an untyped constant to 'int'.
+// convertFloatConst gives an untyped float constant (or an integer
+// constant's exact float64 value) the float type dst. A float32 must hold
+// it exactly: rounding needs an explicit (float32) conversion.
+func (c *checker) convertFloatConst(e ast.Expr, v float64, dst *types.Type) bool {
+	span := e.NodeSpan()
+	if dst.Bits == 32 && !math.IsNaN(v) {
+		r := conv.ToFloat32(v)
+		if math.IsInf(r, 0) && !math.IsInf(v, 0) {
+			c.errorf(diagnostics.TypeConstOutOfRange, span, "constant %s does not fit in 'float32'", conv.FormatFloat(v, 64)).
+				WithHelp("the largest float32 is about 3.4028235e+38")
+			return false
+		}
+		if r != v {
+			c.errorf(diagnostics.TypeInexactFloat, span, "constant %s cannot be represented exactly as 'float32'", conv.FormatFloat(v, 64)).
+				WithHelp(fmt.Sprintf("write (float32) %s to round it to the nearest float32, %s", conv.FormatFloat(v, 64), conv.FormatFloat(r, 32)))
+			return false
+		}
+	}
+	c.info.Types[e] = dst
+	c.info.FloatConsts[e] = v
+	return true
+}
+
+// convertNum gives an untyped constant operand the numeric type dst.
+func (c *checker) convertNum(e ast.Expr, op operand, dst *types.Type) bool {
+	if op.typ.Kind == types.UntypedFloat {
+		return c.convertFloatConst(e, *op.fconst, dst)
+	}
+	return c.convertConst(e, op.konst, dst)
+}
+
+func isUntyped(t *types.Type) bool { return t.Kind == types.UntypedInt || t.Kind == types.UntypedFloat }
+
+func isFloat(t *types.Type) bool { return t.Kind == types.Float || t.Kind == types.UntypedFloat }
+
+// defaulted checks e and converts an untyped constant to its default type:
+// 'int' for integers, 'float' for floats.
 func (c *checker) defaulted(e ast.Expr) operand {
-	op := c.expr(e)
-	if op.typ.Kind == types.UntypedInt {
+	return c.defaultOp(e, c.expr(e))
+}
+
+// defaultOp gives op, the checked form of e, its default type if it is an
+// untyped constant.
+func (c *checker) defaultOp(e ast.Expr, op operand) operand {
+	switch op.typ.Kind {
+	case types.UntypedInt:
 		if !c.convertConst(e, op.konst, types.Int) {
 			return invalid
 		}
 		return operand{typ: types.Int}
+	case types.UntypedFloat:
+		if !c.convertFloatConst(e, *op.fconst, types.FloatT) {
+			return invalid
+		}
+		return operand{typ: types.FloatT}
 	}
 	return op
 }
@@ -122,7 +192,7 @@ func (c *checker) defaulted(e ast.Expr) operand {
 
 func (c *checker) expr(e ast.Expr) operand {
 	op := c.exprInner(e)
-	if op.typ.Kind != types.UntypedInt {
+	if !isUntyped(op.typ) {
 		c.info.Types[e] = op.typ
 	}
 	return op
@@ -132,6 +202,15 @@ func (c *checker) exprInner(e ast.Expr) operand {
 	switch e := e.(type) {
 	case *ast.IntLit:
 		return operand{typ: types.UntypedConst, konst: new(big.Int).SetUint64(e.Value)}
+	case *ast.FloatLit:
+		v := e.Value
+		return operand{typ: types.UntypedFloatConst, fconst: &v}
+	case *ast.CastExpr:
+		return operand{typ: c.cast(e)}
+	case *ast.NewExpr:
+		return operand{typ: c.newExpr(e)}
+	case *ast.SelectorExpr:
+		return operand{typ: c.selector(e)}
 	case *ast.StringLit:
 		return operand{typ: types.StringT}
 	case *ast.BoolLit:
@@ -139,7 +218,7 @@ func (c *checker) exprInner(e ast.Expr) operand {
 	case *ast.ParenExpr:
 		return c.expr(e.X)
 	case *ast.Ident:
-		return operand{typ: c.ident(e)}
+		return c.identOperand(e)
 	case *ast.CallExpr:
 		return operand{typ: c.call(e)}
 	case *ast.LambdaExpr:
@@ -152,6 +231,21 @@ func (c *checker) exprInner(e ast.Expr) operand {
 		return c.binaryType(e.Op, x, y, e.X, e.Y, e.OpPos)
 	}
 	return invalid
+}
+
+// floatConstants are the predeclared constants NaN and Infinity. A
+// variable or function of the same name hides them.
+var floatConstants = map[string]float64{"NaN": math.NaN(), "Infinity": math.Inf(1)}
+
+// identOperand checks a name used as a value. NaN and Infinity are untyped
+// float constants unless something else has their name.
+func (c *checker) identOperand(e *ast.Ident) operand {
+	if v, ok := floatConstants[e.Name]; ok {
+		if sym, _ := c.lookup(e.Name); sym == nil {
+			return operand{typ: types.UntypedFloatConst, fconst: &v}
+		}
+	}
+	return operand{typ: c.ident(e)}
 }
 
 // ident resolves a name used as a value: a variable, or a named function
@@ -184,7 +278,10 @@ func (c *checker) unary(e *ast.UnaryExpr) operand {
 		return invalid
 	case e.Op == "-" && x.typ.Kind == types.UntypedInt:
 		return operand{typ: types.UntypedConst, konst: new(big.Int).Neg(x.konst)}
-	case e.Op == "-" && x.typ.Kind == types.Signed:
+	case e.Op == "-" && x.typ.Kind == types.UntypedFloat:
+		v := -*x.fconst
+		return operand{typ: types.UntypedFloatConst, fconst: &v}
+	case e.Op == "-" && (x.typ.Kind == types.Signed || x.typ.Kind == types.Float):
 		return x
 	case e.Op == "-" && x.typ.Kind == types.Unsigned:
 		c.errorf(diagnostics.TypeBadOperand, e.Span, "cannot negate unsigned integer '%s'", x.typ)
@@ -212,6 +309,11 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 	case "==", "!=":
 		if x.typ.Kind == y.typ.Kind && (x.typ.Kind == types.Bool || x.typ.Kind == types.String) {
 			return operand{typ: types.BoolT}
+		}
+	}
+	if isFloat(x.typ) || isFloat(y.typ) {
+		if types.IsNumeric(x.typ) && types.IsNumeric(y.typ) {
+			return c.floatBinary(op, x, y, xe, ye, opSpan)
 		}
 	}
 	if !types.IsInteger(x.typ) || !types.IsInteger(y.typ) {
@@ -263,6 +365,67 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 		return operand{typ: types.BoolT}
 	}
 	return operand{typ: t}
+}
+
+// floatBinary checks an operator with at least one float operand; both are
+// numeric. Untyped constants take the other operand's float type, or
+// 'float' if both are constants. Typed operands must have identical types:
+// mixing an int with a float, or two float types, needs a conversion.
+func (c *checker) floatBinary(op string, x, y operand, xe, ye ast.Expr, opSpan diagnostics.Span) operand {
+	comparison := op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" || op == ">="
+	if op == "%" {
+		c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%%' is not defined on floating-point numbers").
+			WithHelp("'%' is defined on integers only")
+		return invalid
+	}
+	var t *types.Type
+	switch {
+	case isUntyped(x.typ) && isUntyped(y.typ):
+		t = types.FloatT
+		if !c.convertNum(xe, x, t) || !c.convertNum(ye, y, t) {
+			return invalid
+		}
+	case isUntyped(x.typ) && y.typ.Kind == types.Float:
+		t = y.typ
+		if !c.convertNum(xe, x, t) {
+			return invalid
+		}
+	case isUntyped(y.typ) && x.typ.Kind == types.Float:
+		t = x.typ
+		if !c.convertNum(ye, y, t) {
+			return invalid
+		}
+	case types.Identical(x.typ, y.typ):
+		t = x.typ
+	default:
+		c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' mixes %s and %s", op, describe(x.typ), describe(y.typ)).
+			WithHelp(fmt.Sprintf("numbers are not converted implicitly; convert one side, e.g. (%s) x", floatOf(x.typ, y.typ)))
+		return invalid
+	}
+	if comparison {
+		return operand{typ: types.BoolT}
+	}
+	return operand{typ: t}
+}
+
+func describe(t *types.Type) string {
+	switch t.Kind {
+	case types.UntypedInt:
+		return "an integer constant"
+	case types.UntypedFloat:
+		return "a float constant"
+	}
+	return "'" + t.Name + "'"
+}
+
+// floatOf names the float type among a and b, to suggest a conversion.
+func floatOf(a, b *types.Type) string {
+	for _, t := range []*types.Type{a, b} {
+		if t.Kind == types.Float {
+			return t.Name
+		}
+	}
+	return "float"
 }
 
 func signedOf(a, b *types.Type) *types.Type {
@@ -323,6 +486,8 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	name := e.Fn.Name
 	sym, crossed := c.lookup(name)
 	switch {
+	case sym == nil && (name == "isNaN" || name == "isFinite"):
+		return c.floatTest(e)
 	case sym == nil:
 		if !c.privateError(c.file.Package, name, e.Fn.Span) {
 			c.errorf(diagnostics.NameUndefined, e.Fn.Span, "undefined function '%s'", name)
@@ -341,6 +506,26 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	}
 	c.exprs(e.Args)
 	return types.InvalidT
+}
+
+// floatTest checks isNaN(x) or isFinite(x), the built-in tests of a float
+// of any float type. A function of the same name hides them.
+func (c *checker) floatTest(e *ast.CallExpr) *types.Type {
+	if len(e.Args) != 1 {
+		c.errorf(diagnostics.TypeArgCount, e.Span, "%s expects 1 argument, found %d", e.Fn.Name, len(e.Args))
+		c.exprs(e.Args)
+		return types.BoolT
+	}
+	x := c.expr(e.Args[0])
+	switch {
+	case isUntyped(x.typ):
+		c.convertNum(e.Args[0], x, types.FloatT)
+	case x.typ.Kind != types.Float && x.typ.Kind != types.Invalid:
+		c.errorf(diagnostics.TypeMismatch, e.Args[0].NodeSpan(), "%s takes a float, found '%s'", e.Fn.Name, x.typ).
+			WithHelp("convert it first, e.g. (float) x")
+	}
+	c.info.Builtins[e] = e.Fn.Name
+	return types.BoolT
 }
 
 // callValue checks a call of a computed function value, e.g. f(1)(2).
@@ -384,6 +569,10 @@ func (c *checker) checkArgs(ft *types.Type, e *ast.CallExpr, what string) *types
 func (c *checker) qualifiedCall(e *ast.CallExpr) *types.Type {
 	b := c.quals[e.Pkg.Name]
 	switch {
+	case b == nil && c.isVariable(e.Pkg.Name):
+		t := c.ident(e.Pkg)
+		c.errorf(diagnostics.TypeNoField, e.Fn.Span, "values of type '%s' have no methods", t).
+			WithHelp(fieldHelp(t))
 	case b == nil:
 		if !c.broken {
 			d := c.errorf(diagnostics.NamePackageNotUsed, e.Pkg.Span, "package '%s' is not in scope", e.Pkg.Name)
@@ -431,6 +620,161 @@ func (c *checker) nativeCall(e *ast.CallExpr, pkg *stdlib.Package) *types.Type {
 	}
 	c.info.Natives[e] = f
 	return c.checkArgs(types.NewFunc(f.Params, f.Result), e, fmt.Sprintf("function '%s.%s'", e.Pkg.Name, f.Name))
+}
+
+// isVariable reports whether name is a visible variable.
+func (c *checker) isVariable(name string) bool {
+	sym, _ := c.lookup(name)
+	return sym != nil && sym.fn == nil
+}
+
+// ---- conversions, errors, and fields ----
+
+// cast checks the conversion (T) x. Conversions are checked at run time
+// (failures throw a RangeError or TypeError); conversions of constants are
+// done, and checked, at compile time.
+func (c *checker) cast(e *ast.CastExpr) *types.Type {
+	to := c.resolveType(e.Type)
+	x := c.expr(e.X)
+	if x.typ.Kind == types.Invalid || to.Kind == types.Invalid {
+		return types.InvalidT
+	}
+	span := e.X.NodeSpan()
+	switch {
+	case x.typ.Kind == types.UntypedInt && types.IsInteger(to):
+		if !c.convertConst(e.X, x.konst, to) {
+			return types.InvalidT
+		}
+		c.info.Consts[e] = c.info.Consts[e.X]
+		return to
+	case x.typ.Kind == types.UntypedInt && to.Kind == types.Float:
+		f, _ := new(big.Float).SetInt(x.konst).Float64() // nearest
+		return c.floatConstCast(e, f, to, x.konst.String())
+	case x.typ.Kind == types.UntypedFloat && types.IsInteger(to):
+		v := math.Trunc(*x.fconst)
+		text := conv.FormatFloat(*x.fconst, 64)
+		switch {
+		case to.Kind == types.Unsigned && v < 0:
+			c.errorf(diagnostics.TypeNegativeToUnsigned, span, "Cannot convert negative constant %s to unsigned integer '%s'.", text, to).
+				WithHelp("An unsigned integer cannot hold a negative value; change the destination type.")
+			return types.InvalidT
+		case math.IsNaN(v) || v < math.MinInt64 || v > math.MaxInt64 || !types.InRange(to, int64(v)):
+			c.errorf(diagnostics.TypeConstOutOfRange, span, "constant %s does not fit in '%s'", text, to).
+				WithHelp(rangeHelp(to))
+			return types.InvalidT
+		}
+		c.info.Types[e] = to
+		c.info.Consts[e] = int64(v)
+		return to
+	case x.typ.Kind == types.UntypedFloat && to.Kind == types.Float:
+		return c.floatConstCast(e, *x.fconst, to, conv.FormatFloat(*x.fconst, 64))
+	}
+	from := c.defaultOp(e.X, x).typ
+	if from.Kind == types.Invalid {
+		return types.InvalidT
+	}
+	if !convertible(from, to) {
+		d := c.errorf(diagnostics.TypeBadConversion, e.Span, "cannot convert '%s' to '%s'", from, to)
+		switch {
+		case from.Kind == types.Bool && types.IsNumeric(to):
+			d.WithHelp("bool is not a number; compare instead, e.g. use if (b) { n = 1; }")
+		case types.IsNumeric(from) && to.Kind == types.Bool:
+			d.WithHelp("numbers are not truth values; compare instead, e.g. n != 0")
+		case from.Kind == types.Error:
+			d.WithHelp("use the error's fields, e.g. e.message")
+		}
+		return types.InvalidT
+	}
+	return to
+}
+
+// floatConstCast converts a constant to float type to at compile time.
+// Unlike an implicit conversion, an explicit one may round, and a value
+// beyond float32's range becomes Infinity.
+func (c *checker) floatConstCast(e *ast.CastExpr, v float64, to *types.Type, _ string) *types.Type {
+	if to.Bits == 32 {
+		v = conv.ToFloat32(v)
+	}
+	c.info.Types[e] = to
+	c.info.FloatConsts[e] = v
+	return to
+}
+
+// convertible reports whether (to) x is allowed for x of type from.
+// Numbers convert to each other; numbers, bools, and strings convert to
+// string; strings convert to numbers and bool.
+func convertible(from, to *types.Type) bool {
+	switch {
+	case types.IsNumeric(from) && types.IsNumeric(to):
+		return true
+	case to.Kind == types.String:
+		return types.IsNumeric(from) || from.Kind == types.Bool || from.Kind == types.String
+	case from.Kind == types.String:
+		return types.IsNumeric(to) || to.Kind == types.Bool
+	case from.Kind == types.Bool && to.Kind == types.Bool:
+		return true
+	}
+	return false
+}
+
+// newExpr checks `new T(message, id)`. Only the built-in error types can
+// be constructed so far. As in ActionScript 3, both arguments are
+// optional: the message defaults to "" and the id to 0.
+func (c *checker) newExpr(e *ast.NewExpr) *types.Type {
+	t := c.resolveType(e.Type)
+	if t.Kind == types.Invalid {
+		c.exprs(e.Args)
+		return types.InvalidT
+	}
+	if t.Kind != types.Error {
+		c.errorf(diagnostics.TypeBadNew, e.Type.Span, "'new' can only create error values so far, not '%s'", t).
+			WithHelp("classes are planned; the error types are Error, RangeError, TypeError, and ArgumentError")
+		c.exprs(e.Args)
+		return types.InvalidT
+	}
+	params := []*types.Type{types.StringT, types.Int}
+	if len(e.Args) > len(params) {
+		c.errorf(diagnostics.TypeArgCount, e.Span, "new %s takes at most 2 arguments (message, errorID), found %d", t, len(e.Args))
+		c.exprs(e.Args)
+		return t
+	}
+	for i, a := range e.Args {
+		c.assign(params[i], a, "pass")
+	}
+	return t
+}
+
+// errorFields are the fields of every error type.
+var errorFields = map[string]*types.Type{"message": types.StringT, "name": types.StringT, "errorID": types.Int}
+
+func fieldHelp(t *types.Type) string {
+	if t.Kind == types.Error {
+		return "errors have the fields message, name, and errorID"
+	}
+	return ""
+}
+
+// selector checks x.name: a field of an error value.
+func (c *checker) selector(e *ast.SelectorExpr) *types.Type {
+	if id, ok := e.X.(*ast.Ident); ok && !c.isVariable(id.Name) && c.quals[id.Name] != nil {
+		c.errorf(diagnostics.NameNotAValue, e.Span, "'%s.%s' can only be called; package functions cannot be used as values yet", id.Name, e.Name.Name).
+			WithHelp(fmt.Sprintf("wrap it in a lambda, e.g. (int x) => %s.%s(x)", id.Name, e.Name.Name))
+		return types.InvalidT
+	}
+	t := c.defaulted(e.X).typ
+	switch {
+	case t.Kind == types.Invalid:
+		return types.InvalidT
+	case t.Kind != types.Error:
+		c.errorf(diagnostics.TypeNoField, e.Name.Span, "values of type '%s' have no fields", t)
+		return types.InvalidT
+	}
+	f := errorFields[e.Name.Name]
+	if f == nil {
+		c.errorf(diagnostics.TypeNoField, e.Name.Span, "'%s' has no field '%s'", t, e.Name.Name).WithHelp(fieldHelp(t))
+		return types.InvalidT
+	}
+	return f
 }
 
 // ---- lambdas ----

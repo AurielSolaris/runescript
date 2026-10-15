@@ -53,6 +53,12 @@ const (
 	TypeConstDivByZero     Code = "TYPE-014"
 	TypeProtoMismatch      Code = "TYPE-015"
 	TypeNotCallable        Code = "TYPE-016"
+	TypeBadConversion      Code = "TYPE-017"
+	TypeInexactFloat       Code = "TYPE-018"
+	TypeBadNew             Code = "TYPE-019"
+	TypeNoField            Code = "TYPE-020"
+	TypeNotError           Code = "TYPE-021"
+	TypeUnreachableCatch   Code = "TYPE-022"
 
 	FlowBranchOutsideLoop Code = "FLOW-001"
 	NameAssignToParam     Code = "NAME-006"
@@ -82,6 +88,8 @@ const (
 	RunOverflow     Code = "RUN-002"
 	RunDivideByZero Code = "RUN-003"
 	RunNativeFailed Code = "RUN-004"
+	RunUncaught     Code = "RUN-005" // a thrown error that nothing caught
+	RunConversion   Code = "RUN-006" // a (Type) x conversion that failed
 
 	// TargetUnsupported reports a valid program that a code-generation
 	// target cannot represent.

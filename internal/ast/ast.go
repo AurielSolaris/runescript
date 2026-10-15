@@ -180,6 +180,30 @@ type BranchStmt struct {
 	Span    Span
 }
 
+// ThrowStmt is `throw value;`.
+type ThrowStmt struct {
+	Value Expr
+	Span  Span
+}
+
+// TryStmt is `try { } catch (T e) { } ... finally { }`. It has at least
+// one catch clause or a finally block.
+type TryStmt struct {
+	Body    *Block
+	Catches []*CatchClause
+	Finally *Block // nil without finally
+	Span    Span
+}
+
+// CatchClause is `catch (Type name) { }`, or `catch (name) { }`, which
+// catches every error.
+type CatchClause struct {
+	Type *TypeRef // nil for catch (name)
+	Name *Ident
+	Body *Block
+	Span Span
+}
+
 func (s *FuncDecl) NodeSpan() Span   { return s.Span }
 func (s *Block) NodeSpan() Span      { return s.Span }
 func (s *VarDecl) NodeSpan() Span    { return s.Span }
@@ -191,6 +215,8 @@ func (s *IfStmt) NodeSpan() Span     { return s.Span }
 func (s *WhileStmt) NodeSpan() Span  { return s.Span }
 func (s *ForStmt) NodeSpan() Span    { return s.Span }
 func (s *BranchStmt) NodeSpan() Span { return s.Span }
+func (s *ThrowStmt) NodeSpan() Span  { return s.Span }
+func (s *TryStmt) NodeSpan() Span    { return s.Span }
 
 func (*FuncDecl) stmt()   {}
 func (*Block) stmt()      {}
@@ -203,6 +229,8 @@ func (*IfStmt) stmt()     {}
 func (*WhileStmt) stmt()  {}
 func (*ForStmt) stmt()    {}
 func (*BranchStmt) stmt() {}
+func (*ThrowStmt) stmt()  {}
+func (*TryStmt) stmt()    {}
 
 // ---- expressions ----
 
@@ -216,6 +244,14 @@ type Expr interface {
 // UnaryExpr{"-", IntLit}.
 type IntLit struct {
 	Value uint64
+	Text  string
+	Span  Span
+}
+
+// FloatLit is a non-negative floating-point literal. Value is the nearest
+// float64 to the literal as written.
+type FloatLit struct {
+	Value float64
 	Text  string
 	Span  Span
 }
@@ -272,22 +308,52 @@ type ParenExpr struct {
 	Span Span
 }
 
-func (e *IntLit) NodeSpan() Span     { return e.Span }
-func (e *StringLit) NodeSpan() Span  { return e.Span }
-func (e *BoolLit) NodeSpan() Span    { return e.Span }
-func (e *Ident) NodeSpan() Span      { return e.Span }
-func (e *CallExpr) NodeSpan() Span   { return e.Span }
-func (e *UnaryExpr) NodeSpan() Span  { return e.Span }
-func (e *BinaryExpr) NodeSpan() Span { return e.Span }
-func (e *ParenExpr) NodeSpan() Span  { return e.Span }
-func (e *LambdaExpr) NodeSpan() Span { return e.Span }
+// CastExpr is the checked conversion `(Type) x`.
+type CastExpr struct {
+	Type *TypeRef
+	X    Expr
+	Span Span
+}
 
-func (*IntLit) expr()     {}
-func (*StringLit) expr()  {}
-func (*BoolLit) expr()    {}
-func (*Ident) expr()      {}
-func (*CallExpr) expr()   {}
-func (*UnaryExpr) expr()  {}
-func (*BinaryExpr) expr() {}
-func (*ParenExpr) expr()  {}
-func (*LambdaExpr) expr() {}
+// NewExpr is `new Type(args)`. Only the built-in error types can be
+// constructed so far.
+type NewExpr struct {
+	Type *TypeRef
+	Args []Expr
+	Span Span
+}
+
+// SelectorExpr is `x.name`, a field of a value such as e.message.
+type SelectorExpr struct {
+	X    Expr
+	Name *Ident
+	Span Span
+}
+
+func (e *IntLit) NodeSpan() Span       { return e.Span }
+func (e *StringLit) NodeSpan() Span    { return e.Span }
+func (e *BoolLit) NodeSpan() Span      { return e.Span }
+func (e *Ident) NodeSpan() Span        { return e.Span }
+func (e *CallExpr) NodeSpan() Span     { return e.Span }
+func (e *UnaryExpr) NodeSpan() Span    { return e.Span }
+func (e *BinaryExpr) NodeSpan() Span   { return e.Span }
+func (e *ParenExpr) NodeSpan() Span    { return e.Span }
+func (e *FloatLit) NodeSpan() Span     { return e.Span }
+func (e *CastExpr) NodeSpan() Span     { return e.Span }
+func (e *NewExpr) NodeSpan() Span      { return e.Span }
+func (e *SelectorExpr) NodeSpan() Span { return e.Span }
+func (e *LambdaExpr) NodeSpan() Span   { return e.Span }
+
+func (*IntLit) expr()       {}
+func (*StringLit) expr()    {}
+func (*BoolLit) expr()      {}
+func (*Ident) expr()        {}
+func (*CallExpr) expr()     {}
+func (*UnaryExpr) expr()    {}
+func (*BinaryExpr) expr()   {}
+func (*ParenExpr) expr()    {}
+func (*FloatLit) expr()     {}
+func (*CastExpr) expr()     {}
+func (*NewExpr) expr()      {}
+func (*SelectorExpr) expr() {}
+func (*LambdaExpr) expr()   {}

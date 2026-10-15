@@ -1,0 +1,9 @@
+42 -> 42
+-7 -> out of range: not a plausible age
+forty -> not a number
+adding 1
+caught RangeError 2
+finally 1
+adding 2
+caught RangeError 2
+finally 2

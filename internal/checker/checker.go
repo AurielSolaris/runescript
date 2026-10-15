@@ -40,6 +40,15 @@ type Info struct {
 	// Natives maps calls to standard library functions to their
 	// implementation.
 	Natives map[*ast.CallExpr]*stdlib.Func
+	// FloatConsts holds the value of floating-point constants that were
+	// given a concrete float type, like Consts for integers. The value is
+	// exactly representable in that type.
+	FloatConsts map[ast.Expr]float64
+	// CatchTypes holds the error type each catch clause catches.
+	CatchTypes map[*ast.CatchClause]*types.Type
+	// Builtins maps calls of the built-in functions isNaN and isFinite to
+	// their name. (trace is recognised by name, as it cannot be hidden.)
+	Builtins map[*ast.CallExpr]string
 	// Entry is the program entry point; EntryVoid reports whether it
 	// returns void.
 	Entry     *ast.FuncDecl
@@ -69,6 +78,7 @@ func (f *FuncSym) visibility() ast.Visibility { return firstDecl(f).Visibility }
 type symbol struct {
 	typ     *types.Type // variable type
 	isParam bool
+	isCatch bool     // the error variable of a catch clause (read-only)
 	fn      *FuncSym // non-nil for named functions
 }
 
@@ -101,8 +111,9 @@ type checker struct {
 
 // operand is the checked form of an expression.
 type operand struct {
-	typ   *types.Type
-	konst *big.Int // non-nil only for untyped integer constants
+	typ    *types.Type
+	konst  *big.Int // non-nil only for untyped integer constants
+	fconst *float64 // non-nil only for untyped float constants
 }
 
 var invalid = operand{typ: types.InvalidT}
@@ -126,6 +137,10 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 			Callees:  map[*ast.CallExpr]*FuncSym{},
 			FuncRefs: map[*ast.Ident]*FuncSym{},
 			Natives:  map[*ast.CallExpr]*stdlib.Func{},
+
+			FloatConsts: map[ast.Expr]float64{},
+			CatchTypes:  map[*ast.CatchClause]*types.Type{},
+			Builtins:    map[*ast.CallExpr]string{},
 		},
 		pkgs:  map[*loader.Package]*scope{},
 		files: map[*loader.File]*scope{},
@@ -477,17 +492,30 @@ func (c *checker) checkReturns(body *ast.Block) {
 		WithHelp("add a return statement at the end")
 }
 
-// terminates reports whether stmts always end in a return. Loops are never
-// considered terminating (OQ-FLOW-01).
+// terminates reports whether stmts always end in a return or a throw.
+// Loops are never considered terminating (OQ-FLOW-01).
 func terminates(stmts []ast.Stmt) bool {
 	if len(stmts) == 0 {
 		return false
 	}
 	switch s := stmts[len(stmts)-1].(type) {
-	case *ast.ReturnStmt:
+	case *ast.ReturnStmt, *ast.ThrowStmt:
 		return true
 	case *ast.IfStmt:
 		return ifTerminates(s)
+	case *ast.TryStmt:
+		if s.Finally != nil && terminates(s.Finally.Stmts) {
+			return true
+		}
+		if !terminates(s.Body.Stmts) {
+			return false
+		}
+		for _, cl := range s.Catches {
+			if !terminates(cl.Body.Stmts) {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }

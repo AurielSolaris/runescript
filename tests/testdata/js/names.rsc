@@ -24,14 +24,14 @@ public int RuneScriptError() {
 
 public int main() {
     int var = 1;
-    int new = function(var);
-    int typeof = Math(new);
+    int instanceof = function(var);
+    int typeof = Math(instanceof);
     int arguments = 3;
     int eval = arguments + typeof;
     int undefined = 0;
     int NaN = eval - undefined;
     console("still the RuneScript function");
-    trace(var, new, typeof, eval, undefined, NaN);
+    trace(var, instanceof, typeof, eval, undefined, NaN);
     trace(run((int yield) => yield + 1), RuneScriptError());
     bool process = true;
     string globalThis = "ok";

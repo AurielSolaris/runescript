@@ -76,6 +76,53 @@ func (c *checker) stmt(s ast.Stmt) {
 			c.errorf(diagnostics.FlowBranchOutsideLoop, s.Span, "'%s' is only allowed inside a loop", s.Keyword).
 				WithHelp("break and continue do not cross function boundaries")
 		}
+	case *ast.ThrowStmt:
+		if t := c.expr(s.Value).typ; t.Kind != types.Error && t.Kind != types.Invalid {
+			c.errorf(diagnostics.TypeNotError, s.Value.NodeSpan(), "only errors can be thrown, found '%s'", t).
+				WithHelp(`throw an error value, e.g. throw new Error("message");`)
+		}
+	case *ast.TryStmt:
+		c.tryStmt(s)
+	}
+}
+
+// tryStmt checks try/catch/finally. Catch clauses are tried in order, so a
+// clause whose type an earlier clause already catches can never run.
+func (c *checker) tryStmt(s *ast.TryStmt) {
+	c.block(s.Body)
+	var earlier []*ast.CatchClause
+	for _, cl := range s.Catches {
+		t := types.ErrorT // catch (e) catches every error
+		if cl.Type != nil {
+			t = c.resolveType(cl.Type)
+		}
+		switch {
+		case t.Kind == types.Invalid:
+		case t.Kind != types.Error:
+			c.errorf(diagnostics.TypeNotError, cl.Type.Span, "a catch clause catches an error type, found '%s'", t).
+				WithHelp("the error types are Error, RangeError, TypeError, and ArgumentError")
+			t = types.InvalidT
+		default:
+			for _, prev := range earlier {
+				if p := c.info.CatchTypes[prev]; types.IsSubtype(t, p) {
+					c.errorf(diagnostics.TypeUnreachableCatch, catchSpan(cl), "this catch clause can never run: the clause at %s already catches '%s'", catchSpan(prev).Start, p).
+						WithHelp("put catch clauses for specific error types before the ones for more general types")
+					break
+				}
+			}
+		}
+		c.info.CatchTypes[cl] = t
+		earlier = append(earlier, cl)
+		c.push(false)
+		c.conflict(cl.Name)
+		c.top().add(cl.Name.Name, &symbol{typ: t, isCatch: true})
+		c.block(cl.Body)
+		c.pop()
+	}
+	if s.Finally != nil {
+		// As in ActionScript 3 and Java, a finally block may return, break,
+		// or continue; that replaces however the try statement ended.
+		c.block(s.Finally)
 	}
 }
 
@@ -100,6 +147,9 @@ func (c *checker) target(id *ast.Ident) *symbol {
 	case v.isParam:
 		c.errorf(diagnostics.NameAssignToParam, id.Span, "cannot assign to parameter '%s'", id.Name).
 			WithHelp("parameters are read-only; copy the value into a local variable")
+	case v.isCatch:
+		c.errorf(diagnostics.NameAssignToParam, id.Span, "cannot assign to caught error '%s'", id.Name).
+			WithHelp("the error variable of a catch clause is read-only")
 	default:
 		return v
 	}
@@ -161,4 +211,13 @@ func (c *checker) cond(e ast.Expr) {
 		c.errorf(diagnostics.TypeCondition, e.NodeSpan(), "condition must be 'bool', found '%s'", op.typ).
 			WithHelp("integers are not implicitly converted to bool; compare explicitly, e.g. `x != 0`")
 	}
+}
+
+// catchSpan is where a catch clause's type is written, or its name for
+// catch (e).
+func catchSpan(cl *ast.CatchClause) diagnostics.Span {
+	if cl.Type != nil {
+		return cl.Type.Span
+	}
+	return cl.Name.Span
 }

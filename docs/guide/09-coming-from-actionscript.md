@@ -94,7 +94,7 @@ top-level `main()` function, and no class is needed.
 
 ## Not yet available
 
-Classes, interfaces, `static`, `Vector.<T>`/arrays, `Number`/floats, string
+Classes, interfaces, `static`, `Vector.<T>`/arrays, string
 concatenation, casts, `null`, `use` for files and non-standard packages,
 metadata, E4X XML, and graphics (a native graphics package is planned). See the
 [roadmap](../ROADMAP.md).

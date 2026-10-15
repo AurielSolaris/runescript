@@ -99,7 +99,31 @@ type (
 	// Break and Continue apply to the innermost loop.
 	Break    struct{}
 	Continue struct{}
+	// Throw throws X, an error. Site is the throw statement; it becomes
+	// the error's location if the error has none yet.
+	Throw struct {
+		X    Expr
+		Site Span
+	}
+	// Try runs Body. An error thrown in it is caught by the first of
+	// Catches whose type it has; Finally (nil if absent) runs however the
+	// statement ends, except when the program stops for an error that
+	// cannot be caught. A return, break, or continue in Finally replaces
+	// that ending.
+	Try struct {
+		Body    *Block
+		Catches []*Catch
+		Finally *Block
+	}
 )
+
+// Catch is one catch clause: it catches errors of type T (or a subtype)
+// into Var.
+type Catch struct {
+	T    *types.Type
+	Var  *Var
+	Body *Block
+}
 
 func (*FuncStmt) stmt() {}
 func (*Decl) stmt()     {}
@@ -111,6 +135,8 @@ func (*While) stmt()    {}
 func (*For) stmt()      {}
 func (*Break) stmt()    {}
 func (*Continue) stmt() {}
+func (*Throw) stmt()    {}
+func (*Try) stmt()      {}
 func (*Block) stmt()    {}
 
 // Expr is any expression. Type is never invalid or untyped.
@@ -129,15 +155,49 @@ type (
 		Span  Span
 	}
 	BoolConst struct{ Value bool }
+	// FloatConst is a floating-point constant of float type T, exactly
+	// representable in T.
+	FloatConst struct {
+		T     *types.Type
+		Value float64
+	}
+	// Neg is float negation. Integer negation is an Arith.
+	Neg struct{ X Expr }
+	// Convert is the checked conversion (To) X. A failure throws a
+	// RangeError or TypeError reported at Site.
+	Convert struct {
+		X    Expr
+		To   *types.Type
+		Site Span
+	}
+	// NewError creates an error of type T. Message and ID may be nil
+	// (they default to "" and 0).
+	NewError struct {
+		T           *types.Type
+		Message, ID Expr
+	}
+	// FloatTest is the built-in isNaN(X) or isFinite(X).
+	FloatTest struct {
+		Name string
+		X    Expr
+	}
+	// Field reads a field of an error: message, name, or errorID.
+	Field struct {
+		X    Expr
+		Name string
+		T    *types.Type
+	}
 	// Load reads a variable.
 	Load struct{ Var *Var }
 	// FuncRef is a named function used as a value.
 	FuncRef struct{ Func *Func }
 	// Lambda is an anonymous function value.
 	Lambda struct{ Func *Func }
-	// Arith is a range-checked integer operation: + - * / %. X and Y have
-	// type T. A result outside T's range, or a zero divisor, is a runtime
-	// error reported at Site. Unary minus is Arith{"-", 0, x}.
+	// Arith is a range-checked integer operation (+ - * / %), or an IEEE
+	// float operation (+ - * /), rounded to float32 for float32. X and Y
+	// have type T. For integers, a result outside T's range or a zero
+	// divisor is a runtime error reported at Site. Integer unary minus is
+	// Arith{"-", 0, x}.
 	Arith struct {
 		Op   string
 		T    *types.Type
@@ -194,3 +254,9 @@ func (e *CallFunc) Type() *types.Type    { return e.Func.Type.Result }
 func (e *CallValue) Type() *types.Type   { return e.Callee.Type().Result }
 func (e *CallNative) Type() *types.Type  { return e.Func.Result }
 func (e *Trace) Type() *types.Type       { return types.VoidT }
+func (e *FloatConst) Type() *types.Type  { return e.T }
+func (e *Neg) Type() *types.Type         { return e.X.Type() }
+func (e *Convert) Type() *types.Type     { return e.To }
+func (e *NewError) Type() *types.Type    { return e.T }
+func (e *Field) Type() *types.Type       { return e.T }
+func (e *FloatTest) Type() *types.Type   { return types.BoolT }

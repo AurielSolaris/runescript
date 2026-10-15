@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/driver"
@@ -280,5 +281,41 @@ public void main() { loop(); }`)
 	var re *runtime.Error
 	if !errors.As(err, &re) || re.Diag.Code != diagnostics.RunCallDepth {
 		t.Fatalf("expected ASX-RUN-001, got %v", err)
+	}
+}
+
+// An error thrown deep in a recursion, through a try statement in every
+// frame, unwinds in time linear in the depth. Recovering and re-raising
+// the panic in every frame would take quadratic time (seconds, not
+// milliseconds, at this depth).
+func TestDeepUnwindIsLinear(t *testing.T) {
+	for _, handler := range []string{
+		"finally { int x = 0; }",
+		"catch (RangeError e) { return 0; }", // a clause that does not match
+	} {
+		src := `package p;
+public int down(int n) {
+    try {
+        if (n == 9500) {
+            throw new Error("bottom");
+        }
+        return down(n + 1);
+    } ` + handler + `
+}
+public void main() {
+    try {
+        down(0);
+    } catch (Error e) {
+        trace(e);
+    }
+}`
+		start := time.Now()
+		out, _, err := run(t, src)
+		if err != nil || out != "Error: bottom\n" {
+			t.Fatalf("%s: out %q, err %v", handler, out, err)
+		}
+		if d := time.Since(start); d > 3*time.Second {
+			t.Errorf("%s: unwinding took %v", handler, d)
+		}
 	}
 }

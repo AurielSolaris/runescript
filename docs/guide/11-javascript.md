@@ -52,7 +52,10 @@ guard the rest:
 | Every value has its declared type | Variables hold anything | Checked at compile time, then re-verified on the typed IR before any code is written. No unchecked conversion is ever emitted. |
 | `int` and `uint` are 32-bit; overflow is `ASX-RUN-002` | `2147483647 + 1` is `2147483648` | Every integer `+ - * / %` goes through a range check that stops the program |
 | `/` truncates | `7 / 2` is `3.5` | Truncating division |
-| Division by zero is `ASX-RUN-003` | `Infinity` or `NaN` | Checked |
+| Division by zero is `ASX-RUN-003` | `Infinity` or `NaN` | Checked, for integers and floats |
+| `float32` rounds to 32 bits | One 64-bit number type | `float32` results go through `Math.fround`, and print with float32's shortest digits; `float` and `float64` are JavaScript numbers (IEEE, with `NaN` and `Infinity`, as in AS3) |
+| `(int) "12x"` throws a `TypeError` | `parseInt("12x")` is `12` | The same parsing rules as the interpreter |
+| Runtime errors are catchable error values | Exceptions are any value | Errors are RuneScript error objects; catch clauses test their type; the call-depth error passes every catch clause |
 | Calls nest at most 10,000 deep (`ASX-RUN-001`) | Host-dependent stack | Counted. If the host's stack runs out first, that's also `ASX-RUN-001` |
 | `std:string` positions are UTF-8 byte offsets | Strings are UTF-16 | Offsets are converted, so `string.index("5€x", "x")` is `4` on every target |
 | `std:string` case mapping and white space follow Go | `"ß".toUpperCase()` is `"SS"` | Tables generated from Go's `unicode` package, so the results are identical |

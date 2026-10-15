@@ -17,6 +17,7 @@ const (
 	EOF Kind = iota
 	Ident
 	Int    // integer literal; Token.Text holds the digits
+	Float  // floating-point literal; Token.Text holds it as written
 	String // string literal; Token.Text holds the decoded value
 	Keyword
 	Reserved // reserved for a future feature; not usable as an identifier
@@ -32,7 +33,7 @@ const (
 )
 
 var kindNames = map[Kind]string{
-	EOF: "end of file", Ident: "identifier", Int: "integer literal",
+	EOF: "end of file", Ident: "identifier", Int: "integer literal", Float: "floating-point literal",
 	String: "string literal", Keyword: "keyword", Reserved: "reserved word",
 	LParen: "'('", RParen: "')'", LBrace: "'{'", RBrace: "'}'", Comma: "','",
 	Semicolon: "';'", Dot: "'.'", Assign: "'='", Op: "operator",
@@ -47,16 +48,17 @@ var keywords = map[string]bool{
 	"true": true, "false": true, "bool": true,
 	"public": true, "protected": true, "private": true,
 	"int": true, "sint": true, "uint": true, "string": true, "void": true,
+	"float": true, "float32": true, "float64": true,
+	"try": true, "catch": true, "finally": true, "throw": true, "new": true,
 }
 
 // reserved words named by the specification for features that are not yet
 // implemented. Reserving them now keeps today's programs valid later.
 var reserved = map[string]bool{
 	"class": true, "struct": true,
-	"float": true, "char": true, "array": true, "matrix": true,
+	"char": true, "array": true, "matrix": true,
 	"int8": true, "int16": true, "int32": true, "int64": true,
 	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
-	"float32": true, "float64": true,
 }
 
 // Token is a lexical token with its source span.
@@ -238,32 +240,58 @@ func (l *lexer) ident(start diagnostics.Pos) {
 	}
 }
 
-// number lexes a decimal integer literal. Leading zeros, floating-point
-// literals, and suffixes are rejected because their semantics are undecided.
+// number lexes a decimal integer literal (`42`) or a floating-point
+// literal (`64.3`, `1e10`, `2.5e-3`): digits, then optionally '.' and
+// digits, then optionally an exponent. Both sides of the '.' need digits.
+// Leading zeros (`007`, but not `0.5`) and suffixes are rejected because
+// their semantics are undecided.
 func (l *lexer) number(start diagnostics.Pos) {
-	for l.off < len(l.src) && isDigit(l.src[l.off]) {
+	l.digits()
+	isFloat := false
+	if l.off < len(l.src) && l.src[l.off] == '.' && isDigit(l.peek(1)) {
+		isFloat = true
 		l.advance()
+		l.digits()
+	}
+	if l.off < len(l.src) && (l.src[l.off] == 'e' || l.src[l.off] == 'E') {
+		k := 1
+		if c := l.peek(1); c == '+' || c == '-' {
+			k = 2
+		}
+		if isDigit(l.peek(k)) {
+			isFloat = true
+			for ; k > 0; k-- {
+				l.advance()
+			}
+			l.digits()
+		}
 	}
 	text := string(l.src[start.Offset:l.off])
-	if l.off < len(l.src) && l.src[l.off] == '.' && isDigit(l.peek(1)) {
-		for l.off < len(l.src) && (isDigit(l.src[l.off]) || l.src[l.off] == '.') {
+	if l.off < len(l.src) && (isIdentStart(l.src[l.off]) || l.src[l.off] == '.' && isDigit(l.peek(1))) {
+		for l.off < len(l.src) && (isIdentStart(l.src[l.off]) || isDigit(l.src[l.off]) || l.src[l.off] == '.') {
 			l.advance()
 		}
-		l.errorf(diagnostics.LexUnsupportedLiteral, start, "floating-point literals are not supported yet").
-			WithHelp("'float' literal syntax and widening rules are not yet specified")
+		l.errorf(diagnostics.LexInvalidNumber, start, "invalid number literal %q", string(l.src[start.Offset:l.off])).
+			WithHelp("number literal prefixes and suffixes are not yet specified")
 		return
 	}
-	if l.off < len(l.src) && isIdentStart(l.src[l.off]) {
-		for l.off < len(l.src) && (isIdentStart(l.src[l.off]) || isDigit(l.src[l.off])) {
-			l.advance()
-		}
-		l.errorf(diagnostics.LexInvalidNumber, start, "invalid integer literal %q", string(l.src[start.Offset:l.off])).
-			WithHelp("integer literal prefixes and suffixes are not yet specified")
-		return
-	}
-	if len(text) > 1 && text[0] == '0' {
-		l.errorf(diagnostics.LexInvalidNumber, start, "integer literal %q has a leading zero", text).
+	if len(text) > 1 && text[0] == '0' && isDigit(text[1]) {
+		l.errorf(diagnostics.LexInvalidNumber, start, "number literal %q has a leading zero", text).
 			WithHelp("leading zeros are rejected until octal/decimal semantics are decided; write the number without them")
+		return
+	}
+	if isFloat {
+		v, err := strconv.ParseFloat(text, 64)
+		switch {
+		case err != nil:
+			l.errorf(diagnostics.LexInvalidNumber, start, "floating-point literal %s is too large", text).
+				WithHelp("the largest float is about 1.7976931348623157e308")
+			return
+		case v == 0 && strings.Trim(strings.SplitN(strings.ToLower(text), "e", 2)[0], "0.") != "":
+			l.errorf(diagnostics.LexInvalidNumber, start, "floating-point literal %s is too small and would round to 0", text)
+			return
+		}
+		l.emit(Float, text, start)
 		return
 	}
 	if _, err := strconv.ParseUint(text, 10, 64); err != nil {
@@ -271,6 +299,12 @@ func (l *lexer) number(start diagnostics.Pos) {
 		return
 	}
 	l.emit(Int, text, start)
+}
+
+func (l *lexer) digits() {
+	for l.off < len(l.src) && isDigit(l.src[l.off]) {
+		l.advance()
+	}
 }
 
 func (l *lexer) string(start diagnostics.Pos) {

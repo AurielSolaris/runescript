@@ -59,10 +59,10 @@ public int main() {
 
 func TestReservedNamesAreRenamed(t *testing.T) {
 	js, _ := generate(t, `package p;
-public int new(int this) { return this; }
-public int main() { int var = new(1); return var; }
+public int delete(int this) { return this; }
+public int main() { int var = delete(1); return var; }
 `)
-	for _, want := range []string{"function new$(this$, $site)", "let var$ = new$(1,", "return var$;"} {
+	for _, want := range []string{"function delete$(this$, $site)", "let var$ = delete$(1,", "return var$;"} {
 		if !strings.Contains(js, want) {
 			t.Errorf("generated code lacks %q", want)
 		}

@@ -124,8 +124,10 @@ func TestParseErrors(t *testing.T) {
 		{"reserved class", "package p;\nclass Foo {}", diagnostics.ParseNotImplemented, "2:1"},
 		{"use after function", "package p;\npublic void f() { }\nuse \"std:string\";", diagnostics.ParseUnexpected, "3:1"},
 		{"use without string", "package p;\nuse std;", diagnostics.ParseUnexpected, "2:5"},
-		{"qualified non-call", "package p;\npublic void f() {\n    trace(string.x);\n}", diagnostics.ParseUnexpected, "3:19"},
-		{"reserved type in body", "package p;\npublic void f() {\n    float x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
+		{"catch without name", "package p;\npublic void f() {\n    try { } catch (Error) { }\n}", diagnostics.ParseUnexpected, "3:25"},
+		{"try alone", "package p;\npublic void f() {\n    try { }\n}", diagnostics.ParseUnexpected, "4:1"},
+		{"cast of nothing", "package p;\npublic void f() {\n    trace((int));\n}", diagnostics.ParseUnexpected, "3:16"},
+		{"reserved type in body", "package p;\npublic void f() {\n    char x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
 		{"uninitialized var", "package p;\npublic void f() {\n    int x;\n}", diagnostics.ParseUnexpected, "3:10"},
 		{"expression statement", "package p;\npublic void f() {\n    1 + 2;\n}", diagnostics.ParseUnexpected, "3:5"},
 		{"standalone block", "package p;\npublic void f() {\n    { }\n}", diagnostics.ParseNotImplemented, "3:5"},
@@ -251,5 +253,43 @@ func TestParseFunctionErrors(t *testing.T) {
 				t.Errorf("got %v, want ASX-PARSE-001 at %s", diags, c.pos)
 			}
 		})
+	}
+}
+
+func TestParseCastsErrorsAndTry(t *testing.T) {
+	f := mustParse(t, `package p;
+public void f() {
+    int n = (int) -64.7 + 1;
+    try {
+        throw new RangeError("bad", 7);
+    } catch (RangeError e) {
+        trace(e.message, (string) 1.5e3);
+    } catch (Error e) {
+    } finally {
+    }
+}`)
+	stmts := f.Funcs[0].Body.Stmts
+	bin := stmts[0].(*ast.VarDecl).Init.(*ast.BinaryExpr)
+	cast, ok := bin.X.(*ast.CastExpr) // a cast binds tighter than +
+	if !ok || cast.Type.Name != "int" || cast.Span.Start.Col != 13 {
+		t.Fatalf("cast = %+v", bin.X)
+	}
+	if neg, ok := cast.X.(*ast.UnaryExpr); !ok || neg.X.(*ast.FloatLit).Value != 64.7 {
+		t.Errorf("cast operand = %+v", cast.X)
+	}
+	try := stmts[1].(*ast.TryStmt)
+	if len(try.Catches) != 2 || try.Finally == nil || try.Catches[1].Type.Name != "Error" {
+		t.Fatalf("try = %+v", try)
+	}
+	n := try.Body.Stmts[0].(*ast.ThrowStmt).Value.(*ast.NewExpr)
+	if n.Type.Name != "RangeError" || len(n.Args) != 2 {
+		t.Errorf("new = %+v", n)
+	}
+	args := try.Catches[0].Body.Stmts[0].(*ast.ExprStmt).Call.Args
+	if sel, ok := args[0].(*ast.SelectorExpr); !ok || sel.Name.Name != "message" || sel.X.(*ast.Ident).Name != "e" {
+		t.Errorf("selector = %+v", args[0])
+	}
+	if c, ok := args[1].(*ast.CastExpr); !ok || c.Type.Name != "string" {
+		t.Errorf("string cast = %+v", args[1])
 	}
 }

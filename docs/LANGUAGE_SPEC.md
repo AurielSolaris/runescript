@@ -48,14 +48,19 @@ Implemented keywords **[v0.1]**:
 package use return if else while for break continue true false
 public protected private
 int sint uint bool string void
+float float32 float64                 [v0.3]
+try catch finally throw new           [v0.3]
 ```
+
+`as` is a keyword only after a `use` path (§4.2). `Error`, `RangeError`,
+`TypeError`, and `ArgumentError` are predeclared type names, not keywords.
 
 Reserved for planned features **[v0.1, provisional]**. They are rejected
 with `ASX-PARSE-002`:
 
 ```
-class struct float char array matrix
-int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64
+class struct char array matrix
+int8 int16 int32 int64 uint8 uint16 uint32 uint64
 ```
 
 `trace` is not a keyword. It is a built-in function name and can't be
@@ -69,8 +74,12 @@ redeclared.
 - **String [v0.1]**: `"…"` on one line. Escapes: `\n \t \r \\ \"`. Any other
   escape is an error **[provisional]**.
 - **Boolean [v0.1]**: `true`, `false`.
-- **Float, char [undecided]**: `1.5` and `'a'` are rejected with
-  `ASX-LEX-006`.
+- **Float [v0.3]**: digits, then optionally `.` and digits, then
+  optionally an exponent: `64.3`, `1e10`, `2.5E-3`. Both sides of the `.`
+  need digits (`.5` and `5.` are not literals). A literal stands for the
+  nearest float64 to its decimal value; one too large for float64, or so
+  small it would round to zero, is `ASX-LEX-005`.
+- **Char [undecided]**: `'a'` is rejected with `ASX-LEX-006`.
 
 ### 2.5 Operators and punctuation **[v0.1]**
 ```
@@ -102,7 +111,8 @@ Stmt         = FuncDecl                 (* nested function or prototype *)
              | SimpleStmt ";"
              | "return" [ Expr ] ";"
              | "break" ";" | "continue" ";"
-             | IfStmt | WhileStmt | ForStmt ;
+             | "throw" Expr ";"
+             | IfStmt | WhileStmt | ForStmt | TryStmt ;
 SimpleStmt   = VarDecl | Assignment | IncDec | Call ;
 VarDecl      = Type Ident "=" Expr ;
 Assignment   = Ident ( "=" | "+=" | "-=" | "*=" | "/=" | "%=" ) Expr ;
@@ -112,6 +122,8 @@ IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
 WhileStmt    = "while" "(" Expr ")" Block ;
 ForStmt      = "for" "(" [ SimpleStmt ] ";" [ Expr ] ";" [ ForPost ] ")" Block ;
 ForPost      = Assignment | IncDec | Call ;
+TryStmt      = "try" Block { "catch" "(" Type Ident ")" Block } [ "finally" Block ] ;
+               (* at least one catch clause or a finally block *)
 
 Expr         = OrExpr ;
 OrExpr       = AndExpr { "||" AndExpr } ;
@@ -120,10 +132,13 @@ EqExpr       = RelExpr { ( "==" | "!=" ) RelExpr } ;
 RelExpr      = AddExpr { ( "<" | "<=" | ">" | ">=" ) AddExpr } ;
 AddExpr      = MulExpr { ( "+" | "-" ) MulExpr } ;
 MulExpr      = Unary   { ( "*" | "/" | "%" ) Unary } ;
-Unary        = ( "-" | "!" ) Unary | Postfix ;
-Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" } ;   (* calls of function values *)
-Primary      = IntLit | StringLit | "true" | "false"
-             | Ident | Call | Lambda | "(" Expr ")" ;
+Unary        = ( "-" | "!" ) Unary | Cast | Postfix ;
+Cast         = "(" CastType ")" Unary ;
+CastType     = "int" | "sint" | "uint" | "float" | "float32" | "float64" | "string" | "bool" ;
+Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" | "." Ident } ;   (* calls, fields *)
+Primary      = IntLit | FloatLit | StringLit | "true" | "false"
+             | Ident | Call | Lambda | New | "(" Expr ")" ;
+New          = "new" Ident "(" [ Expr { "," Expr } ] ")" ;
 Lambda       = "(" [ Type Ident { "," Type Ident } ] ")" "=>" ( Expr | Block ) ;
 Call         = [ Qualifier "." ] Ident "(" [ Expr { "," Expr } ] ")" ;
 Qualifier    = Ident | "string" ;   (* the package qualifier; see §4.2 *)
@@ -142,6 +157,9 @@ Notes:
   appear inside expressions.
 - **[v0.2]** A qualifier can only be followed by a call: `string.toUpper(s)`.
   Packages export nothing but functions so far.
+- **[v0.3]** `(` followed by a type keyword and `)` is a conversion, which
+  binds like a unary operator: `(int) x + 1` is `((int) x) + 1`. A type
+  keyword can't begin an expression, so this is unambiguous.
 - **[v0.1]** A `Type` that is an identifier parses, but it is reported as
   `ASX-TYPE-010 unknown type` until user-defined types exist.
 
@@ -287,6 +305,9 @@ three is accepted.
 | `uint` | [v0.1, provisional width] | Unsigned integer. v0.1 representation: 32-bit (0 … 4294967295). |
 | `bool` | [v0.1] | `true`, `false`. |
 | `string` | [v0.1] | Immutable UTF-8 text. **[v0.2, decided]** Positions and lengths are byte offsets, as in Go. |
+| `float` | [v0.3, provisional] | Generic floating point (§5.1b). Default representation float32, widening to float64. |
+| `float32`, `float64` | [v0.3, provisional] | IEEE 754 binary32 and binary64. Explicit widths: they never widen. |
+| `Error`, `RangeError`, `TypeError`, `ArgumentError` | [v0.3] | Error values (§7.6). The last three are subtypes of `Error`. |
 | `void` | [v0.1] | Means "no value". Valid only as a return type; you can't store it, pass it, or trace it. |
 
 There is no `any` type and never will be (CLAUDE.md §4).
@@ -299,11 +320,47 @@ when their parameter and result types are identical. Function values can be
 stored, passed, returned, and called, but not traced, compared, or used with
 operators (`ASX-TYPE-012`). `void` can be a result but not a parameter.
 
+### 5.1b Floating-point types **[v0.3, provisional]**
+Owner decision: `float` follows CLAUDE.md §4.4. It starts with a float32
+representation and widens to float64 whenever a value needs it, in
+magnitude **or precision**; it never contracts. Rules that follow from
+this:
+
+- Widening never changes a value, so the value of every `float` expression
+  is exactly what float64 arithmetic gives. `0.1 + 0.2` is
+  `0.30000000000000004`. The width a value is stored in is not observable
+  in v0.3; it becomes a question of memory layout once floats can be stored
+  in arrays and structs (OQ-NUM-01).
+- `float32` and `float64` are exact IEEE types and never widen. Every
+  `float32` result is rounded to float32.
+- **IEEE 754, as in ActionScript 3 (owner decision).** A result too large
+  for its type is `Infinity` (or `-Infinity`), and `0 / 0` is `NaN`. Float
+  operations never stop the program. `NaN` is unequal to everything,
+  itself included. The predeclared constants `NaN` and `Infinity` are
+  untyped float constants (a variable or function of the same name hides
+  them), and the built-ins `isNaN(x)` and `isFinite(x)` test a float of any
+  float type. `-0` exists but prints as `0` and is equal to `0`.
+- Operators: `+ - * /`, unary `-`, and all six comparisons, on two operands
+  of the same float type. `%` is integers only. `++`/`--` are integers
+  only; write `x += 1;`.
+- **No implicit conversions** between integers and floats, or between float
+  types: `n * 1.5` with an `int n` is `ASX-TYPE-012`, and assigning a
+  `float` to a `float64` is `ASX-TYPE-001`. Use a conversion (§5.6).
+- Float constants: a float literal (or `-` applied to one) takes the float
+  type its context needs, or `float`. An integer constant can also become a
+  float. Either must be exactly representable: `float32 x = 0.1;` is
+  `ASX-TYPE-018` (write `(float32) 0.1`). Float constant expressions are
+  not folded: `0.1 + 0.2` is computed at run time, in float arithmetic.
+- `trace` and `(string)` print floats as ActionScript 3 prints Numbers
+  (`NaN`, `Infinity`, `-Infinity` for the non-finite values):
+  the shortest decimal that reads back as the same value (at float32
+  precision for `float32`), plain from 1e-6 to below 1e21 (`64`, `0.5`,
+  `0.000001`) and in exponent form otherwise (`1e+21`, `1.5e-7`).
+
 ### 5.2 Planned types **[planned/undecided]**
-`float` (default float32, widening), `char`, `int8 int16 int32`,
-`float32 float64`, plus probably `int64` and `uint8 … uint64`. Also `array`,
-`matrix`, `struct`, `class`, and generic type parameters. None of these are
-implemented. Their names are reserved.
+`char`, `int8 int16 int32`, plus probably `int64` and `uint8 … uint64`.
+Also `array`, `matrix`, `struct`, `class`, and generic type parameters.
+None of these are implemented. Their names are reserved.
 
 ### 5.3 Integer constants **[v0.1, provisional]**
 Integer literals, and expressions built only from literals using
@@ -336,14 +393,39 @@ destination of type `D` only if:
 | S → D | Result |
 |---|---|
 | same type (`int`/`sint` count as the same; function types structurally) | allowed |
+| an error type → a supertype (`RangeError` → `Error`) [v0.3] | allowed |
 | untyped constant → integer type | allowed if the value fits (§5.3) |
+| untyped constant → float type [v0.3] | allowed if the value is exactly representable (§5.1b) |
 | signed (`int`/`sint`) → `uint` | **error `ASX-TYPE-004`**, whatever the runtime value |
 | `uint` → `int`/`sint` | **error `ASX-TYPE-005`** [provisional: rules undecided] |
 | `void` → anything | error `ASX-TYPE-002` |
 | anything else | error `ASX-TYPE-001` |
 
-There are no implicit conversions between integers, `bool`, and `string`.
-Explicit checked-conversion syntax is **[undecided]**.
+There are no implicit conversions between numbers, `bool`, and `string`.
+
+### 5.6 Conversions **[v0.3, decided syntax]**
+`(T) x` converts `x` to `T`, C style (owner decision; this settles
+OQ-CONV-01). `T` is `int`, `sint`, `uint`, `float`, `float32`, `float64`,
+`string`, or `bool`. Conversions are **checked**: they never wrap, and a
+value that can't be converted throws instead (`ASX-RUN-006` if nothing
+catches it).
+
+| From → to | Rule | Failure |
+|---|---|---|
+| integer → integer | the same value | out of range: `RangeError` |
+| float → integer | truncates toward zero: `(int) -64.7` is `-64` | out of range, `NaN`, or infinite: `RangeError` |
+| integer → float | the nearest value of the float type | never |
+| float → float | the nearest value; exact into `float64`/`float`; beyond float32's range is `Infinity` | never |
+| number, `bool` → `string` | as `trace` prints it | never |
+| `string` → integer | an optional sign and decimal digits, nothing else: `"-42"` | not of that form: `TypeError`; out of range: `RangeError` |
+| `string` → float | sign, digits, optional fraction and exponent (`"64.7"`, `"1e5"`), or `"NaN"`, `"Infinity"`, `"-Infinity"`; parsed to the nearest float64 (`Infinity` if too large), then rounded for `float32` | not of that form: `TypeError` |
+| `string` → `bool` | exactly `"true"` or `"false"` | otherwise: `TypeError` |
+| `bool` ↔ number, errors, functions | not allowed: `ASX-TYPE-017` | |
+
+A conversion of a constant happens at compile time, and its failure is a
+compile-time error: `(uint) -2.5` is `ASX-TYPE-007`, `(int) 3e10` is
+`ASX-TYPE-006`. Unlike an implicit conversion, an explicit one may round:
+`(float32) 0.1` is allowed.
 
 ## 6. Expressions
 
@@ -352,9 +434,10 @@ Explicit checked-conversion syntax is **[undecided]**.
 | Operator | Operands | Result |
 |---|---|---|
 | `+ - * / %` | two integers of the same signedness | the same integer type |
-| unary `-` | a signed integer | the same type (`uint` is rejected) |
-| `< <= > >=` | two integers of the same signedness | `bool` |
-| `== !=` | two integers of the same signedness, two `bool`s, or two `string`s | `bool` |
+| `+ - * /` [v0.3] | two floats of the same type | that type (§5.1b) |
+| unary `-` | a signed integer or a float | the same type (`uint` is rejected) |
+| `< <= > >=` | two integers of the same signedness, or two floats of the same type | `bool` |
+| `== !=` | two numbers as above, two `bool`s, or two `string`s | `bool` |
 | `&& \|\|` | `bool` | `bool`; short-circuit evaluation |
 | `!` | `bool` | `bool` |
 
@@ -402,8 +485,55 @@ an integer variable. Assignment is a statement, not an expression.
 `return e;` in a non-void function; `return;` in a `void` function. A
 non-void function must return on every path (`ASX-TYPE-008`). A body
 returns on every path when it ends in `return`, or in an
-`if`/`else if`/`else` chain whose every branch does. Loops are never treated
-as guaranteeing a return **[provisional]**.
+`if`/`else if`/`else` chain whose every branch does. **[v0.3]** `throw`
+counts like `return`, and so does a `try` statement whose block and every
+catch clause end that way, or whose `finally` block does. Loops are never
+treated as guaranteeing a return **[provisional]**.
+
+### 7.6 Errors: `throw` and `try` **[v0.3]**
+Modelled on ActionScript 3 (owner decision).
+
+- **Error values.** `new Error(message, errorID)` creates an error; both
+  arguments are optional (`""` and `0`). `RangeError`, `TypeError`, and
+  `ArgumentError` are built-in subtypes of `Error`, created the same way.
+  An error has the read-only fields `message` (`string`), `name`
+  (`string`, the type's name), and `errorID` (`int`). Errors are values:
+  they can be stored, passed, returned, and traced (`trace(e)` prints
+  `RangeError: message`, or just the name if the message is empty), but not
+  compared. `new` can create only error types until classes exist
+  (`ASX-TYPE-019`).
+- **`throw e;`** throws an error value (anything else is `ASX-TYPE-021`). A
+  throw ends a path for the definite-return rule (§7.5).
+- **`try { } catch (T e) { } … finally { }`** runs the block. If it throws,
+  the first catch clause whose type the error has (the type or a subtype)
+  runs, with the error in its read-only variable. A clause that an earlier
+  one makes unreachable is `ASX-TYPE-022`. If no clause matches, the error
+  goes on to the enclosing try statements and calling functions. The
+  `finally` block runs however the statement ends: normally, by `return`,
+  `break`, or `continue`, or by an error, which then goes on.
+- **A `finally` block may `return`, `break`, or `continue`** (owner
+  decision, as in ActionScript 3 and Java). That replaces however the try
+  statement was ending: a `return` value from the block, or an error in
+  flight, which is discarded. A `finally` block that throws replaces the
+  error in flight.
+- **`catch (e)`** (owner decision) has no type and catches every error;
+  it means `catch (Error e)`. `catch (Error)` without a name is
+  `ASX-PARSE-001`.
+- **Runtime errors are catchable** (owner decision), except the call-depth
+  limit: integer overflow and integer division by zero throw a
+  `RangeError`, a failed conversion a `RangeError` or `TypeError`, and a
+  failed standard library call an `Error`. Their `errorID` is their code's
+  number (2 for `ASX-RUN-002`), and their message is the runtime error's.
+- **Uncaught errors.** A runtime error that nothing catches is reported
+  with its own code, message, and location, even if it was caught and
+  thrown again. An error created with `new` that nothing catches is
+  `ASX-RUN-005` ("uncaught RangeError: message") at the `throw` that first
+  threw it.
+- **The call-depth limit (`ASX-RUN-001`) can't be caught.** While the
+  program stops for it, catch clauses don't run and neither do `finally`
+  blocks.
+- **[undecided]** Stack traces (`getStackTrace()`), methods such as
+  `toString()`, and user-defined error types (with classes).
 
 ## 8. Built-ins
 
@@ -446,8 +576,11 @@ The `ASX` code prefix is **provisional**. Each code is
 `FLOW`, `USE`, `ENTRY`, `RUN`, and `TARGET` (code generation, §12). The full list is in `docs/guide/08-diagnostics.md`.
 
 The checker reports every semantic error it finds. The parser stops at the
-first syntax error. A runtime error ends the program with exit status 1 and
-reports the source location where it happened.
+first syntax error. A runtime error that nothing catches (§7.6) ends the
+program with exit status 1 and reports the source location where it
+happened. **[v0.3]** The runtime errors `ASX-RUN-002` to `ASX-RUN-004` and
+`ASX-RUN-006` are thrown as error values and can be caught; exceeding the
+call depth (`ASX-RUN-001`) cannot be caught.
 
 ## 10. Comparison with ActionScript 3
 
@@ -469,12 +602,13 @@ purpose:
 | `int`/`uint` mixing | Implicit coercion; `var u:uint = -1` wraps to 4294967295 | Compile errors (`ASX-TYPE-004/005/007/011`) |
 | Integer overflow | Wraps | Never wraps silently (v0.1: runtime error; widening planned) |
 | Integer division | Produces `Number` (`7/2 == 3.5`) | Truncating integer division |
-| Floating point | `Number` (64-bit) | `float` (default 32-bit, widening) [planned] |
+| Floating point | `Number` (64-bit), with `NaN` and `Infinity` | `float` (float32 by default, widening exactly), `float32`, `float64`; IEEE, with `NaN` and `Infinity`, as in AS3 [v0.3] |
 | Type names | `String`, `Boolean` | `string`, `bool`; `sint` alias added |
 | Truthiness | `if (count)` allowed | Conditions must be `bool` |
 | Variable scope | `var` is function-scoped and hoisted | Block-scoped; no shadowing [provisional] |
 | Visibility | `public protected private internal`; default `internal` | `public` (everywhere), `protected` (package), `private` (file); always written |
-| Casts | `T(x)` and `x as T` | Explicit checked conversions [undecided] |
+| Casts | `T(x)` and `x as T`; `int("x")` is `0` | `(T) x`, checked: `(int) "x"` throws a `TypeError` [v0.3] |
+| Exceptions | `throw` any value; `catch (e:Error)`, `catch (e)` | `throw` error values only; `catch (Error e)`, `catch (e)`; runtime errors are catchable [v0.3] |
 | Imports | `import a.b.C;` imports one definition | `use "a.b";` and `use "./file";` make a whole package callable as `b.f()` [v0.3]; `use "go:pkg";` [planned] |
 | `trace` | `trace(...args)`, space-separated | Same, written to stdout |
 

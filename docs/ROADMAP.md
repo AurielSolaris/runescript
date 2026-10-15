@@ -57,7 +57,7 @@ conditionals, loops, and basic functions.
 - [x] Final source file extension: `.rsc` (`.rs` was Rust's)
 - [ ] Final diagnostic prefix (currently `ASX`)
 - [ ] Integer widening model, overflow behaviour, and the width of `uint`
-- [ ] Explicit checked conversion syntax
+- [x] Explicit checked conversion syntax: C-style `(T) x` (v0.3)
 - [ ] Unsigned → signed and mixed-signedness rules
 - [ ] Entry-point rules and visibility semantics for top-level functions
 - [ ] Confirm or relax: required initializers, read-only parameters, no shadowing, mandatory braces
@@ -91,6 +91,23 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
   a used file, running from a different working directory), all also run on
   Node.js
 - [ ] Qualified function values (`geom.area` without a call)
+
+### Floats, conversions, and errors ✅ (requested by the owner during v0.3)
+- [x] `float` (float32 by default, widening exactly, per CLAUDE.md §4.4),
+  `float32`, `float64`; literals `64.3`, `1e10`; IEEE 754 (`NaN`,
+  `Infinity`, `isNaN`, `isFinite`), as in ActionScript 3
+- [x] Float formatting as in ActionScript 3, identical on both targets
+  (`internal/conv`, tested against Node.js on random values)
+- [x] Checked conversions `(T) x` between numbers, strings, and bools;
+  compile-time checks for constants
+- [x] `Error`, `RangeError`, `TypeError`, `ArgumentError`; `new`, fields
+  `message`/`name`/`errorID`
+- [x] `throw`, `try`/`catch`/`finally`, untyped `catch (e)`; `return`,
+  `break`, and `continue` in `finally` as in AS3; runtime errors are
+  catchable (except the call-depth limit)
+- [x] Interpreter and JavaScript target behave identically (differential
+  tests), and error unwinding stays linear in the call depth
+- [ ] `std:math`
 - [ ] `runescript` flag to resolve uses from a directory other than the
   working directory, if wanted
 
@@ -104,7 +121,8 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 
 - [ ] Explicit-width integers (`int8`…`int64`, `uint8`…`uint64`)
 - [ ] Widening as decided in v0.2, with boundary and non-contraction tests
-- [ ] `float`, `float32`, `float64`; precision-aware widening
+- [x] `float`, `float32`, `float64` (v0.3); widening is exact, so
+  representation only matters once floats are stored in arrays/structs
 - [ ] Additional literal forms (hex, separators) if approved
 - [ ] `std:math`: Go's `math` package in full, once floats exist
 

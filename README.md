@@ -50,6 +50,13 @@ protected int main() {
 - Multi-file programs: `use "geom";` loads the package in `geom/*.rsm`, and
   `use "./lib/x.rsc";` loads one file; `public`/`protected`/`private` are
   enforced ([guide](docs/guide/12-packages-and-files.md))
+- `float` (float32 by default, widening without loss), `float32`, `float64`;
+  IEEE 754 with `NaN` and `Infinity`, as in ActionScript
+- Checked C-style conversions: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
+  ([guide](docs/guide/13-floats-and-conversions.md))
+- ActionScript-style errors: `throw new RangeError("…")`,
+  `try`/`catch (Error e)`/`catch (e)`/`finally`; runtime errors are catchable
+  ([guide](docs/guide/14-errors.md))
 - Compile-time type checking with located diagnostics, including rejection
   of signed → unsigned assignment
 - Integer overflow and division by zero are reported as runtime errors and
@@ -58,8 +65,8 @@ protected int main() {
   in browsers and Node.js and behaves exactly like the interpreter
   ([guide](docs/guide/11-javascript.md))
 
-**Not yet implemented:** classes, structs, arrays, floats, `char`, string
-concatenation, exceptions, type conversions, `go:` packages, `std:math`, `std:symrs`, and the planned native
+**Not yet implemented:** classes, structs, arrays, `char`, string
+concatenation, `go:` packages, `std:math`, `std:symrs`, and the planned native
 graphics package. See the [roadmap](docs/ROADMAP.md).
 
 ## Build and run

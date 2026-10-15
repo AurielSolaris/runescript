@@ -41,7 +41,8 @@ func TestTokensAndPositions(t *testing.T) {
 func TestKeywordClasses(t *testing.T) {
 	cases := map[string]Kind{
 		"if": Keyword, "while": Keyword, "bool": Keyword, "true": Keyword,
-		"use": Keyword, "class": Reserved, "float": Reserved, "int64": Reserved, "matrix": Reserved,
+		"use": Keyword, "class": Reserved, "float": Keyword, "float32": Keyword, "try": Keyword, "new": Keyword,
+		"char": Reserved, "int64": Reserved, "matrix": Reserved, "Error": Ident, "as": Ident,
 		"trace": Ident, "function": Ident, "Main": Ident, "_x1": Ident,
 	}
 	for word, kind := range cases {
@@ -75,7 +76,11 @@ func TestLexErrors(t *testing.T) {
 		{"007", diagnostics.LexInvalidNumber, "1:1"},
 		{"12abc", diagnostics.LexInvalidNumber, "1:1"},
 		{"99999999999999999999999", diagnostics.LexInvalidNumber, "1:1"},
-		{"  1.5", diagnostics.LexUnsupportedLiteral, "1:3"},
+		{"  1.5x", diagnostics.LexInvalidNumber, "1:3"},
+		{"1.2.3", diagnostics.LexInvalidNumber, "1:1"},
+		{"00.5", diagnostics.LexInvalidNumber, "1:1"},
+		{"1e999", diagnostics.LexInvalidNumber, "1:1"},
+		{"1e-999", diagnostics.LexInvalidNumber, "1:1"},
 		{"'a'", diagnostics.LexUnsupportedLiteral, "1:1"},
 		{"x # y", diagnostics.LexUnexpectedChar, "1:3"},
 		{"a & b", diagnostics.LexUnexpectedChar, "1:3"},
@@ -89,6 +94,22 @@ func TestLexErrors(t *testing.T) {
 		if d := diags[0]; d.Code != c.code || d.Span.Start.String() != c.pos {
 			t.Errorf("%q: got %s at %s, want %s at %s", c.src, d.Code, d.Span.Start, c.code, c.pos)
 		}
+	}
+}
+
+func TestFloatLiterals(t *testing.T) {
+	toks, diags := Lex([]byte("64.3 1e10 2.5E-3 0.5 0e0 1e+2 7"))
+	if len(diags) != 0 {
+		t.Fatal(diags)
+	}
+	want := []Kind{Float, Float, Float, Float, Float, Float, Int, EOF}
+	for i, tok := range toks {
+		if tok.Kind != want[i] {
+			t.Errorf("token %d %q: kind %v, want %v", i, tok.Text, tok.Kind, want[i])
+		}
+	}
+	if toks[2].Text != "2.5E-3" {
+		t.Errorf("text %q", toks[2].Text)
 	}
 }
 

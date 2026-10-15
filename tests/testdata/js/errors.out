@@ -1,0 +1,24 @@
+5
+caught ArgumentError b must not be zero 1001
+ArgumentError: b must not be zero
+RangeError: integer division by zero
+cannot convert "12x" to 'int': not an integer 6
+cannot convert -1.5 to 'uint': out of range
+Error 4
+Infinity
+cannot convert Infinity to 'int': out of range
+catch (e) catches RangeError
+finally after return 21
+42
+7
+finally 0
+body 1
+finally 1
+finally 2
+inner finally
+outer caught Error true 0
+caught once: RangeError 2
+caught again: integer overflow: 2147483647 + 1 = 2147483648 does not fit in 'int'
+finally 0
+finally 1
+TypeError: kept RangeError Error: made 7

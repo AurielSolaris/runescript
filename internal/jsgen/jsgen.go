@@ -21,11 +21,13 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/AurielSolaris/runescript/internal/conv"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/ir"
 	"github.com/AurielSolaris/runescript/internal/runtime"
@@ -213,6 +215,8 @@ func fillRuntime(tables map[string]bool) string {
 		"overflow":     diagnostics.RunOverflow.String(),
 		"divideByZero": diagnostics.RunDivideByZero.String(),
 		"nativeFailed": diagnostics.RunNativeFailed.String(),
+		"uncaught":     diagnostics.RunUncaught.String(),
+		"conversion":   diagnostics.RunConversion.String(),
 	})
 	table := func(name string, runs func() []int64) string {
 		if !tables[name] {
@@ -228,6 +232,7 @@ func fillRuntime(tables map[string]bool) string {
 		"/*@TITLE@*/", table("title", titleRuns),
 		"/*@FOLD@*/", table("fold", foldRuns),
 		"/*@SPACE@*/", ints(spaces()),
+		"/*@F32STR@*/", conv.Float32JS,
 	).Replace(runtimeJS)
 }
 
@@ -323,9 +328,52 @@ func (g *gen) stmt(s ir.Stmt) {
 		g.line("break;")
 	case *ir.Continue:
 		g.line("continue;")
+	case *ir.Throw:
+		g.line("throw %s(%s, %d);", g.use("thrown"), g.expr(s.X, precAssign), g.site(s.Site))
+	case *ir.Try:
+		g.try(s)
 	default:
 		panic(fmt.Sprintf("jsgen: unexpected statement %T", s))
 	}
+}
+
+// try emits try/catch/finally. The caught value goes through $caught,
+// which turns runtime errors into RuneScript errors and lets errors that
+// cannot be caught pass. Catch clauses become an if chain on the error's
+// type. A finally block is skipped while the program is stopping for an
+// error that cannot be caught, as in the interpreter.
+func (g *gen) try(s *ir.Try) {
+	g.line("try {")
+	g.block(s.Body)
+	if len(s.Catches) > 0 {
+		g.line("} catch ($e) {")
+		g.indent++
+		g.line("const $x = %s($e, $site);", g.use("caught"))
+		for i, c := range s.Catches {
+			kw := "} else if"
+			if i == 0 {
+				kw = "if"
+			}
+			g.line("%s (%s($x, %s)) {", kw, g.use("isA"), quote(c.T.Name))
+			g.indent++
+			g.line("const %s = $x;", jsName(c.Var.Name))
+			g.stmts(c.Body.Stmts)
+			g.indent--
+		}
+		g.line("} else {")
+		g.line("  throw $x;")
+		g.line("}")
+		g.indent--
+	}
+	if s.Finally != nil {
+		g.line("} finally {")
+		g.line("  if (!%s()) {", g.use("fatal"))
+		g.indent += 2
+		g.stmts(s.Finally.Stmts)
+		g.indent -= 2
+		g.line("  }")
+	}
+	g.line("}")
 }
 
 // ifRest emits the body of an if whose header is already written, and its
@@ -409,6 +457,45 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		return quote(e.Value), precCall
 	case *ir.BoolConst:
 		return strconv.FormatBool(e.Value), precCall
+	case *ir.FloatConst:
+		var s string
+		switch {
+		case math.IsNaN(e.Value):
+			return "NaN", precCall
+		case math.IsInf(e.Value, 1):
+			return "Infinity", precCall
+		case math.IsInf(e.Value, -1):
+			s = "-Infinity"
+		default:
+			s = strconv.FormatFloat(e.Value, 'g', -1, 64) // exact: the shortest decimal that reads back
+		}
+		if strings.HasPrefix(s, "-") {
+			return s, precUnary
+		}
+		return s, precCall
+	case *ir.Neg:
+		x := g.expr(e.X, precUnary)
+		if strings.HasPrefix(x, "-") {
+			x = "(" + x + ")"
+		}
+		return "-" + x, precUnary
+	case *ir.Convert:
+		return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use("cast"), g.expr(e.X, precAssign),
+			quote(kindCode(e.X.Type())), quote(kindCode(e.To)), quote(e.To.Name), g.site(e.Site)), precCall
+	case *ir.NewError:
+		msg, id := `""`, "0"
+		if e.Message != nil {
+			msg = g.expr(e.Message, precAssign)
+		}
+		if e.ID != nil {
+			id = g.expr(e.ID, precAssign)
+		}
+		return fmt.Sprintf("%s(%s, %s, %s)", g.use("newError"), quote(e.T.Name), msg, id), precCall
+	case *ir.FloatTest:
+		// Through the runtime: a user function may be called isNaN.
+		return g.use(e.Name) + "(" + g.expr(e.X, precAssign) + ")", precCall
+	case *ir.Field:
+		return g.expr(e.X, precCall) + "." + e.Name, precCall
 	case *ir.Load:
 		return jsName(e.Var.Name), precCall
 	case *ir.FuncRef:
@@ -416,6 +503,14 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 	case *ir.Lambda:
 		return g.lambda(e.Func), precAssign
 	case *ir.Arith:
+		if e.T.Kind == types.Float {
+			// JavaScript's own IEEE arithmetic; float32 rounds the result.
+			op := g.expr(e.X, precUnary) + " " + e.Op + " " + g.expr(e.Y, precUnary)
+			if e.T.Bits == 32 {
+				return "Math.fround(" + op + ")", precCall
+			}
+			return "(" + op + ")", precCall
+		}
 		suffix := "I"
 		if e.T.Kind == types.Unsigned {
 			suffix = "U"
@@ -458,6 +553,9 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		parts := make([]string, len(e.Args))
 		for i, a := range e.Args {
 			parts[i] = g.expr(a, precAssign)
+			if t := a.Type(); t.Kind == types.Float && t.Bits == 32 {
+				parts[i] = g.use("f32str") + "(" + parts[i] + ")"
+			}
 		}
 		return g.use("trace") + "(" + strings.Join(parts, ", ") + ")", precCall
 	}
@@ -519,6 +617,27 @@ func init() {
 		Infinity`) {
 		reserved[w] = true
 	}
+}
+
+// kindCode names a conversion operand or destination for the runtime's
+// cast: i(nt), u(int), f(loat or float64), f32, s(tring), or b(ool).
+func kindCode(t *types.Type) string {
+	switch t.Kind {
+	case types.Signed:
+		return "i"
+	case types.Unsigned:
+		return "u"
+	case types.Float:
+		if t.Bits == 32 {
+			return "f32"
+		}
+		return "f"
+	case types.String:
+		return "s"
+	case types.Bool:
+		return "b"
+	}
+	panic("jsgen: conversion of " + t.Name)
 }
 
 // entryFile is the name of the file declaring main.

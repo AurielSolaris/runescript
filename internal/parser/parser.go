@@ -234,12 +234,49 @@ func (p *parser) funcDecl() *ast.FuncDecl {
 
 var typeKeywords = map[string]bool{
 	"int": true, "sint": true, "uint": true, "string": true, "bool": true, "void": true,
+	"float": true, "float32": true, "float64": true,
+}
+
+// errorTypes are the built-in error type names.
+var errorTypes = map[string]bool{"Error": true, "RangeError": true, "TypeError": true, "ArgumentError": true}
+
+// castTypes are the types a `(Type) x` conversion can name.
+var castTypes = map[string]bool{
+	"int": true, "sint": true, "uint": true, "string": true, "bool": true,
+	"float": true, "float32": true, "float64": true,
 }
 
 func (p *parser) isTypeStart() bool {
 	t := p.tok()
 	return (t.Kind == lexer.Keyword && typeKeywords[t.Text] && p.peekTok(1).Kind != lexer.Dot) ||
-		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Ident)
+		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Ident) ||
+		(t.Kind == lexer.Ident && p.isNamedFuncType())
+}
+
+// isNamedFuncType reports whether the tokens ahead are a function type
+// whose result is a named type, followed by a variable name, such as
+// `Error(string) make`. A call is never followed by a name, so this does
+// not mistake `f(x)` for a type.
+func (p *parser) isNamedFuncType() bool {
+	i := 1
+	for p.peekTok(i).Kind == lexer.LParen {
+		depth := 0
+		for {
+			switch p.peekTok(i).Kind {
+			case lexer.LParen:
+				depth++
+			case lexer.RParen:
+				depth--
+			case lexer.EOF, lexer.Semicolon, lexer.LBrace:
+				return false
+			}
+			i++
+			if depth == 0 {
+				break
+			}
+		}
+	}
+	return i > 1 && p.peekTok(i).Kind == lexer.Ident
 }
 
 // isQualifiedStart reports whether the next tokens begin `pkg.name`. A type
@@ -323,6 +360,13 @@ func (p *parser) stmt() ast.Stmt {
 		return &ast.WhileStmt{Cond: cond, Body: body, Span: span(t.Span, body.Span)}
 	case t.Kind == lexer.Keyword && t.Text == "for":
 		return p.forStmt()
+	case t.Kind == lexer.Keyword && t.Text == "throw":
+		p.next()
+		v := p.expr()
+		end := p.expect(lexer.Semicolon, "';' after throw")
+		return &ast.ThrowStmt{Value: v, Span: span(t.Span, end.Span)}
+	case t.Kind == lexer.Keyword && t.Text == "try":
+		return p.tryStmt()
 	case t.Kind == lexer.Keyword && (t.Text == "break" || t.Text == "continue"):
 		p.next()
 		end := p.expect(lexer.Semicolon, "';' after '"+t.Text+"'")
@@ -432,6 +476,43 @@ func (p *parser) ifStmt() *ast.IfStmt {
 	return s
 }
 
+// tryStmt parses `try { } catch (Type name) { } ... finally { }`.
+func (p *parser) tryStmt() *ast.TryStmt {
+	start := p.expectKeyword("try")
+	s := &ast.TryStmt{Body: p.block()}
+	end := s.Body.Span
+	for p.isKeyword("catch") {
+		c := &ast.CatchClause{Span: p.next().Span}
+		p.expect(lexer.LParen, "'(' after 'catch'")
+		if p.is(lexer.Ident, "") && p.peekTok(1).Kind == lexer.RParen {
+			// catch (e) catches every error. catch (Error) is a mistake.
+			if errorTypes[p.tok().Text] {
+				p.failHelp(diagnostics.ParseUnexpected, p.peekTok(1).Span,
+					"name the caught error, e.g. catch ("+p.tok().Text+" e)",
+					"expected a name after '%s' in catch clause", p.tok().Text)
+			}
+		} else {
+			c.Type = p.typeRef("error type")
+		}
+		c.Name = p.ident("name of the caught error")
+		p.expect(lexer.RParen, "')' after catch parameter")
+		c.Body = p.block()
+		c.Span = span(c.Span, c.Body.Span)
+		s.Catches = append(s.Catches, c)
+		end = c.Body.Span
+	}
+	if p.isKeyword("finally") {
+		p.next()
+		s.Finally = p.block()
+		end = s.Finally.Span
+	}
+	if len(s.Catches) == 0 && s.Finally == nil {
+		p.fail(diagnostics.ParseUnexpected, p.tok().Span, "expected 'catch' or 'finally' after try block, found %s", p.tok().Describe())
+	}
+	s.Span = span(start.Span, end)
+	return s
+}
+
 func (p *parser) forStmt() *ast.ForStmt {
 	start := p.expectKeyword("for")
 	p.expect(lexer.LParen, "'(' after 'for'")
@@ -488,12 +569,33 @@ func (p *parser) unary() ast.Expr {
 		x := p.unary()
 		return &ast.UnaryExpr{Op: t.Text, X: x, Span: span(t.Span, x.NodeSpan())}
 	}
+	if p.isCastStart() {
+		p.next()
+		typ := p.typeRef("type")
+		p.expect(lexer.RParen, "')'")
+		x := p.unary()
+		return &ast.CastExpr{Type: typ, X: x, Span: span(t.Span, x.NodeSpan())}
+	}
 	return p.postfix(p.primary())
 }
 
-// postfix parses calls applied to an expression: f(1)(2), (g)(x).
+// isCastStart reports whether the next tokens are `(Type)`. A type keyword
+// is never an expression, so `(int)` can only begin a conversion.
+func (p *parser) isCastStart() bool {
+	t1, t2 := p.peekTok(1), p.peekTok(2)
+	return p.is(lexer.LParen, "") && t1.Kind == lexer.Keyword && castTypes[t1.Text] && t2.Kind == lexer.RParen
+}
+
+// postfix parses calls and field selections applied to an expression:
+// f(1)(2), (g)(x), e.message.
 func (p *parser) postfix(x ast.Expr) ast.Expr {
-	for p.is(lexer.LParen, "") {
+	for p.is(lexer.LParen, "") || p.is(lexer.Dot, "") {
+		if p.is(lexer.Dot, "") {
+			p.next()
+			name := p.ident("field name after '.'")
+			x = &ast.SelectorExpr{X: x, Name: name, Span: span(x.NodeSpan(), name.Span)}
+			continue
+		}
 		call := p.callArgs(nil)
 		call.Callee = x
 		call.Span.Start = x.NodeSpan().Start
@@ -555,11 +657,11 @@ func (p *parser) primary() ast.Expr {
 	if p.isQualifiedStart() {
 		pkg := &ast.Ident{Name: p.next().Text, Span: t.Span}
 		p.next() // '.'
-		name := p.ident("function name after '" + pkg.Name + ".'")
+		name := p.ident("name after '" + pkg.Name + ".'")
 		if !p.is(lexer.LParen, "") {
-			p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
-				"packages currently export only functions",
-				"expected '(' to call %s.%s, found %s", pkg.Name, name.Name, p.tok().Describe())
+			// A field, such as e.message; the checker rejects a package
+			// function used without a call.
+			return &ast.SelectorExpr{X: pkg, Name: name, Span: span(pkg.Span, name.Span)}
 		}
 		call := p.callArgs(name)
 		call.Pkg = pkg
@@ -567,6 +669,10 @@ func (p *parser) primary() ast.Expr {
 		return call
 	}
 	switch t.Kind {
+	case lexer.Float:
+		p.next()
+		v, _ := strconv.ParseFloat(t.Text, 64) // range already checked by the lexer
+		return &ast.FloatLit{Value: v, Text: t.Text, Span: t.Span}
 	case lexer.Int:
 		p.next()
 		v, _ := strconv.ParseUint(t.Text, 10, 64) // range already checked by the lexer
@@ -578,6 +684,19 @@ func (p *parser) primary() ast.Expr {
 		if t.Text == "true" || t.Text == "false" {
 			p.next()
 			return &ast.BoolLit{Value: t.Text == "true", Span: t.Span}
+		}
+		if t.Text == "new" {
+			p.next()
+			// A built-in type keyword is accepted here so that the checker
+			// can explain that only error types can be created.
+			nt := p.tok()
+			if nt.Kind != lexer.Ident && !(nt.Kind == lexer.Keyword && typeKeywords[nt.Text]) {
+				p.unexpected("type name after 'new'")
+			}
+			p.next()
+			typ := &ast.TypeRef{Name: nt.Text, Span: nt.Span}
+			call := p.callArgs(nil)
+			return &ast.NewExpr{Type: typ, Args: call.Args, Span: diagnostics.Span{Start: t.Span.Start, End: call.Span.End}}
 		}
 	case lexer.LParen:
 		if p.isLambdaStart() {

@@ -16,10 +16,12 @@ complete program in these pages is compiled by the test suite
 10. [Standard library: `std:string`](10-std-string.md): Go's `strings`, in RuneScript
 11. [Compiling to JavaScript](11-javascript.md): `runescript build`, and how strict typing is kept
 12. [Packages and files](12-packages-and-files.md): `use`, multi-file programs, visibility
+13. [Floats and conversions](13-floats-and-conversions.md): `float`, `float32`, `float64`, `(int) x`
+14. [Errors](14-errors.md): `throw`, `try`, `catch`, `finally`, and catching runtime errors
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).
 
-> **Not yet available:** classes, structs, arrays, floats, `char`, string
-> concatenation, exceptions, and type conversions. Their keywords are
-> reserved, and using them gives a clear "not implemented yet" error.
+> **Not yet available:** classes, structs, arrays, `char`, and string
+> concatenation. Their keywords are reserved, and using them gives a clear
+> "not implemented yet" error.

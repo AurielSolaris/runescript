@@ -30,6 +30,13 @@ func TestAccepted(t *testing.T) {
 	cases := map[string]string{
 		"canonical entry":     "package main;\nprotected int main() {\n    return 0;\n}",
 		"void main":           "package p;\npublic void main() { trace(\"hi\"); }",
+		"float constants":     program("    float f = 3;\n    float32 h = 0.5;\n    float64 d = -1e300;\n    float32 big = 16777216;\n    trace(f * 2, h / 4, d < 0);", ""),
+		"constant casts":      program("    int a = (int) -64.7;\n    uint b = (uint) 3.9;\n    float32 c = (float32) 0.1;\n    float d = (float) 9007199254740993;", ""),
+		"runtime casts":       program("    int n = 3;\n    string s = \"4\";\n    float f = (float) n + (float) s;\n    uint u = (uint) n;\n    bool b = (bool) s;\n    trace((string) f, (int) f, (float32) f, u, b);", ""),
+		"error subtypes":      program("    Error e = new RangeError(\"r\");\n    Error(string) make = (string m) => new TypeError(m);\n    trace(e.message, e.name, e.errorID, make(\"t\"));", ""),
+		"throw ends a path":   "package p;\npublic int f(int n) {\n    if (n > 0) {\n        return n;\n    }\n    throw new ArgumentError(\"n\");\n}\npublic void main() { trace(f(1)); }",
+		"try ends a path":     "package p;\npublic int f() {\n    try {\n        return 1;\n    } catch (Error e) {\n        return 2;\n    }\n}\npublic void main() { trace(f()); }",
+		"loop in finally":     program("    try { trace(1); } finally {\n        for (int i = 0; i < 2; i++) { if (i == 1) { break; } }\n    }", ""),
 		"sint is int":         program("    sint a = 1;\n    int b = a;\n    sint c = b;", ""),
 		"literal to uint":     program("    uint u = 4294967295;", ""),
 		"int bounds":          program("    int lo = -2147483648;\n    int hi = 2147483647;", ""),

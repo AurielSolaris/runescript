@@ -17,6 +17,8 @@ go run ./cmd/runescript run examples/hello.rsc
 | [`strings.rsc`](strings.rsc) | The `std:string` standard library |
 | [`callbacks.rsc`](callbacks.rsc) | Function types, callbacks, lambdas, nested functions, prototypes, returning functions |
 | [`primes.rsc`](primes.rsc) | Predicate callbacks, a lambda, a nested helper, and `string.repeat` |
+| [`temperatures.rsc`](temperatures.rsc) | `float`, `float32`, and checked conversions such as `(int) f` and `(float) "98.6"` |
+| [`errors.rsc`](errors.rsc) | `throw`, `try`/`catch`/`finally`, error types, and catching a runtime error |
 
 These two are **rejected on purpose**. Run them with `check` to see the
 diagnostics:

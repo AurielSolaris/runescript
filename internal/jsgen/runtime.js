@@ -5,7 +5,10 @@
 // codes and Unicode tables.
 //
 // Values: int and uint are JavaScript numbers that are always integers in
-// their 32-bit range; bool is a boolean; string is a well-formed string;
+// their 32-bit range; float and float64 are finite JavaScript numbers;
+// float32 values are numbers that are exact float32 values (or NaN or
+// infinite); floats follow IEEE 754, as in ActionScript 3; bool is
+// a boolean; string is a well-formed string; errors are RSError objects;
 // function values are functions taking a trailing call-site argument.
 
 class RuneScriptError extends Error {
@@ -27,6 +30,37 @@ const $rt = (() => {
   const INT_MIN = -2147483648, INT_MAX = 2147483647, UINT_MAX = 4294967295;
 
   let files = [], sites = [], depth = 0, sink = null;
+  // fatal is set once an error that cannot be caught (the call-depth
+  // limit) is on its way out: catch clauses let it pass and finally blocks
+  // are skipped, as in the interpreter.
+  let fatal = false;
+
+  // RSError is a RuneScript error value. code is the diagnostic it is
+  // reported with if nothing catches it; site is where it was raised (-1
+  // until it is thrown).
+  class RSError {
+    constructor(name, message, errorID, code, site) {
+      this.name = name;
+      this.message = message;
+      this.errorID = errorID;
+      this.code = code;
+      this.site = site;
+    }
+    toString() { return this.message === "" ? this.name : this.name + ": " + this.message; }
+  }
+  const SUPER = { RangeError: "Error", TypeError: "Error", ArgumentError: "Error" };
+  const isA = (e, type) => {
+    for (let t = e.name; t !== undefined; t = SUPER[t]) if (t === type) return true;
+    return false;
+  };
+  const errorID = (code) => Number(code.slice(code.lastIndexOf("-") + 1));
+  const newError = (name, message, id) => new RSError(name, message, id, CODES.uncaught, -1);
+  const thrown = (e, site) => {
+    if (e.site < 0) e.site = site;
+    return e;
+  };
+  // FAULTS are the error types of runtime errors that can be caught.
+  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error" };
 
   // at returns the file, line, and column of a call site.
   const at = (site) => {
@@ -34,8 +68,19 @@ const $rt = (() => {
     return [files[f], line, col];
   };
 
-  function fail(code, site, detail) {
-    throw new RuneScriptError(code, ...at(site), detail);
+  function fail(code, site, detail, type = FAULTS[code]) {
+    if (type === undefined) {
+      fatal = true;
+      throw new RuneScriptError(code, ...at(site), detail);
+    }
+    throw new RSError(type, detail, errorID(code), code, site);
+  }
+
+  // report turns an error that nothing caught into the RuneScriptError
+  // that run throws.
+  function report(e) {
+    const detail = e.code === CODES.uncaught ? "uncaught " + e.toString() : e.message;
+    return new RuneScriptError(e.code, ...at(e.site), detail);
   }
 
   // ---- checked integer arithmetic (OQ-NUM-01: trap, never wrap) ----
@@ -75,6 +120,54 @@ const $rt = (() => {
   const divU = (x, y, s) => (divisor(y, s), Math.trunc(x / y) >>> 0);
   const modU = (x, y, s) => (divisor(y, s), (x % y) >>> 0);
 
+  // ---- floats ----
+  //
+  // Float arithmetic is JavaScript's own (IEEE 754, as in ActionScript 3),
+  // emitted inline; float32 results are rounded with Math.fround.
+
+  /*@F32STR@*/
+
+  // ---- conversions ----
+  //
+  // cast(v, from, to, name, site) is the checked conversion (name) v, where
+  // from and to are i(nt), u(int), f(loat/float64), f32, s(tring), b(ool).
+  // The rules follow internal/conv and the interpreter exactly.
+  const INT_RE = /^[+-]?[0-9]+$/;
+  const FLOAT_RE = /^([+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?|NaN|[+-]?Infinity)$/;
+  const show = (v, from) => (from === "s" ? `"${v}"` : from === "f32" ? f32str(v) : String(v));
+  function cast(v, from, to, name, site) {
+    const outOfRange = () => fail(CODES.conversion, site, `cannot convert ${show(v, from)} to '${name}': out of range`, "RangeError");
+    const notValid = (what) => fail(CODES.conversion, site, `cannot convert ${show(v, from)} to '${name}': not ${what}`, "TypeError");
+    switch (to) {
+      case "s":
+        return show(v, from === "s" ? "" : from);
+      case "b":
+        if (from === "b") return v;
+        if (v === "true" || v === "false") return v === "true";
+        return notValid("'true' or 'false'");
+      case "i":
+      case "u": {
+        let n;
+        if (from === "s") {
+          if (!INT_RE.test(v)) notValid("an integer");
+          n = Number(v); // exact while it can be in range
+        } else {
+          n = Math.trunc(v);
+        }
+        if (to === "i" ? !(n >= INT_MIN && n <= INT_MAX) : !(n >= 0 && n <= UINT_MAX)) outOfRange();
+        return n === 0 ? 0 : n;
+      }
+      default: {
+        let f = v;
+        if (from === "s") {
+          if (!FLOAT_RE.test(v)) notValid("a number");
+          f = Number(v);
+        }
+        return to === "f32" ? Math.fround(f) : f;
+      }
+    }
+  }
+
   // ---- calls ----
 
   // enter runs at the start of every function body; site is where it was
@@ -89,12 +182,20 @@ const $rt = (() => {
   // MAX_DEPTH, into the same runtime error, reported at the innermost call
   // site that has enough stack left to build the error.
   function unwind(e, site) {
-    if (e instanceof RuneScriptError) return e;
+    if (e instanceof RuneScriptError || e instanceof RSError) return e;
     if (e instanceof RangeError || (e && e.name === "InternalError")) {
+      fatal = true;
       return new RuneScriptError(CODES.callDepth, ...at(site),
         `maximum call depth exceeded: the JavaScript host ran out of stack at depth ${depth} (limit ${MAX_DEPTH})`);
     }
     return e;
+  }
+
+  // caught is what a catch clause sees: a RuneScript error. Anything else
+  // (an error that cannot be caught) is thrown on.
+  function caught(e, site) {
+    if (e instanceof RSError && !fatal) return e;
+    throw unwind(e, site);
   }
 
   function trace(...args) {
@@ -108,7 +209,7 @@ const $rt = (() => {
     try {
       r = impl(...args);
     } catch (e) {
-      if (e instanceof RuneScriptError) throw e;
+      if (e instanceof RuneScriptError || e instanceof RSError) throw e;
       fail(CODES.nativeFailed, site, `${name} failed: ${e.message}`);
     }
     if ((result === "int" && !(r >= INT_MIN && r <= INT_MAX)) ||
@@ -280,16 +381,22 @@ const $rt = (() => {
     sites = program.sites;
     sink = options.trace ?? ((line) => console.log(line));
     depth = 0;
+    fatal = false;
     try {
       const code = program.main(program.entrySite);
       return program.entryVoid ? 0 : code;
+    } catch (e) {
+      throw e instanceof RSError ? report(e) : e;
     } finally {
       depth = 0;
+      fatal = false;
     }
   }
 
   return {
     addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU,
+    f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
+    newError, thrown, caught, isA, fatal: () => fatal,
     enter, leave, unwind, trace, native, run, std: { string },
   };
 })();

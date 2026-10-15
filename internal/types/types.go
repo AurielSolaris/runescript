@@ -1,9 +1,10 @@
 // Package types defines RuneScript's semantic types.
 //
-// Only the v0.1 subset exists: int/sint (one signed type, two spellings),
-// uint, bool, string, and void. Integer ranges are the provisional default
-// representations (int32 / uint32); widening is not implemented
-// (OQ-NUM-01, OQ-NUM-02).
+// The types are int/sint (one signed type, two spellings), uint, the
+// floating-point types float, float32, and float64, bool, string, void,
+// function types, and the built-in error types (Error and its subtypes).
+// Integer ranges are the provisional default representations (int32 /
+// uint32); integer widening is not implemented (OQ-NUM-01, OQ-NUM-02).
 package types
 
 import "math"
@@ -23,6 +24,13 @@ const (
 	UntypedInt
 	// Func is a function type such as int(int, int).
 	Func
+	// Float is a floating-point type; Bits tells which one.
+	Float
+	// UntypedFloat is the type of a floating-point literal before it is
+	// given a destination type.
+	UntypedFloat
+	// Error is a built-in error type: Error or one of its subtypes.
+	Error
 )
 
 // Type is a semantic type. Name preserves the spelling used in source so
@@ -33,6 +41,11 @@ type Type struct {
 	// Params and Result are set for Func types only.
 	Params []*Type
 	Result *Type
+	// Bits is set for Float types: 0 for the generic 'float', which starts
+	// as float32 and widens (see Float), or 32 or 64.
+	Bits int
+	// Super is the supertype of an error type other than Error.
+	Super *Type
 }
 
 // NewFunc returns the function type result(params...).
@@ -58,11 +71,66 @@ var (
 	VoidT        = &Type{Kind: Void, Name: "void"}
 	UntypedConst = &Type{Kind: UntypedInt, Name: "untyped integer constant"}
 	InvalidT     = &Type{Kind: Invalid, Name: "invalid"}
+
+	// FloatT is the generic 'float'. Its default representation is
+	// float32, and a value widens to float64 whenever float32 cannot hold
+	// it exactly, in magnitude or precision; it never contracts (CLAUDE.md
+	// §4.4). Widening never changes a value, so a float's value is always
+	// the one float64 arithmetic gives; the representation becomes
+	// observable only once floats can be stored in memory layouts (arrays,
+	// structs), which is open (OQ-NUM-01, OQ-FLOAT-01).
+	FloatT = &Type{Kind: Float, Name: "float"}
+	// Floats follow IEEE 754, as ActionScript 3's Number does: overflow
+	// gives Infinity, and 0/0 gives NaN.
+	//
+	// Float32 and Float64 are exact IEEE 754 binary32 and binary64 types.
+	// They never widen; float32 arithmetic rounds to float32.
+	Float32           = &Type{Kind: Float, Name: "float32", Bits: 32}
+	Float64           = &Type{Kind: Float, Name: "float64", Bits: 64}
+	UntypedFloatConst = &Type{Kind: UntypedFloat, Name: "untyped float constant"}
+
+	// The built-in error types, modelled on ActionScript 3's. They become
+	// ordinary classes once classes exist.
+	ErrorT         = &Type{Kind: Error, Name: "Error"}
+	RangeErrorT    = &Type{Kind: Error, Name: "RangeError", Super: ErrorT}
+	TypeErrorT     = &Type{Kind: Error, Name: "TypeError", Super: ErrorT}
+	ArgumentErrorT = &Type{Kind: Error, Name: "ArgumentError", Super: ErrorT}
 )
 
 var byName = map[string]*Type{
 	"int": Int, "sint": Sint, "uint": Uint, "bool": BoolT, "string": StringT, "void": VoidT,
+	"float": FloatT, "float32": Float32, "float64": Float64,
+	"Error": ErrorT, "RangeError": RangeErrorT, "TypeError": TypeErrorT, "ArgumentError": ArgumentErrorT,
 }
+
+// ErrorTypes lists the built-in error types, Error first.
+var ErrorTypes = []*Type{ErrorT, RangeErrorT, TypeErrorT, ArgumentErrorT}
+
+// IsSubtype reports whether a value of type s can be used where t is
+// expected: s and t are identical, or s is an error type below t.
+func IsSubtype(s, t *Type) bool {
+	if Identical(s, t) {
+		return true
+	}
+	if s.Kind != Error || t.Kind != Error {
+		return false
+	}
+	for ; s != nil; s = s.Super {
+		if s == t {
+			return true
+		}
+	}
+	return false
+}
+
+// IsNumeric reports whether t is an integer or floating-point type,
+// including untyped constants.
+func IsNumeric(t *Type) bool {
+	return IsInteger(t) || t.Kind == Float || t.Kind == UntypedFloat
+}
+
+// Float32Max is the largest finite float32.
+const Float32Max = math.MaxFloat32
 
 // Lookup returns the built-in type with the given name, or nil.
 func Lookup(name string) *Type { return byName[name] }
@@ -74,7 +142,13 @@ func Identical(a, b *Type) bool {
 	if a.Kind != b.Kind {
 		return false
 	}
-	if a.Kind != Func {
+	switch a.Kind {
+	case Float:
+		return a.Bits == b.Bits
+	case Error:
+		return a == b
+	case Func:
+	default:
 		return true
 	}
 	if len(a.Params) != len(b.Params) || !Identical(a.Result, b.Result) {

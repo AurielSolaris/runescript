@@ -130,7 +130,7 @@ public int main() {
 main.rsc:5:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsigned integer 'uint'.
         uint unsignedValue = signedValue;
                              ^^^^^^^^^^^
-  help: Use an explicit checked conversion (syntax not yet specified), or change the destination type.
+  help: Use an explicit checked conversion, (uint) x, or change the destination type.
 ```
 
 Number literals are more flexible. A literal takes the type of whatever
@@ -163,8 +163,10 @@ public void main() {
 }
 ```
 
-The reverse direction (`uint` into `int`) is also rejected in v0.1, as is
-mixing `int` and `uint` in one operation. Explicit conversions are planned
-but not designed yet.
+The reverse direction (`uint` into `int`) is also rejected, as is mixing
+`int` and `uint` in one operation. To convert, write the conversion out:
+`(uint) signedValue` checks the value when it runs and throws an error if it
+is negative. See [Floats and conversions](13-floats-and-conversions.md),
+which also covers `float`, `float32`, and `float64`.
 
 Next: [Operators](04-operators.md)

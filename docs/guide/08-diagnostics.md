@@ -6,7 +6,7 @@ Every error points at the exact source location:
 prog.rsc:9:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsigned integer 'uint'.
         uint unsignedValue = signedValue;
                              ^^^^^^^^^^^
-  help: Use an explicit checked conversion (syntax not yet specified), or change the destination type.
+  help: Use an explicit checked conversion, (uint) x, or change the destination type.
 ```
 
 The `ASX` prefix is provisional and may be renamed. The numbers stay the
@@ -20,15 +20,15 @@ same.
 | `ASX-LEX-002` | A string literal with no closing `"` before the end of the line |
 | `ASX-LEX-003` | An unknown escape sequence such as `\q` |
 | `ASX-LEX-004` | A `/*` comment that is never closed |
-| `ASX-LEX-005` | An invalid integer: leading zero (`007`), letters attached (`12abc`), or too large |
-| `ASX-LEX-006` | A literal kind that isn't supported yet: floats (`1.5`), chars (`'a'`) |
+| `ASX-LEX-005` | An invalid number: leading zero (`007`), letters attached (`12abc`), too many dots (`1.2.3`), or too large or too small (`1e999`, `1e-999`) |
+| `ASX-LEX-006` | A literal kind that isn't supported yet: chars (`'a'`) |
 
 ## Syntax errors
 
 | Code | Meaning |
 |---|---|
 | `ASX-PARSE-001` | Something unexpected, e.g. a missing `;`, a missing `package`, a function without an access modifier, an AS3-style `function` keyword, a missing initializer |
-| `ASX-PARSE-002` | A reserved word for a feature that isn't implemented yet (`class`, `float`, …) |
+| `ASX-PARSE-002` | A reserved word for a feature that isn't implemented yet (`class`, `char`, …) |
 
 The parser stops at the first syntax error.
 
@@ -81,6 +81,12 @@ The parser stops at the first syntax error.
 | `ASX-TYPE-014` | Division by a constant zero |
 | `ASX-TYPE-015` | A function definition doesn't match its prototype |
 | `ASX-TYPE-016` | Calling a value that isn't a function, e.g. `(1)(2)` |
+| `ASX-TYPE-017` | A conversion that isn't allowed, e.g. `(int) true` or `(string) e` for an error `e` |
+| `ASX-TYPE-018` | A constant that its float type can't represent exactly, e.g. `float32 f = 0.1;` (write `(float32) 0.1`) |
+| `ASX-TYPE-019` | `new` of something other than an error type |
+| `ASX-TYPE-020` | A field that doesn't exist, e.g. `e.what`, a field of a non-error value, or a method call such as `e.toString()` |
+| `ASX-TYPE-021` | `throw` of a value that isn't an error, or a catch clause whose type isn't an error type |
+| `ASX-TYPE-022` | A catch clause that can never run, because an earlier clause already catches its type |
 
 ## Other compile-time errors
 
@@ -93,15 +99,18 @@ The parser stops at the first syntax error.
 
 ## Runtime errors
 
-These stop the program with exit status 1. Anything traced before the
+These stop the program with exit status 1, unless a `try` statement
+catches them (see [chapter 14](14-errors.md)). Anything traced before the
 error has already been printed.
 
-| Code | Meaning |
-|---|---|
-| `ASX-RUN-001` | Calls nested more than 10,000 deep (usually runaway recursion) |
-| `ASX-RUN-002` | Integer overflow: the result doesn't fit its type |
-| `ASX-RUN-003` | Integer division or remainder by zero |
-| `ASX-RUN-004` | A standard library function failed, e.g. `string.repeat` with a negative count |
+| Code | Meaning | Caught as |
+|---|---|---|
+| `ASX-RUN-001` | Calls nested more than 10,000 deep (usually runaway recursion) | can't be caught |
+| `ASX-RUN-002` | Integer overflow: the result doesn't fit its type (floats become `Infinity` instead) | `RangeError` |
+| `ASX-RUN-003` | Integer division or remainder by zero (for floats, the result is `Infinity` or `NaN`) | `RangeError` |
+| `ASX-RUN-004` | A standard library function failed, e.g. `string.repeat` with a negative count | `Error` |
+| `ASX-RUN-005` | An error created with `new` was thrown and nothing caught it | |
+| `ASX-RUN-006` | A conversion failed, e.g. `(int) "12x"` or `(uint) -1` at run time | `TypeError` or `RangeError` |
 
 On the JavaScript target, `ASX-RUN-001` is also reported when the host's own
 stack runs out before 10,000 calls (see [chapter 11](11-javascript.md)).

@@ -35,7 +35,7 @@ func FuzzRun(f *testing.F) {
 }
 
 func addSeeds(f *testing.F) {
-	for _, glob := range []string{"../examples/*.rsc", "testdata/errors/*.rsc"} {
+	for _, glob := range []string{"../examples/*.rsc", "testdata/errors/*.rsc", "testdata/js/*.rsc", "testdata/runtime/*.rsc"} {
 		files, _ := filepath.Glob(glob)
 		for _, path := range files {
 			b, err := os.ReadFile(path)
