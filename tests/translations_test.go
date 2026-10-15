@@ -36,7 +36,7 @@ func translatedFiles(t *testing.T) []string {
 	}
 	files := []string{"README.md"}
 	for _, g := range guide {
-		files = append(files, filepath.ToSlash(strings.TrimPrefix(g, "../")))
+		files = append(files, strings.TrimPrefix(filepath.ToSlash(g), "../"))
 	}
 	return files
 }
