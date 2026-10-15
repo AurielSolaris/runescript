@@ -78,6 +78,7 @@ func (t Token) Describe() string {
 }
 
 type lexer struct {
+	file  *diagnostics.Source
 	src   []byte
 	off   int
 	line  int
@@ -89,13 +90,18 @@ type lexer struct {
 // Lex tokenizes src. The token slice always ends with an EOF token.
 // Lexical errors are reported as diagnostics; lexing continues after them.
 func Lex(src []byte) ([]Token, []*diagnostics.Diagnostic) {
-	l := &lexer{src: src, line: 1, col: 1}
+	return LexSource(diagnostics.NewSource("", src))
+}
+
+// LexSource tokenizes a source file; every position records the file.
+func LexSource(file *diagnostics.Source) ([]Token, []*diagnostics.Diagnostic) {
+	l := &lexer{file: file, src: file.Text, line: 1, col: 1}
 	l.run()
 	return l.toks, l.diags
 }
 
 func (l *lexer) pos() diagnostics.Pos {
-	return diagnostics.Pos{Offset: l.off, Line: l.line, Col: l.col}
+	return diagnostics.Pos{File: l.file, Offset: l.off, Line: l.line, Col: l.col}
 }
 
 func (l *lexer) peek(n int) byte {
@@ -324,6 +330,20 @@ func (l *lexer) matchOperator() string {
 		}
 	}
 	return ""
+}
+
+// IsName reports whether s is an identifier that is not a keyword or a
+// reserved word, i.e. a valid package name segment or function name.
+func IsName(s string) bool {
+	if s == "" || !isIdentStart(s[0]) || keywords[s] || reserved[s] {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		if !isIdentStart(s[i]) && !isDigit(s[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func isIdentStart(c byte) bool {

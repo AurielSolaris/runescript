@@ -28,7 +28,7 @@ conditionals, loops, and basic functions.
 - [x] Logo: `assets/runescript.svg` and an icon variant, rasterized to PNG via headless Edge (`scripts/render-logo.sh`)
 - [x] Docs: specification, user guide, roadmap
 
-## v0.2: Standard library and functions (current)
+## v0.2: Standard library and functions
 
 ### Standard library, part 1 ✅
 - [x] `use "std:<name>";` declarations and qualified calls (`string.toUpper(s)`)
@@ -45,7 +45,7 @@ conditionals, loops, and basic functions.
 - [x] Lambdas `(int a) => a + 1` and `(int a) => { … }`
 - [x] Function boundaries: no capture of enclosing variables
 - [x] Docs (guide chapter 6) and an example (`examples/callbacks.rsc`)
-- [ ] Enforce `private` (file) and `protected` (package) once multi-file programs exist (v0.3)
+- [x] Enforce `private` (file) and `protected` (package) once multi-file programs exist (done in v0.3)
 
 ### Tests and examples ✅
 - [x] Fuzz tests for the parser/checker and the interpreter (no crashes on arbitrary input)
@@ -72,15 +72,27 @@ conditionals, loops, and basic functions.
 - [ ] JavaScript interop: `use "js:<module>";` with typed prototypes, checked at the boundary
 - [ ] Measure generated-code performance before optimizing (e.g. inlining range checks)
 
-## v0.3: `use` for packages and files
+## v0.3: `use` for packages and files (current)
 
 Syntax decided by the owner: `use "<package_name>";` and `use "<file_path>";`,
 with paths relative to the current working directory. (`std:` works since v0.2.)
 
-- [ ] Decide how a package name is told apart from a file path, aliases, and
-  what visibility exposes
-- [ ] Multi-file programs: load, parse, and check every used file once; detect cycles
-- [ ] Tests: missing file, cycles, name clashes, running from a different working directory
+- [x] Decisions: a path contains `/`; a package is the `.rsm` files of its
+  directory; qualifier = last segment or `as` alias; a file use binds the
+  file's package; cycles are errors; exactly one `main`, in any file; file
+  extensions are a convention (any extension works when named directly)
+- [x] `internal/loader`: load and parse every used file once; detect cycles
+- [x] Checker: package scopes, per-file private scopes, qualified calls,
+  `public`/`protected`/`private` enforced (`ASX-NAME-011`)
+- [x] Diagnostics and runtime errors name the file; the JavaScript target
+  bundles every file into one module
+- [x] Tests: `tests/testdata/multi` (missing files, cycles, mismatched
+  packages, clashes, visibility, duplicates, bad names, a runtime error in
+  a used file, running from a different working directory), all also run on
+  Node.js
+- [ ] Qualified function values (`geom.area` without a call)
+- [ ] `runescript` flag to resolve uses from a directory other than the
+  working directory, if wanted
 
 ## v0.4: Strings and output
 

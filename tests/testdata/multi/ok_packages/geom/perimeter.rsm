@@ -1,0 +1,18 @@
+package geom;
+
+use "./util/text.txt";
+
+public int perimeter(int w, int h) {
+    trace(text.shout("perimeter"));
+    return scale(2 * (w + h));
+}
+
+// Protected: shared by both files of package geom.
+protected int scale(int n) {
+    return n * one();
+}
+
+// Private to this file.
+private int one() {
+    return 1;
+}

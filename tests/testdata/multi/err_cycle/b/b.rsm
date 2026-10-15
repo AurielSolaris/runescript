@@ -1,0 +1,6 @@
+package b;
+use "a"; // expect: ASX-USE-005 b/b.rsm:2:5
+
+public int g(int n) {
+    return n;
+}

@@ -1,0 +1,13 @@
+package lib;
+
+public int open() {
+    return shared() + secret();
+}
+
+protected int shared() {
+    return 1;
+}
+
+private int secret() {
+    return 2;
+}

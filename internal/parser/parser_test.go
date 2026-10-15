@@ -149,7 +149,7 @@ func TestParseErrors(t *testing.T) {
 func TestParseUseAndQualifiedCalls(t *testing.T) {
 	f := mustParse(t, `package p;
 use "std:string";
-use "lib/x.rsc";
+use "lib/x.rsc" as x;
 public void f() {
     string s = string.toUpper("a");
     string.trimSpace(s);
@@ -157,6 +157,9 @@ public void f() {
 }`)
 	if len(f.Uses) != 2 || f.Uses[0].Path != "std:string" || f.Uses[1].Path != "lib/x.rsc" {
 		t.Fatalf("uses = %+v", f.Uses)
+	}
+	if f.Uses[0].Alias != nil || f.Uses[1].Alias == nil || f.Uses[1].Alias.Name != "x" || f.Uses[1].Alias.Span.Start.Col != 20 {
+		t.Errorf("aliases: %+v, %+v", f.Uses[0].Alias, f.Uses[1].Alias)
 	}
 	stmts := f.Funcs[0].Body.Stmts
 	decl := stmts[0].(*ast.VarDecl)

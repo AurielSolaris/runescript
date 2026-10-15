@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
-	"github.com/AurielSolaris/runescript/internal/parser"
+	"github.com/AurielSolaris/runescript/internal/loader"
 )
 
 // program wraps body lines in `int main()`. The first body line is line 3.
@@ -16,12 +16,14 @@ func program(body, extra string) string {
 
 func check(t *testing.T, src string) []*diagnostics.Diagnostic {
 	t.Helper()
-	f, diags := parser.Parse([]byte(src))
-	if len(diags) != 0 {
-		t.Fatalf("parse failed: %v", diags)
+	prog, diags := loader.LoadSource(diagnostics.NewSource("t.rsc", []byte(src)), t.TempDir())
+	for _, f := range prog.Files {
+		if f.AST == nil {
+			t.Fatalf("parse failed: %v", diags)
+		}
 	}
-	_, diags = Check(f)
-	return diags
+	_, more := Check(prog)
+	return append(diags, more...)
 }
 
 func TestAccepted(t *testing.T) {
@@ -206,7 +208,7 @@ func TestStdStringRejected(t *testing.T) {
 		code diagnostics.Code
 		pos  string
 	}{
-		{"file use", "package p;\nuse \"lib/x.rsc\";\npublic void main() { }", diagnostics.UseUnsupported, "2:5"},
+		{"missing file", "package p;\nuse \"lib/x.rsc\";\npublic void main() { }", diagnostics.UseNotFound, "2:5"},
 		{"go use", "package p;\nuse \"go:strings\";\npublic void main() { }", diagnostics.UseUnsupported, "2:5"},
 		{"unknown std package", "package p;\nuse \"std:math\";\npublic void main() { }", diagnostics.UseUnknownPackage, "2:5"},
 		{"duplicate use", "package p;\nuse \"std:string\";\nuse \"std:string\";\npublic void main() { }", diagnostics.UseDuplicate, "3:1"},

@@ -69,7 +69,7 @@ func TestBuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"from prog.rsc", "export function run(", `$trace("hi")`} {
+	for _, want := range []string{"prog.rsc. Do not edit.", "export function run(", `$trace("hi")`} {
 		if !strings.Contains(string(js), want) {
 			t.Errorf("output lacks %q", want)
 		}
@@ -80,5 +80,75 @@ func TestBuild(t *testing.T) {
 	}
 	if _, err := os.Stat(out); err != nil {
 		t.Error(err)
+	}
+}
+
+// Programs can span files with any extension; uses are resolved against
+// the working directory.
+func TestMultiFileProgram(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "lib"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"tool.txt": `package app;
+use "./lib/math.inc";
+public int main() {
+    trace(math.triple(3));
+    return math.triple(1);
+}
+`,
+		"lib/math.inc": `package math;
+public int triple(int n) {
+    return n * 3;
+}
+`,
+		"broken.rsc": `package app;
+use "./lib/nope.rsc";
+public int main() {
+    return 0;
+}
+`,
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
+	var stdout, stderr strings.Builder
+	if code := cli([]string{"run", "tool.txt"}, &stdout, &stderr); code != 3 || strings.TrimSpace(stdout.String()) != "9" {
+		t.Errorf("run: exit %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
+	}
+	stderr.Reset()
+	want := `broken.rsc:2:5: error ASX-USE-004: cannot find file "lib/nope.rsc"`
+	if code := cli([]string{"check", "broken.rsc"}, &stdout, &stderr); code != exitCompileError || !strings.HasPrefix(stderr.String(), want) {
+		t.Errorf("check: exit %d, stderr %q", code, stderr.String())
+	}
+	if code := cli([]string{"build", "tool.txt"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("build: exit %d: %s", code, stderr.String())
+	}
+	if _, err := os.Stat("tool.js"); err != nil {
+		t.Error(err)
+	}
+}
+
+// build refuses to overwrite its own source.
+func TestBuildDoesNotOverwriteSource(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "app.js")
+	text := `package main;
+public int main() {
+    return 0;
+}
+`
+	if err := os.WriteFile(src, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr strings.Builder
+	if code := cli([]string{"build", src}, &stdout, &stderr); code != exitUsage || !strings.Contains(stderr.String(), "would overwrite the source") {
+		t.Errorf("exit %d, stderr %q", code, stderr.String())
+	}
+	if got, _ := os.ReadFile(src); string(got) != text {
+		t.Error("source was modified")
 	}
 }

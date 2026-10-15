@@ -1,4 +1,4 @@
-# RuneScript Guide (v0.1)
+# RuneScript Guide (v0.3)
 
 A practical tour of the RuneScript features that exist **today**. Every
 complete program in these pages is compiled by the test suite
@@ -15,10 +15,11 @@ complete program in these pages is compiled by the test suite
 9. [Coming from ActionScript 3](09-coming-from-actionscript.md)
 10. [Standard library: `std:string`](10-std-string.md): Go's `strings`, in RuneScript
 11. [Compiling to JavaScript](11-javascript.md): `runescript build`, and how strict typing is kept
+12. [Packages and files](12-packages-and-files.md): `use`, multi-file programs, visibility
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).
 
 > **Not yet available:** classes, structs, arrays, floats, `char`, string
-> concatenation, using files and non-standard packages, and type conversions. Their keywords are
+> concatenation, exceptions, and type conversions. Their keywords are
 > reserved, and using them gives a clear "not implemented yet" error.

@@ -1,0 +1,5 @@
+package geom;
+
+public int area(int w, int h) {
+    return scale(w * h);
+}

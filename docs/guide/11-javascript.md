@@ -12,7 +12,9 @@ runescript build -o web/app.js examples/hello.rsc # choose the output file
 node examples/fizzbuzz.js                         # runs it; main's result is the exit code
 ```
 
-`--target js` is the default and currently the only target.
+`--target js` is the default and currently the only target. A program of
+several files (see [Packages and files](12-packages-and-files.md)) becomes
+one module, and runtime errors name the file they happened in.
 
 ## Using the module in a web page
 
@@ -94,4 +96,4 @@ random non-ASCII text.
   is planned as `use "js:<module>";` with typed declarations whose values
   are checked when they enter RuneScript.
 
-Next: back to the [guide index](README.md)
+Next: [Packages and files](12-packages-and-files.md)

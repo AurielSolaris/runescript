@@ -26,11 +26,16 @@ const $rt = (() => {
   const MAX_DEPTH = /*@MAX_DEPTH@*/;
   const INT_MIN = -2147483648, INT_MAX = 2147483647, UINT_MAX = 4294967295;
 
-  let file = "", sites = [], depth = 0, sink = null;
+  let files = [], sites = [], depth = 0, sink = null;
+
+  // at returns the file, line, and column of a call site.
+  const at = (site) => {
+    const [f, line, col] = sites[site];
+    return [files[f], line, col];
+  };
 
   function fail(code, site, detail) {
-    const [line, col] = sites[site];
-    throw new RuneScriptError(code, file, line, col, detail);
+    throw new RuneScriptError(code, ...at(site), detail);
   }
 
   // ---- checked integer arithmetic (OQ-NUM-01: trap, never wrap) ----
@@ -86,8 +91,7 @@ const $rt = (() => {
   function unwind(e, site) {
     if (e instanceof RuneScriptError) return e;
     if (e instanceof RangeError || (e && e.name === "InternalError")) {
-      const [line, col] = sites[site];
-      return new RuneScriptError(CODES.callDepth, file, line, col,
+      return new RuneScriptError(CODES.callDepth, ...at(site),
         `maximum call depth exceeded: the JavaScript host ran out of stack at depth ${depth} (limit ${MAX_DEPTH})`);
     }
     return e;
@@ -272,7 +276,7 @@ const $rt = (() => {
   // run calls the entry point. options.trace receives each line of trace
   // output (default console.log). The result is main's int result, or 0.
   function run(program, options = {}) {
-    file = program.file;
+    files = program.files;
     sites = program.sites;
     sink = options.trace ?? ((line) => console.log(line));
     depth = 0;

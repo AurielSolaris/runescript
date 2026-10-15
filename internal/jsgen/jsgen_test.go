@@ -8,20 +8,20 @@ import (
 	"github.com/AurielSolaris/runescript/internal/checker"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/ir"
-	"github.com/AurielSolaris/runescript/internal/parser"
+	"github.com/AurielSolaris/runescript/internal/loader"
 )
 
 func generate(t *testing.T, src string) (string, []*diagnostics.Diagnostic) {
 	t.Helper()
-	file, diags := parser.Parse([]byte(src))
+	prog, diags := loader.LoadSource(diagnostics.NewSource("t.rsc", []byte(src)), t.TempDir())
 	if diags != nil {
 		t.Fatal(diags)
 	}
-	info, diags := checker.Check(file)
+	info, diags := checker.Check(prog)
 	if diags != nil {
 		t.Fatal(diags)
 	}
-	out, diags, err := Generate(ir.Lower(file, info), Options{File: "t.rsc", Version: "test"})
+	out, diags, err := Generate(ir.Lower(info), Options{Version: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}

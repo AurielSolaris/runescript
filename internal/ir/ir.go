@@ -22,7 +22,8 @@ type Span = diagnostics.Span
 
 // Program is a whole checked program.
 type Program struct {
-	// Funcs are the top-level function definitions, in source order.
+	// Funcs are the top-level function definitions of every file, in load
+	// order, then source order.
 	Funcs []*Func
 	// Entry is main; EntryVoid reports whether it returns void.
 	Entry     *Func
@@ -35,6 +36,7 @@ type Program struct {
 // Func is a named function (top-level or nested) or a lambda.
 type Func struct {
 	Name   string // "" for a lambda
+	Pkg    string // the package of a top-level function; "" otherwise
 	Type   *types.Type
 	Params []*Var
 	Body   *Block
@@ -165,7 +167,9 @@ type (
 		Args   []Expr
 		Site   Span
 	}
-	// CallNative calls a standard library function. Pkg is its qualifier.
+	// CallNative calls a standard library function. Pkg is the qualifier
+	// it was called with (an alias, or the package's own qualifier); the
+	// package itself is Func.Package.
 	CallNative struct {
 		Pkg  string
 		Func *stdlib.Func

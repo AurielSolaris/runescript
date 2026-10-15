@@ -7,21 +7,22 @@ import (
 	"testing"
 
 	"github.com/AurielSolaris/runescript/internal/checker"
-	"github.com/AurielSolaris/runescript/internal/parser"
+	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/loader"
 	"github.com/AurielSolaris/runescript/internal/types"
 )
 
 func lower(t *testing.T, src string) *Program {
 	t.Helper()
-	file, diags := parser.Parse([]byte(src))
+	prog, diags := loader.LoadSource(diagnostics.NewSource("t.rsc", []byte(src)), t.TempDir())
 	if diags != nil {
 		t.Fatal(diags)
 	}
-	info, diags := checker.Check(file)
+	info, diags := checker.Check(prog)
 	if diags != nil {
 		t.Fatal(diags)
 	}
-	return Lower(file, info)
+	return Lower(info)
 }
 
 // Every example lowers to IR that passes verification.

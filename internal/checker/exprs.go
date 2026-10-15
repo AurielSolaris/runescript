@@ -7,6 +7,7 @@ import (
 
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/loader"
 	"github.com/AurielSolaris/runescript/internal/types"
 	"github.com/AurielSolaris/runescript/stdlib"
 )
@@ -162,7 +163,9 @@ func (c *checker) ident(e *ast.Ident) *types.Type {
 		c.errorf(diagnostics.NameNotAValue, e.Span, "the built-in 'trace' cannot be used as a value").
 			WithHelp("wrap it in a lambda, e.g. (string s) => trace(s)")
 	case sym == nil:
-		c.errorf(diagnostics.NameUndefined, e.Span, "undefined name '%s'", e.Name)
+		if !c.privateError(c.file.Package, e.Name, e.Span) {
+			c.errorf(diagnostics.NameUndefined, e.Span, "undefined name '%s'", e.Name)
+		}
 	case sym.fn != nil:
 		c.info.FuncRefs[e] = sym.fn
 		return sym.fn.Type
@@ -301,7 +304,7 @@ func fold(op string, x, y *big.Int) *big.Int {
 func (c *checker) call(e *ast.CallExpr) *types.Type {
 	switch {
 	case e.Pkg != nil:
-		return c.nativeCall(e)
+		return c.qualifiedCall(e)
 	case e.Fn == nil:
 		t := c.expr(e.Callee).typ
 		return c.callValue(t, e, fmt.Sprintf("a value of type '%s'", t))
@@ -321,7 +324,9 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	sym, crossed := c.lookup(name)
 	switch {
 	case sym == nil:
-		c.errorf(diagnostics.NameUndefined, e.Fn.Span, "undefined function '%s'", name)
+		if !c.privateError(c.file.Package, name, e.Fn.Span) {
+			c.errorf(diagnostics.NameUndefined, e.Fn.Span, "undefined function '%s'", name)
+		}
 	case sym.fn != nil:
 		c.info.Callees[e] = sym.fn
 		return c.checkArgs(sym.fn.Type, e, "function '"+name+"'")
@@ -375,17 +380,44 @@ func (c *checker) checkArgs(ft *types.Type, e *ast.CallExpr, what string) *types
 	return ft.Result
 }
 
-// nativeCall checks a qualified call such as string.toUpper(s).
-func (c *checker) nativeCall(e *ast.CallExpr) *types.Type {
-	pkg := c.uses[e.Pkg.Name]
-	if pkg == nil {
-		d := c.errorf(diagnostics.NamePackageNotUsed, e.Pkg.Span, "package '%s' is not in scope", e.Pkg.Name)
-		if p := stdlib.Lookup(e.Pkg.Name); p != nil {
-			d.WithHelp(fmt.Sprintf(`add use "std:%s"; after the package declaration`, p.Path))
+// qualifiedCall checks a call such as string.toUpper(s) or geom.area(2).
+func (c *checker) qualifiedCall(e *ast.CallExpr) *types.Type {
+	b := c.quals[e.Pkg.Name]
+	switch {
+	case b == nil:
+		if !c.broken {
+			d := c.errorf(diagnostics.NamePackageNotUsed, e.Pkg.Span, "package '%s' is not in scope", e.Pkg.Name)
+			if p := stdlib.Lookup(e.Pkg.Name); p != nil {
+				d.WithHelp(fmt.Sprintf(`add use "std:%s"; after the package declaration`, p.Path))
+			}
+		}
+	case b.std != nil:
+		return c.nativeCall(e, b.std)
+	case b.pkg != nil:
+		return c.packageCall(e, b.pkg)
+	}
+	// Unknown qualifier, or a use that could not be loaded (reported).
+	c.exprs(e.Args)
+	return types.InvalidT
+}
+
+// packageCall checks a call of a function of another RuneScript package.
+func (c *checker) packageCall(e *ast.CallExpr, pkg *loader.Package) *types.Type {
+	sym := c.pkgs[pkg].syms[e.Fn.Name]
+	if sym == nil || sym.fn == nil {
+		if !c.privateError(pkg, e.Fn.Name, e.Fn.Span) {
+			c.errorf(diagnostics.NameNotInPackage, e.Fn.Span, "package %s has no function '%s'", pkg.Name, e.Fn.Name)
 		}
 		c.exprs(e.Args)
 		return types.InvalidT
 	}
+	c.checkProtected(sym.fn, e.Fn.Span)
+	c.info.Callees[e] = sym.fn
+	return c.checkArgs(sym.fn.Type, e, fmt.Sprintf("function '%s.%s'", e.Pkg.Name, e.Fn.Name))
+}
+
+// nativeCall checks a call of a standard library function.
+func (c *checker) nativeCall(e *ast.CallExpr, pkg *stdlib.Package) *types.Type {
 	f := pkg.Funcs[e.Fn.Name]
 	if f == nil {
 		d := c.errorf(diagnostics.NameNotInPackage, e.Fn.Span, "package std:%s has no function '%s'", pkg.Path, e.Fn.Name)
@@ -398,7 +430,7 @@ func (c *checker) nativeCall(e *ast.CallExpr) *types.Type {
 		return types.InvalidT
 	}
 	c.info.Natives[e] = f
-	return c.checkArgs(types.NewFunc(f.Params, f.Result), e, fmt.Sprintf("function '%s.%s'", pkg.Qualifier, f.Name))
+	return c.checkArgs(types.NewFunc(f.Params, f.Result), e, fmt.Sprintf("function '%s.%s'", e.Pkg.Name, f.Name))
 }
 
 // ---- lambdas ----

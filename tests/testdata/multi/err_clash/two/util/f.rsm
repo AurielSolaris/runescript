@@ -1,0 +1,5 @@
+package two.util;
+
+public int f() {
+    return 2;
+}

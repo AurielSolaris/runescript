@@ -10,9 +10,12 @@ import "github.com/AurielSolaris/runescript/internal/types"
 
 // Func is a natively implemented function.
 type Func struct {
-	Name   string
-	Params []*types.Type
-	Result *types.Type
+	Name string
+	// Package is the path of the package the function belongs to, e.g.
+	// "string". It is set when the package is registered.
+	Package string
+	Params  []*types.Type
+	Result  *types.Type
 	// Impl receives one Go value per parameter and returns the result
 	// (nil for void). A panic inside Impl becomes a RuneScript runtime error.
 	Impl func(args []any) any
@@ -31,6 +34,9 @@ type Package struct {
 var packages = map[string]*Package{}
 
 func register(p *Package) {
+	for _, f := range p.Funcs {
+		f.Package = p.Path
+	}
 	packages[p.Path] = p
 }
 

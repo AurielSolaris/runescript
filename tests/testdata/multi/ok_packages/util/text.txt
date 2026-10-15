@@ -1,0 +1,7 @@
+package text;
+
+use "std:string";
+
+public string shout(string s) {
+    return string.toUpper(s);
+}

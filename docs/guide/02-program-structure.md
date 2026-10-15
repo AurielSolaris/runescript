@@ -33,10 +33,10 @@ public void main() {
 The functions are then called through the package's qualifier (the last
 part of its name). See [Standard library: std:string](10-std-string.md).
 
-> **Planned, not yet implemented:** other RuneScript packages
-> (`use "games.engine";`), source files (`use "lib/helpers.rsc";`, relative to
-> the current directory), and Go packages (`use "go:<package>";`). Today these
-> give `ASX-USE-003`.
+`use` also loads other RuneScript packages (`use "games.engine";`) and
+files (`use "./lib/helpers.rsc";`), so a program can span several files.
+See [Packages and files](12-packages-and-files.md). Go packages
+(`use "go:<package>";`) are planned and give `ASX-USE-003` today.
 
 ## Comments
 

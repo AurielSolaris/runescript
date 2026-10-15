@@ -87,7 +87,7 @@ func interpret(t *testing.T, src []byte) result {
 // compileJS compiles src and writes the module to a temporary directory.
 func compileJS(t *testing.T, src []byte) string {
 	t.Helper()
-	js, diags, err := driver.BuildJS(src, jsgen.Options{File: "prog.rsc", Version: "test"})
+	js, diags, err := driver.BuildJS("prog.rsc", src, jsgen.Options{Version: "test"})
 	if diags != nil || err != nil {
 		t.Fatalf("BuildJS: diags=%v err=%v", diags, err)
 	}

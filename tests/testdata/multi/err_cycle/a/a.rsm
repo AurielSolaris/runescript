@@ -1,0 +1,6 @@
+package a;
+use "b";
+
+public int f(int n) {
+    return b.g(n);
+}

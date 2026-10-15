@@ -1,6 +1,6 @@
 # RuneScript Language Specification
 
-**Version 0.2 (draft, in progress).** This is the formal companion to `CLAUDE.md`. If
+**Version 0.3 (draft, in progress).** This is the formal companion to `CLAUDE.md`. If
 the two disagree, the disagreement is flagged in §11 rather than silently
 resolved.
 
@@ -8,7 +8,7 @@ Every rule carries one of these labels:
 
 | Label | Meaning |
 |---|---|
-| **[v0.1]**, **[v0.2]** | Implemented, and covered by tests, in that version. |
+| **[v0.1]**, **[v0.2]**, **[v0.3]** | Implemented, and covered by tests, in that version. |
 | **[v0.1, provisional]** | Implemented, but the owner has not decided the rule. It is the most conservative choice and may change. |
 | **[planned]** | Required by the design; not implemented. |
 | **[undecided]** | Not yet designed. Programs using it are rejected. |
@@ -22,10 +22,14 @@ from AS3, RuneScript's design wins. §10 summarises the differences.
 ## 1. Source text
 
 - **[v0.1]** Source files are UTF-8.
-- **[v0.2]** Source files use the `.rsc` extension. The CLI accepts any file
-  name and does not check the extension.
+- **[v0.3, decided]** Programs conventionally use `.rsc`, and the files of a
+  package directory use `.rsm` (§4.2). As in Perl, the extension is a
+  convention, not a rule: a file named on the command line or in a file
+  `use` may have any extension, as long as it contains valid RuneScript.
 - **[v0.1]** Positions in diagnostics are `line:column`, both 1-based.
-  Columns count Unicode code points.
+  Columns count Unicode code points. **[v0.3]** In a program of several
+  files, diagnostics also name the file: `geom/area.rsm:4:12`. A file is
+  named by its path relative to the working directory.
 
 ## 2. Lexical structure
 
@@ -84,7 +88,7 @@ EBNF. `{ x }` means zero or more, `[ x ]` means optional.
 ```ebnf
 File         = PackageDecl { UseDecl } { FuncDecl } EOF ;
 PackageDecl  = "package" Ident { "." Ident } ";" ;
-UseDecl      = "use" StringLit ";" ;
+UseDecl      = "use" StringLit [ "as" Ident ] ";" ;   (* "as" is contextual *)
 
 FuncDecl     = Visibility Type Ident "(" [ Params ] ")" ( Block | ";" ) ;
 Visibility   = "public" | "protected" | "private" ;
@@ -147,45 +151,82 @@ Notes:
 - **[v0.1]** Every file begins with exactly one `package name;`. Names are
   dotted identifiers. A package is a semicolon-terminated declaration, not a
   brace-delimited block (unlike AS3).
-- **[undecided]** How packages map to directories, and multi-file packages.
+- **[v0.3]** A package is identified by its name. Every file of the program
+  that declares `package geom;` belongs to package `geom`, however it was
+  loaded, so a package can span several files (§4.2).
+- **[undecided]** Whether the package name must match the entry file's
+  directory, and whether one file may declare several packages (no, so far).
 
-### 4.2 Using packages and files: `use`
+### 4.2 Using packages and files: `use` **[v0.3]**
 Syntax (decided by the owner):
 
 ```text
-use "std:<name>";          // standard library package   [v0.2]
-use "<package_name>";      // RuneScript package          [planned]
-use "<file_path>";         // source file, relative to the current working directory [planned]
-use "go:<package>";        // Go package                  [planned]
+use "std:<name>";             // standard library package
+use "<package.name>";         // RuneScript package: the .rsm files in package/name/
+use "<path/to/file>";         // one file, any extension
+use "<...>" as <name>;        // any of the above, with another qualifier
+use "go:<package>";           // Go package                 [planned]
 ```
 
-- **[v0.2]** `use` declarations come after `package` and before any
-  function (`ASX-PARSE-001` otherwise).
-- **[v0.2]** A package's functions are called through its **qualifier**, the
-  last segment of its name: `use "std:string";` → `string.toUpper(s)`. A
-  type keyword can be a qualifier, so `string.` names package `std:string`
-  while `string` alone is still the type.
-- **[v0.2]** Using a qualifier without the matching `use` is
-  `ASX-NAME-007`. An unknown function is `ASX-NAME-008`. An unknown `std:`
-  package is `ASX-USE-001`, and using one twice is `ASX-USE-002`.
-- **[v0.2]** All other forms are rejected with `ASX-USE-003` for now.
-- **[undecided]** How a package name is told apart from a file path, aliases,
-  cycles, and what visibility a used file exports. Resolving file paths
-  against the *current working directory* means the same program can resolve
-  differently depending on where it is launched from. The owner chose this
-  deliberately.
+- `use` declarations come after `package` and before any function
+  (`ASX-PARSE-001` otherwise). A `use` applies to the file it is in.
+- **Package or file (decided).** A string containing `/` is a file path
+  (`"./geom.rsc"`, `"lib/geom"`, `"../shared/x.txt"`). `std:` is the
+  standard library and other `scheme:` forms are `ASX-USE-003`. Anything
+  else is a package name: dot-separated identifiers that are not keywords
+  (`ASX-USE-006` otherwise). Backslashes are rejected (`ASX-USE-006`);
+  paths use `/` on every platform.
+- **Resolution (decided).** Paths and package directories are relative to
+  the *current working directory*, not to the file containing the `use`. The
+  same program can therefore resolve differently depending on where it is
+  launched from. The owner chose this deliberately.
+- **Package directories (decided).** `use "org.x.geom";` loads every regular
+  file with the extension `.rsm` directly in `org/x/geom/` (not in its
+  subdirectories), in name order. Other files there are ignored. Each must
+  declare `package org.x.geom;` (`ASX-USE-007`). A directory with no `.rsm`
+  file is `ASX-USE-004`, as is a missing file.
+- **Each file is loaded once,** however many files use it and however its
+  path is spelled.
+- **Qualifiers (decided).** A package's functions are called through a
+  qualifier: the last segment of its name (`use "org.x.geom";` →
+  `geom.area(2, 3)`), or the name after `as`. A file use binds the package
+  the file declares (`use "./lib/text.txt";` in which the file says
+  `package text;` → `text.shout(s)`). A type keyword can be a qualifier, so
+  `string.` names package `std:string` while `string` alone is still the
+  type. Qualifiers belong to the file: other files must `use` the package
+  themselves.
+- A qualifier that already refers to another package in the file is
+  `ASX-USE-008`; using the same package twice under the same qualifier is
+  `ASX-USE-002`. Using a package under two different qualifiers is allowed.
+- A qualifier without a matching `use` is `ASX-NAME-007`; a function the
+  package doesn't have is `ASX-NAME-008`. An unknown `std:` package is
+  `ASX-USE-001`.
+- **Own package.** A `use` that resolves to the package of the file it is
+  in (typically a file of the same package) loads that file but binds no
+  qualifier: the package's functions are already in scope.
+- **Cycles (decided).** Packages may not use each other in a cycle, directly
+  or indirectly (`ASX-USE-005`, reported at the `use` that closes it, with
+  the cycle spelled out). Files of one package don't depend on each other.
+- **[v0.3, provisional]** Qualified names can only be called
+  (`geom.area(1, 2)`); a qualified function can't yet be used as a value
+  (`geom.area` alone is `ASX-PARSE-001`). Wrap it in a lambda.
 
 ### 4.3 Functions
 - **[v0.2, decided]** Every function declaration, nested ones included,
   has the form `<access> <return type> <name>(<params>) { … }`. `<access>` is
   required and is one of `public`, `private`, `protected`. There is no
   `function` keyword. A missing modifier is `ASX-PARSE-001`.
-- **[decided; enforcement planned]** `public` means usable everywhere,
-  `private` means this file only, and `protected` means this package only.
-  Programs are single-file, so this is not enforced yet. On nested functions
-  the modifier is required but has no effect.
-- **[v0.1]** Top-level functions are visible throughout the file and can be
-  called before their definition. Recursion is supported.
+- **[v0.3, decided]** `public` means usable everywhere, `private` means this
+  file only, and `protected` means this package only. Using a function where
+  its modifier doesn't allow it is `ASX-NAME-011`. On nested functions the
+  modifier is required but has no effect.
+- **[v0.3]** A package's public and protected top-level functions are
+  visible, unqualified, in every file of the package, and can be called
+  before their definition. Recursion is supported. Other packages call
+  only the public ones, through a qualifier.
+- **[v0.3]** A private top-level function is visible only in its own file.
+  Two files may each have a private function of the same name; any other
+  repeated top-level name in a package is `ASX-NAME-002`.
 - **[v0.1]** Arguments are passed by value. Arity and argument types are
   checked statically. **[provisional]** Parameters are read-only.
 - **[v0.1, provisional]** No overloading: a name declares one function.
@@ -193,7 +234,9 @@ use "go:<package>";        // Go package                  [planned]
   function without a body. Parameter names are optional. The definition
   must follow in the same scope with an identical type (`ASX-TYPE-015`). A
   prototype may appear at most once, before the definition (`ASX-NAME-002`),
-  and must be defined (`ASX-NAME-010`).
+  and must be defined (`ASX-NAME-010`). **[v0.3]** A top-level prototype must
+  be defined in the same file (`ASX-NAME-002`); other files of the package
+  don't need prototypes.
 - **[v0.2] Nested functions.** A function declared in a block is visible from
   its declaration (or prototype) to the end of that block, and within its own
   body. Mutual recursion between nested functions uses a prototype.
@@ -217,7 +260,10 @@ use "go:<package>";        // Go package                  [planned]
 ### 4.4 Entry point **[v0.1, provisional]**
 A program runs by calling a top-level function `main` that takes no
 parameters and returns `int`/`sint` or `void`. An `int` result becomes the
-process exit code; `void` means exit code 0. The canonical form is:
+process exit code; `void` means exit code 0. **[v0.3, decided]** `main` may
+be in any file of the program, but there must be exactly one
+(`ASX-ENTRY-003` for the others; `ASX-ENTRY-001` if there is none). The
+canonical form is:
 
 ```actionscript
 package main;
@@ -427,9 +473,9 @@ purpose:
 | Type names | `String`, `Boolean` | `string`, `bool`; `sint` alias added |
 | Truthiness | `if (count)` allowed | Conditions must be `bool` |
 | Variable scope | `var` is function-scoped and hoisted | Block-scoped; no shadowing [provisional] |
-| Visibility | `public protected private internal`; default `internal` | `public protected private`; default and meaning undecided |
+| Visibility | `public protected private internal`; default `internal` | `public` (everywhere), `protected` (package), `private` (file); always written |
 | Casts | `T(x)` and `x as T` | Explicit checked conversions [undecided] |
-| Imports | `import a.b.C;` | `use "std:string";` [v0.2]; `use "a.b";`, `use "path/file";`, `use "go:pkg";` [planned] |
+| Imports | `import a.b.C;` imports one definition | `use "a.b";` and `use "./file";` make a whole package callable as `b.f()` [v0.3]; `use "go:pkg";` [planned] |
 | `trace` | `trace(...args)`, space-separated | Same, written to stdout |
 
 **Games and graphics.** AS3 was used mostly for games and interactive
@@ -455,7 +501,9 @@ metadata, E4X XML, `Vector.<T>` (vs. `Array<T>` generics), type inference,
 ## 12. JavaScript target **[v0.2]**
 
 `runescript build [--target js] [-o out.js] file.rsc` compiles a program to
-a single ES2022 module (owner decision). The module exports
+a single ES2022 module (owner decision). **[v0.3]** Every file of the
+program is compiled into that one module, and runtime errors name the file
+they happened in, as the interpreter's do. The module exports
 `run(options)`, which calls `main` and returns the exit code, and
 `RuneScriptError`. Run directly with Node.js (`node out.js`), the module
 calls `run` itself.

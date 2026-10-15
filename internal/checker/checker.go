@@ -10,18 +10,22 @@
 package checker
 
 import (
+	"fmt"
 	"math/big"
 	"sort"
 	"strings"
 
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/loader"
 	"github.com/AurielSolaris/runescript/internal/types"
 	"github.com/AurielSolaris/runescript/stdlib"
 )
 
 // Info is the result of checking, consumed by the runtime.
 type Info struct {
+	// Program is the program that was checked.
+	Program *loader.Program
 	// Types holds the resolved type of every checked expression.
 	Types map[ast.Expr]*types.Type
 	// Consts holds the value of integer constant expressions that were
@@ -49,7 +53,17 @@ type FuncSym struct {
 	Type  *types.Type
 	Def   *ast.FuncDecl // nil until the definition is seen
 	Proto *ast.FuncDecl // the prototype, if any
+	// For top-level functions, the file and package declaring them; nil
+	// for nested functions.
+	File *loader.File
+	Pkg  *loader.Package
 }
+
+// TopLevel reports whether f is a top-level function.
+func (f *FuncSym) TopLevel() bool { return f.Pkg != nil }
+
+// visibility is the access modifier of f's first declaration.
+func (f *FuncSym) visibility() ast.Visibility { return firstDecl(f).Visibility }
 
 // symbol is anything a name can refer to inside a function.
 type symbol struct {
@@ -71,7 +85,13 @@ type checker struct {
 	info   *Info
 	diags  []*diagnostics.Diagnostic
 	scopes []*scope
-	uses   map[string]*stdlib.Package // by qualifier
+	pkgs   map[*loader.Package]*scope // public and protected top-level functions
+	files  map[*loader.File]*scope    // private top-level functions of each file
+
+	// state of the file being checked
+	file   *loader.File
+	quals  map[string]*binding // use qualifiers
+	broken bool                // a use with an unknown qualifier could not be loaded
 
 	// state of the function or lambda being checked
 	fnName    string
@@ -87,35 +107,71 @@ type operand struct {
 
 var invalid = operand{typ: types.InvalidT}
 
-// Check type-checks file. It returns all diagnostics found.
-func Check(file *ast.File) (*Info, []*diagnostics.Diagnostic) {
+// binding is what a use qualifier refers to in one file: a standard
+// library package or a RuneScript package (neither for a broken use).
+type binding struct {
+	std  *stdlib.Package
+	pkg  *loader.Package
+	decl *ast.UseDecl
+}
+
+// Check type-checks a loaded program. Every file must have parsed. It
+// returns all diagnostics found.
+func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 	c := &checker{
 		info: &Info{
+			Program:  prog,
 			Types:    map[ast.Expr]*types.Type{},
 			Consts:   map[ast.Expr]int64{},
 			Callees:  map[*ast.CallExpr]*FuncSym{},
 			FuncRefs: map[*ast.Ident]*FuncSym{},
 			Natives:  map[*ast.CallExpr]*stdlib.Func{},
 		},
-		uses:   map[string]*stdlib.Package{},
-		scopes: []*scope{{syms: map[string]*symbol{}}},
+		pkgs:  map[*loader.Package]*scope{},
+		files: map[*loader.File]*scope{},
 	}
-	c.useDecls(file)
+	for _, p := range prog.Packages {
+		c.pkgs[p] = &scope{syms: map[string]*symbol{}}
+	}
+	for _, f := range prog.Files {
+		c.files[f] = &scope{syms: map[string]*symbol{}}
+	}
 
-	// Top-level functions are visible throughout the file, so declare them
-	// all before checking any body.
-	sigs := make([]*types.Type, len(file.Funcs))
-	for i, fn := range file.Funcs {
-		sigs[i] = c.declareFunc(fn)
-	}
-	for i, fn := range file.Funcs {
-		if fn.Body != nil {
-			c.funcBody(fn, sigs[i])
+	// A package's top-level functions are visible in all of its files, so
+	// declare every one before checking any body.
+	sigs := map[*ast.FuncDecl]*types.Type{}
+	for _, f := range prog.Files {
+		c.enterFile(f)
+		for _, fn := range f.AST.Funcs {
+			sigs[fn] = c.declareTop(fn)
 		}
 	}
-	c.reportUndefined(c.scopes[0])
-	c.entry(file)
+	for _, f := range prog.Files {
+		c.enterFile(f)
+		c.useDecls(f)
+		for _, fn := range f.AST.Funcs {
+			if fn.Body != nil {
+				c.funcBody(fn, sigs[fn])
+			}
+		}
+	}
+	for _, f := range prog.Files {
+		c.enterFile(f)
+		c.reportUndefined(c.files[f])
+	}
+	for _, p := range prog.Packages {
+		c.reportUndefined(c.pkgs[p])
+	}
+	c.entry(prog)
 	return c.info, c.diags
+}
+
+// enterFile makes f the file being checked.
+func (c *checker) enterFile(f *loader.File) {
+	c.file = f
+	c.scopes = []*scope{c.pkgs[f.Package], c.files[f]}
+	c.quals = map[string]*binding{}
+	c.broken = false
 }
 
 func (c *checker) errorf(code diagnostics.Code, span diagnostics.Span, format string, args ...any) *diagnostics.Diagnostic {
@@ -126,29 +182,58 @@ func (c *checker) errorf(code diagnostics.Code, span diagnostics.Span, format st
 
 // ---- use declarations ----
 
-// useDecls resolves `use` declarations. Only "std:" packages exist so far;
-// other packages, files, and "go:" packages are planned.
-func (c *checker) useDecls(file *ast.File) {
-	for _, u := range file.Uses {
-		name, isStd := strings.CutPrefix(u.Path, "std:")
-		if !isStd {
-			c.errorf(diagnostics.UseUnsupported, u.PathSpan, "cannot use %q: only standard library packages (\"std:...\") are supported so far", u.Path).
-				WithHelp("using other RuneScript packages, source files, and Go packages is planned")
-			continue
+// useDecls binds the qualifiers of f's use declarations. The loader has
+// already resolved RuneScript packages and files and reported the uses it
+// could not resolve.
+func (c *checker) useDecls(f *loader.File) {
+	for _, u := range f.Uses {
+		switch u.Kind {
+		case loader.UseStd:
+			pkg := stdlib.Lookup(u.Name)
+			if pkg == nil {
+				paths := stdlib.Paths()
+				sort.Strings(paths)
+				c.errorf(diagnostics.UseUnknownPackage, u.Decl.PathSpan, "unknown standard library package %q", u.Decl.Path).
+					WithHelp("available: std:" + strings.Join(paths, ", std:"))
+				continue
+			}
+			q := u.Qualifier
+			if q == "" {
+				q = pkg.Qualifier
+			}
+			c.bind(q, &binding{std: pkg, decl: u.Decl})
+		case loader.UsePackage, loader.UseFile:
+			switch {
+			case u.Self(f):
+				// Its functions are already in scope.
+			case u.Target == nil && u.Qualifier != "":
+				c.bind(u.Qualifier, &binding{decl: u.Decl})
+			case u.Target == nil:
+				// A missing file: its package name, and so its qualifier,
+				// is unknown.
+				c.broken = true
+			default:
+				c.bind(u.Qualifier, &binding{pkg: u.Target, decl: u.Decl})
+			}
 		}
-		pkg := stdlib.Lookup(name)
-		if pkg == nil {
-			paths := stdlib.Paths()
-			sort.Strings(paths)
-			c.errorf(diagnostics.UseUnknownPackage, u.PathSpan, "unknown standard library package %q", u.Path).
-				WithHelp("available: std:" + strings.Join(paths, ", std:"))
-			continue
+	}
+}
+
+// bind makes qualifier q refer to b in the current file.
+func (c *checker) bind(q string, b *binding) {
+	prev := c.quals[q]
+	switch {
+	case prev == nil:
+		c.quals[q] = b
+	case prev.std != nil && prev.std == b.std, prev.pkg != nil && prev.pkg == b.pkg:
+		c.errorf(diagnostics.UseDuplicate, b.decl.Span, "%q is already used at %s", b.decl.Path, prev.decl.Span.Start)
+	default:
+		span := b.decl.PathSpan
+		if b.decl.Alias != nil {
+			span = b.decl.Alias.Span
 		}
-		if _, dup := c.uses[pkg.Qualifier]; dup {
-			c.errorf(diagnostics.UseDuplicate, u.Span, "%q is already used", u.Path)
-			continue
-		}
-		c.uses[pkg.Qualifier] = pkg
+		c.errorf(diagnostics.UseQualifierClash, span, "'%s' already refers to %q, used at %s", q, prev.decl.Path, prev.decl.Span.Start).
+			WithHelp(fmt.Sprintf("give one of them another name, e.g. use %q as other;", b.decl.Path))
 	}
 }
 
@@ -267,23 +352,66 @@ func paramName(p *ast.Param) string {
 	return p.Name.Name
 }
 
-// declareFunc declares a top-level or nested function (definition or
-// prototype) in the innermost scope and returns its signature.
+// declareTop declares a top-level function. Private functions go in the
+// file's scope and the others in the package's, so two files may each
+// have a private function of the same name.
+func (c *checker) declareTop(fn *ast.FuncDecl) *types.Type {
+	name := fn.Name.Name
+	fileScope, pkgScope := c.files[c.file], c.pkgs[c.file.Package]
+	switch {
+	case fileScope.syms[name] != nil:
+		return c.declareIn(fileScope, fn, true)
+	case pkgScope.syms[name] != nil:
+		return c.declareIn(pkgScope, fn, true)
+	case fn.Visibility == ast.VisPrivate:
+		return c.declareIn(fileScope, fn, true)
+	}
+	if other := c.privateElsewhere(c.file.Package, name); other != nil {
+		c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "function '%s' is already declared, as private, at %s", name, firstDecl(other).Name.Span.Start.Where(c.file.Source)).
+			WithHelp("only private functions of different files may share a name")
+		return c.funcType(fn)
+	}
+	return c.declareIn(pkgScope, fn, true)
+}
+
+// privateElsewhere returns a private function called name in a file of
+// pkg other than the current one.
+func (c *checker) privateElsewhere(pkg *loader.Package, name string) *FuncSym {
+	for _, f := range pkg.Files {
+		if f == c.file {
+			continue
+		}
+		if sym := c.files[f].syms[name]; sym != nil && sym.fn != nil {
+			return sym.fn
+		}
+	}
+	return nil
+}
+
+// declareFunc declares a nested function (definition or prototype) in the
+// innermost scope and returns its signature.
 func (c *checker) declareFunc(fn *ast.FuncDecl) *types.Type {
+	return c.declareIn(c.top(), fn, false)
+}
+
+func (c *checker) declareIn(s *scope, fn *ast.FuncDecl, topLevel bool) *types.Type {
 	t := c.funcType(fn)
 	name := fn.Name.Name
-	if existing, ok := c.top().syms[name]; ok {
+	if existing, ok := s.syms[name]; ok {
 		f := existing.fn
 		switch {
+		case f != nil && f.Def == nil && fn.Body != nil && f.File != nil && f.File != c.file:
+			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "function '%s' has a prototype in %s; define it in that file", name, f.File.Source.Name).
+				WithHelp("a package's functions are visible in all of its files without prototypes")
 		case f != nil && f.Def == nil && fn.Body != nil:
 			if !types.Identical(f.Type, t) {
 				c.errorf(diagnostics.TypeProtoMismatch, fn.Name.Span,
 					"definition of '%s' has type '%s', but its prototype at %s declares '%s'",
-					name, t, f.Proto.Name.Span.Start, f.Type)
+					name, t, f.Proto.Name.Span.Start.Where(c.file.Source), f.Type)
 			}
 			f.Def = fn
 		case f != nil:
-			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "function '%s' is already declared at %s", name, firstDecl(f).Name.Span.Start).
+			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "function '%s' is already declared at %s", name, firstDecl(f).Name.Span.Start.Where(c.file.Source)).
 				WithHelp("functions cannot be overloaded; a prototype may appear once, before the definition")
 		default:
 			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "'%s' is already declared in this function", name)
@@ -294,12 +422,15 @@ func (c *checker) declareFunc(fn *ast.FuncDecl) *types.Type {
 		return t
 	}
 	f := &FuncSym{Name: name, Type: t}
+	if topLevel {
+		f.File, f.Pkg = c.file, c.file.Package
+	}
 	if fn.Body != nil {
 		f.Def = fn
 	} else {
 		f.Proto = fn
 	}
-	c.top().add(name, &symbol{fn: f})
+	s.add(name, &symbol{fn: f})
 	return t
 }
 
@@ -374,21 +505,66 @@ func ifTerminates(s *ast.IfStmt) bool {
 	return false
 }
 
-func (c *checker) entry(file *ast.File) {
-	sym := c.scopes[0].syms["main"]
-	if sym == nil || sym.fn == nil || sym.fn.Def == nil {
-		c.errorf(diagnostics.EntryMissing, file.Package.Span, "no entry point: function 'main' is not defined").
+// checkProtected reports a call, through a use qualifier, of a protected
+// function of another package.
+func (c *checker) checkProtected(f *FuncSym, span diagnostics.Span) {
+	if f.visibility() == ast.VisProtected && f.Pkg != c.file.Package {
+		c.errorf(diagnostics.NameNotVisible, span, "function '%s' is protected: only package %s can use it", f.Name, f.Pkg.Name).
+			WithHelp("declare it public to use it from other packages")
+	}
+}
+
+// privateError reports name, at span, if it is a private function of
+// another file of pkg, and reports whether it was.
+func (c *checker) privateError(pkg *loader.Package, name string, span diagnostics.Span) bool {
+	f := c.privateElsewhere(pkg, name)
+	if f == nil {
+		return false
+	}
+	help := fmt.Sprintf("declare it protected to share it within package %s, or public to share it with every package", f.Pkg.Name)
+	if pkg != c.file.Package {
+		help = "declare it public to use it from other packages"
+	}
+	c.errorf(diagnostics.NameNotVisible, span, "function '%s' is private to %s", name, f.File.Source.Name).WithHelp(help)
+	return true
+}
+
+// entry finds the program's entry point: the one top-level function named
+// main, in any file (owner decision, v0.3).
+func (c *checker) entry(prog *loader.Program) {
+	var mains []*FuncSym
+	var scopes []*scope
+	for _, p := range prog.Packages {
+		scopes = append(scopes, c.pkgs[p])
+	}
+	for _, f := range prog.Files {
+		scopes = append(scopes, c.files[f])
+	}
+	for _, s := range scopes {
+		if sym := s.syms["main"]; sym != nil && sym.fn != nil && sym.fn.Def != nil {
+			mains = append(mains, sym.fn)
+		}
+	}
+	sort.SliceStable(mains, func(i, j int) bool { return mains[i].Def.Span.Start.Before(mains[j].Def.Span.Start) })
+	if len(mains) == 0 {
+		c.errorf(diagnostics.EntryMissing, prog.Entry.AST.Package.Span, "no entry point: function 'main' is not defined").
 			WithHelp("define `public int main() { return 0; }`")
 		return
 	}
-	t := sym.fn.Type
+	for _, m := range mains[1:] {
+		c.errorf(diagnostics.EntryDuplicate, m.Def.Name.Span, "more than one entry point: 'main' is also defined in package %s at %s",
+			mains[0].Pkg.Name, mains[0].Def.Name.Span.Start.Where(m.File.Source)).
+			WithHelp("a program has exactly one function named 'main'; rename the others")
+	}
+	main := mains[0]
+	t := main.Type
 	if len(t.Params) != 0 || (t.Result.Kind != types.Signed && t.Result.Kind != types.Void) {
 		if t.Result.Kind != types.Invalid {
-			c.errorf(diagnostics.EntryBadSignature, sym.fn.Def.Name.Span, "'main' must take no parameters and return 'int' or 'void'").
+			c.errorf(diagnostics.EntryBadSignature, main.Def.Name.Span, "'main' must take no parameters and return 'int' or 'void'").
 				WithHelp("entry-point parameters (e.g. command-line arguments) are not yet specified")
 		}
 		return
 	}
-	c.info.Entry = sym.fn.Def
+	c.info.Entry = main.Def
 	c.info.EntryVoid = t.Result.Kind == types.Void
 }

@@ -35,7 +35,7 @@ protected int main() {
 }
 ```
 
-## Status: v0.2 in progress (early development)
+## Status: v0.3 in progress (early development)
 
 **Works now**, and is covered by tests:
 
@@ -47,6 +47,9 @@ protected int main() {
 - `if`/`else if`/`else`, `while`, `for`, `break`, `continue`, `return`
 - `trace(...)`
 - Standard library: `use "std:string";` gives Go's `strings` functions as `string.toUpper(s)` and so on
+- Multi-file programs: `use "geom";` loads the package in `geom/*.rsm`, and
+  `use "./lib/x.rsc";` loads one file; `public`/`protected`/`private` are
+  enforced ([guide](docs/guide/12-packages-and-files.md))
 - Compile-time type checking with located diagnostics, including rejection
   of signed → unsigned assignment
 - Integer overflow and division by zero are reported as runtime errors and
@@ -56,7 +59,7 @@ protected int main() {
   ([guide](docs/guide/11-javascript.md))
 
 **Not yet implemented:** classes, structs, arrays, floats, `char`, string
-concatenation, `use` for files and non-standard packages, type conversions, `std:math`, `std:symrs`, and the planned native
+concatenation, exceptions, type conversions, `go:` packages, `std:math`, `std:symrs`, and the planned native
 graphics package. See the [roadmap](docs/ROADMAP.md).
 
 ## Build and run
@@ -72,7 +75,9 @@ node examples/fizzbuzz.js                         # runs it (Node.js 24+)
 go test ./...
 ```
 
-> RuneScript files use the `.rsc` extension. The CLI accepts any file name.
+> RuneScript programs use the `.rsc` extension, and package directories hold
+> `.rsm` files. Like Perl, the extension is a convention: the CLI and file
+> `use`s accept any file name, as long as the file contains RuneScript.
 
 ## Tests
 

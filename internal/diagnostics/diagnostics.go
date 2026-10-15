@@ -61,12 +61,22 @@ const (
 	NameAcrossBoundary    Code = "NAME-009"
 	NameNeverDefined      Code = "NAME-010"
 
-	UseUnknownPackage Code = "USE-001"
-	UseDuplicate      Code = "USE-002"
-	UseUnsupported    Code = "USE-003"
+	UseUnknownPackage  Code = "USE-001"
+	UseDuplicate       Code = "USE-002"
+	UseUnsupported     Code = "USE-003"
+	UseNotFound        Code = "USE-004"
+	UseCycle           Code = "USE-005"
+	UseBadName         Code = "USE-006"
+	UsePackageMismatch Code = "USE-007"
+	UseQualifierClash  Code = "USE-008"
+
+	// NameNotVisible reports a use of a private or protected function from
+	// outside the file or package it belongs to.
+	NameNotVisible Code = "NAME-011"
 
 	EntryMissing      Code = "ENTRY-001"
 	EntryBadSignature Code = "ENTRY-002"
+	EntryDuplicate    Code = "ENTRY-003"
 
 	RunCallDepth    Code = "RUN-001"
 	RunOverflow     Code = "RUN-002"
@@ -78,15 +88,56 @@ const (
 	TargetUnsupported Code = "TARGET-001"
 )
 
+// Source is one source file of a program.
+type Source struct {
+	// Name is the file name shown in diagnostics, e.g. "lib/geom.rsm".
+	Name string
+	Text []byte
+	// Index is the file's position in the program's load order; it orders
+	// diagnostics from different files.
+	Index int
+}
+
+// NewSource returns a source with the given display name.
+func NewSource(name string, text []byte) *Source {
+	return &Source{Name: name, Text: text}
+}
+
 // Pos is a position in a source file. Line and Col are 1-based; Col counts
-// Unicode code points. Offset is a 0-based byte offset.
+// Unicode code points. Offset is a 0-based byte offset. File is the source
+// the position is in; it is nil only for positions built by hand in tests.
 type Pos struct {
+	File   *Source
 	Offset int
 	Line   int
 	Col    int
 }
 
 func (p Pos) String() string { return fmt.Sprintf("%d:%d", p.Line, p.Col) }
+
+// Where renders p as seen from file from: "line:col" in the same file, and
+// "name:line:col" in another one.
+func (p Pos) Where(from *Source) string {
+	if p.File == nil || p.File == from {
+		return p.String()
+	}
+	return p.File.Name + ":" + p.String()
+}
+
+// Before reports whether p comes before q in load order, then source order.
+func (p Pos) Before(q Pos) bool {
+	pi, qi := -1, -1
+	if p.File != nil {
+		pi = p.File.Index
+	}
+	if q.File != nil {
+		qi = q.File.Index
+	}
+	if pi != qi {
+		return pi < qi
+	}
+	return p.Offset < q.Offset
+}
 
 // Span is a half-open source range [Start, End).
 type Span struct {
@@ -141,10 +192,18 @@ func Format(d *Diagnostic, filename string, src []byte) string {
 	return b.String()
 }
 
+// Render formats d against the source file its span is in.
+func Render(d *Diagnostic) string {
+	if f := d.Span.Start.File; f != nil {
+		return Format(d, f.Name, f.Text)
+	}
+	return Format(d, "", nil)
+}
+
 // sourceLine returns the full line of src containing byte offset off,
 // without its line terminator.
 func sourceLine(src []byte, off int) (string, bool) {
-	if off < 0 || off > len(src) {
+	if src == nil || off < 0 || off > len(src) {
 		return "", false
 	}
 	start := off

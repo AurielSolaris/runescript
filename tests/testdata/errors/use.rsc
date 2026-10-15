@@ -1,10 +1,10 @@
-// `use` declarations: only std: packages exist so far.
+// `use` declarations in one file (multi-file programs: testdata/multi).
 package tests.errors;
 
 use "std:string";
 use "std:string";          // expect: ASX-USE-002 5:1
 use "std:nope";            // expect: ASX-USE-001 6:5
-use "lib/helpers.rsc";      // expect: ASX-USE-003 7:5
+use "lib/helpers.rsc" as h; // expect: ASX-USE-004 7:5
 use "go:strings";          // expect: ASX-USE-003 8:5
 
 public int main() {

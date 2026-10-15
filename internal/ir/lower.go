@@ -8,14 +8,19 @@ import (
 	"github.com/AurielSolaris/runescript/internal/types"
 )
 
-// Lower converts a file that checked without errors into IR. It panics if
-// info is incomplete, which would be a checker bug, not a user error.
-func Lower(file *ast.File, info *checker.Info) *Program {
+// Lower converts a program that checked without errors into IR. It
+// panics if info is incomplete, which would be a checker bug, not a user
+// error.
+func Lower(info *checker.Info) *Program {
 	l := &lowerer{info: info, funcs: map[*ast.FuncDecl]*Func{}, syms: map[*checker.FuncSym]*Func{}}
 	p := &Program{EntryVoid: info.EntryVoid, EntrySite: info.Entry.Name.Span}
-	for _, fd := range file.Funcs {
-		if fd.Body != nil {
-			p.Funcs = append(p.Funcs, l.funcDecl(fd))
+	for _, file := range info.Program.Files {
+		for _, fd := range file.AST.Funcs {
+			if fd.Body != nil {
+				f := l.funcDecl(fd)
+				f.Pkg = file.Package.Name
+				p.Funcs = append(p.Funcs, f)
+			}
 		}
 	}
 	p.Entry = l.funcs[info.Entry]

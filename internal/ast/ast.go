@@ -16,10 +16,13 @@ type File struct {
 	Funcs   []*FuncDecl
 }
 
-// UseDecl is `use "path";`. Only the "std:" form is implemented.
+// UseDecl is `use "path";` or `use "path" as name;`. The path names a
+// standard library package ("std:string"), a RuneScript package
+// ("org.x.geom"), or a file ("./lib/geom.rsc"); see internal/loader.
 type UseDecl struct {
 	Path     string
 	PathSpan Span
+	Alias    *Ident // nil without `as`
 	Span     Span
 }
 
@@ -31,8 +34,8 @@ type PackageDecl struct {
 
 // Visibility is a function's access modifier. Every function declaration
 // has one. Decided meaning: public = everywhere, private = this file,
-// protected = this package. Programs are single-file so far, so it is not
-// yet enforced.
+// protected = this package. The checker enforces it on top-level
+// functions; on nested functions it has no effect yet.
 type Visibility int
 
 const (

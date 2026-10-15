@@ -1,0 +1,5 @@
+package calc;
+
+public int square(int n) {
+    return n * n; // expect runtime error: ASX-RUN-002 calc/square.rsm:4:14
+}

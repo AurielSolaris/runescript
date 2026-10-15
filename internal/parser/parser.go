@@ -21,7 +21,12 @@ type bailout struct{ d *diagnostics.Diagnostic }
 
 // Parse lexes and parses src. On error the returned file is nil.
 func Parse(src []byte) (file *ast.File, diags []*diagnostics.Diagnostic) {
-	toks, lexDiags := lexer.Lex(src)
+	return ParseSource(diagnostics.NewSource("", src))
+}
+
+// ParseSource lexes and parses one source file of a program.
+func ParseSource(src *diagnostics.Source) (file *ast.File, diags []*diagnostics.Diagnostic) {
+	toks, lexDiags := lexer.LexSource(src)
 	if len(lexDiags) > 0 {
 		return nil, lexDiags
 	}
@@ -135,8 +140,16 @@ func (p *parser) useDecl() *ast.UseDecl {
 			"expected package path string after 'use', found %s", p.tok().Describe())
 	}
 	path := p.next()
+	u := &ast.UseDecl{Path: path.Text, PathSpan: path.Span}
+	// `as` is contextual: it is a keyword only here, so it stays usable as
+	// a name everywhere else.
+	if p.is(lexer.Ident, "as") {
+		p.next()
+		u.Alias = p.ident("name after 'as'")
+	}
 	end := p.expect(lexer.Semicolon, "';' after use declaration")
-	return &ast.UseDecl{Path: path.Text, PathSpan: path.Span, Span: span(start.Span, end.Span)}
+	u.Span = span(start.Span, end.Span)
+	return u
 }
 
 func (p *parser) packageDecl() *ast.PackageDecl {

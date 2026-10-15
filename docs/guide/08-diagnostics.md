@@ -46,14 +46,20 @@ The parser stops at the first syntax error.
 | `ASX-NAME-008` | The package has no function with that name (the help text suggests the camelCase spelling if you used Go's) |
 | `ASX-NAME-009` | Using an enclosing function's variable inside a nested function or lambda (functions don't capture) |
 | `ASX-NAME-010` | A prototype whose function is never defined |
+| `ASX-NAME-011` | A function used where its access modifier forbids it: another file's `private` function, or another package's `protected` one |
 
 ## `use` errors
 
 | Code | Meaning |
 |---|---|
 | `ASX-USE-001` | Unknown standard library package, e.g. `use "std:nope";` |
-| `ASX-USE-002` | The same package is used twice |
-| `ASX-USE-003` | A `use` form that isn't supported yet: RuneScript packages, files, and `go:` packages |
+| `ASX-USE-002` | The same package is used twice under the same name |
+| `ASX-USE-003` | A `use` form that isn't supported yet, e.g. `go:` packages |
+| `ASX-USE-004` | The used file doesn't exist, or the package's directory has no `.rsm` files (both are relative to the working directory) |
+| `ASX-USE-005` | Packages use each other in a cycle; the message shows the cycle |
+| `ASX-USE-006` | Not a valid package name, e.g. `"1abc"` or `"if.then"`, or a path written with `\` |
+| `ASX-USE-007` | A `.rsm` file in a package's directory declares a different package |
+| `ASX-USE-008` | Two uses in one file would have the same qualifier; give one an alias with `as` |
 
 ## Type errors
 
@@ -83,6 +89,7 @@ The parser stops at the first syntax error.
 | `ASX-FLOW-001` | `break` or `continue` outside a loop |
 | `ASX-ENTRY-001` | No `main` function |
 | `ASX-ENTRY-002` | `main` has parameters, or returns something other than `int`/`void` |
+| `ASX-ENTRY-003` | More than one file defines `main`; a program has exactly one |
 
 ## Runtime errors
 
