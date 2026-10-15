@@ -1,0 +1,34 @@
+<!-- source: docs/guide/README.md @ 52427d9 -->
+
+<div dir="rtl">
+
+> זהו תרגום של [המקור באנגלית](../../../../docs/guide/README.md). אם יש הבדל, הגרסה האנגלית היא הקובעת. התרגום נעשה בעזרת בינה מלאכותית ונבדק בידי המחבר.
+
+# המדריך ל-RuneScript (גרסה 0.3)
+
+סיור מעשי בתכונות של RuneScript שקיימות **היום**. כל תוכנית שלמה בדפים האלה
+מתקמפלת בחבילת הבדיקות (`tests/docs_test.go`). אם אחת מהן מפסיקה להתקמפל,
+הבנייה נכשלת.
+
+1. [מתחילים](01-getting-started.md): בניית ה-CLI והרצת תוכנית
+2. [מבנה התוכנית](02-program-structure.md): חבילות, הערות, `main`
+3. [טיפוסים ומשתנים](03-types-and-variables.md): `int`, `uint`, `bool`, `string`, השמה
+4. [אופרטורים](04-operators.md): חשבון, השוואה, לוגיקה
+5. [בקרת זרימה](05-control-flow.md): `if`, `while`, `for`, `break`, `continue`
+6. [פונקציות](06-functions.md): פרמטרים, ערכי החזרה, רקורסיה
+7. [פלט עם `trace`](../../../../docs/guide/07-trace.md)
+8. [מדריך הודעות האבחון](../../../../docs/guide/08-diagnostics.md): כל קודי השגיאה
+9. [למי שמגיע מ-ActionScript 3](../../../../docs/guide/09-coming-from-actionscript.md)
+10. [הספרייה הסטנדרטית: `std:string`](../../../../docs/guide/10-std-string.md): ה-`strings` של Go, ב-RuneScript
+11. [הידור ל-JavaScript](../../../../docs/guide/11-javascript.md): `runescript build`, ואיך הקפדת הטיפוסים נשמרת
+12. [חבילות וקבצים](../../../../docs/guide/12-packages-and-files.md): `use`, תוכניות מרובות קבצים, נראות
+13. [מספרים עשרוניים והמרות](../../../../docs/guide/13-floats-and-conversions.md): `float`, `float32`, `float64`, `(int) x`
+14. [שגיאות](../../../../docs/guide/14-errors.md): `throw`, `try`, `catch`, `finally`, ותפיסת שגיאות זמן ריצה
+
+לכללים המדויקים, ראו את [מפרט השפה](../../../../docs/LANGUAGE_SPEC.md) (באנגלית).
+למה שמתוכנן בהמשך, ראו את [מפת הדרכים](../../../../docs/ROADMAP.md) (באנגלית).
+
+> **עדיין לא זמין:** מחלקות, מבנים (structs), מערכים, `char`, ושרשור מחרוזות.
+> מילות המפתח שלהם שמורות, ושימוש בהן מניב שגיאה ברורה של "עדיין לא מומש".
+
+</div>

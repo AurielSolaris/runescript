@@ -6,7 +6,7 @@
 
 <p align="center">A statically typed, general-purpose language inspired by ActionScript, implemented in Go.</p>
 
-<p align="center"><strong>English</strong> · <a href="localization/bn/README.md" lang="bn">বাংলা</a> (Bengali) · <a href="localization/he/README.md" lang="he">עברית</a> (Hebrew)</p>
+<p align="center"><strong>English</strong> · <a href="localization/bn/README.md" lang="bn">বাংলা</a> (Bengali) · <a href="localization/heb/README.md" lang="he">עברית</a> (Hebrew)</p>
 
 ---
 
@@ -169,7 +169,7 @@ folder per language:
 | Language | Folder | Covers |
 |---|---|---|
 | বাংলা (Bengali) | [`localization/bn/`](localization/bn/README.md) | README and the guide |
-| עברית (Hebrew) | [`localization/he/`](localization/he/README.md) | README and the guide |
+| עברית (Hebrew) | [`localization/heb/`](localization/heb/README.md) | README and the guide |
 
 The Bengali and Hebrew translations are maintained with AI and checked by
 hand by the author. **Help is appreciated:** corrections from native

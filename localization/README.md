@@ -3,13 +3,18 @@
 English is the original language of RuneScript's documentation. The
 English files ([`README.md`](../README.md) and [`docs/`](../docs/)) are the
 source of truth; this folder holds translations of them, one folder per
-language, named with its [ISO 639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)
-code:
+language, named with a short code chosen by the project: `bn` for Bengali
+and `heb` for Hebrew. (Web pages still declare Hebrew with the standard
+language tag, `lang="he"`, which browsers and screen readers expect.)
 
 | Language | Folder | Translated | Maintained by |
 |---|---|---|---|
 | বাংলা (Bengali) | [`bn/`](bn/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
-| עברית (Hebrew) | [`he/`](he/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
+| עברית (Hebrew) | [`heb/`](heb/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
+
+**Status:** the README, the guide index, and chapters 1–6 are translated in
+both languages; chapters 7–14 are in progress and link readers to the English
+pages until then.
 
 **Help is appreciated.** If you speak one of these languages, corrections
 and better wording are very welcome; so are new languages. Open an issue or
