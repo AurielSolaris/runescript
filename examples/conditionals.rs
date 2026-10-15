@@ -1,7 +1,7 @@
 // if / else if / else, comparisons, and boolean operators.
 package examples.conditionals;
 
-string classify(int n) {
+public string classify(int n) {
     if (n < 0) {
         return "negative";
     } else if (n == 0) {
@@ -13,7 +13,7 @@ string classify(int n) {
     }
 }
 
-void main() {
+public void main() {
     trace(-5, classify(-5));
     trace(0, classify(0));
     trace(7, classify(7));

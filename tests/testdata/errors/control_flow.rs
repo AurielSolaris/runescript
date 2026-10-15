@@ -1,13 +1,13 @@
 // Conditions must be bool, branches need loops, and every path must return.
 package tests.errors;
 
-int pick(bool b) {
+public int pick(bool b) {
     if (b) {
         return 1;
     }
 } // expect: ASX-TYPE-008 8:1
 
-int main() {
+public int main() {
     int n = 3;
     if (n) {             // expect: ASX-TYPE-013 12:9
     }

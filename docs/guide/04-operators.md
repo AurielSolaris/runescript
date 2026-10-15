@@ -14,7 +14,7 @@
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int x = 7;
     trace(x + 2, x - 9, x * 3, x / 2, x % 4, -x);   // 9 -2 21 3 3 -7
 }
@@ -32,7 +32,7 @@ error that points at the operation. It never wraps around:
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int x = 2147483647;
     x = x + 1;          // runtime error: ASX-RUN-002 integer overflow
 }
@@ -50,7 +50,7 @@ produce a `bool`. `==` and `!=` also work on two `bool`s or two `string`s.
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int a = 1;
     int b = 2;
     string s = "rune";
@@ -71,7 +71,7 @@ Both operands must be `bool`. Numbers are never treated as true or false.
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int age = 30;
     bool adult = age >= 18 && !(age > 120);
     trace(adult);   // true

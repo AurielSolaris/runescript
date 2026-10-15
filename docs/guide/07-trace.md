@@ -7,7 +7,7 @@ separated by single spaces, followed by a newline, to standard output.
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     trace("Hello");                 // Hello
     trace("x =", 42);               // x = 42
     trace(1, -2, true, "three");    // 1 -2 true three

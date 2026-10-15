@@ -51,9 +51,19 @@ const (
 	TypeBadOperand         Code = "TYPE-012"
 	TypeCondition          Code = "TYPE-013"
 	TypeConstDivByZero     Code = "TYPE-014"
+	TypeProtoMismatch      Code = "TYPE-015"
+	TypeNotCallable        Code = "TYPE-016"
 
 	FlowBranchOutsideLoop Code = "FLOW-001"
 	NameAssignToParam     Code = "NAME-006"
+	NamePackageNotUsed    Code = "NAME-007"
+	NameNotInPackage      Code = "NAME-008"
+	NameAcrossBoundary    Code = "NAME-009"
+	NameNeverDefined      Code = "NAME-010"
+
+	UseUnknownPackage Code = "USE-001"
+	UseDuplicate      Code = "USE-002"
+	UseUnsupported    Code = "USE-003"
 
 	EntryMissing      Code = "ENTRY-001"
 	EntryBadSignature Code = "ENTRY-002"
@@ -61,6 +71,7 @@ const (
 	RunCallDepth    Code = "RUN-001"
 	RunOverflow     Code = "RUN-002"
 	RunDivideByZero Code = "RUN-003"
+	RunNativeFailed Code = "RUN-004"
 )
 
 // Pos is a position in a source file. Line and Col are 1-based; Col counts

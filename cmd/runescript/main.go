@@ -13,7 +13,7 @@ import (
 )
 
 // Version is the language/implementation version.
-const Version = "0.1.0-dev"
+const Version = "0.2.0-dev"
 
 const usage = `usage:
   runescript run <file>     check and run a program

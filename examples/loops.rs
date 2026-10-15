@@ -1,13 +1,13 @@
 // while, for, break, and continue.
 package examples.loops;
 
-void sayHi(string message, int times) {
+public void sayHi(string message, int times) {
     for (int i = 0; i < times; i++) {
         trace(message);
     }
 }
 
-int main() {
+public int main() {
     sayHi("Hello world", 3);
 
     int n = 0;

@@ -8,22 +8,35 @@ in `;`, not a block:
 ```actionscript
 package games.puzzle.solver;
 
-void main() {
+public void main() {
 }
 ```
 
-Package names are dotted identifiers. In v0.1, each program is a single
+Package names are dotted identifiers. Each program is currently a single
 file.
 
-> **Planned, not yet implemented:** other packages and files will be brought
-> in with `use`:
->
-> ```text
-> use "rune.gfx";          // a package
-> use "lib/helpers.rs";    // a file, relative to the current directory
-> ```
->
-> `use` is already reserved. Writing it today gives `ASX-PARSE-002`.
+## Using packages: `use`
+
+`use` declarations come right after the `package` line, before any
+function. Standard library packages are written `"std:<name>"`:
+
+```actionscript
+package main;
+
+use "std:string";
+
+public void main() {
+    trace(string.toUpper("hello"));   // HELLO
+}
+```
+
+The functions are then called through the package's qualifier (the last
+part of its name). See [Standard library: std:string](10-std-string.md).
+
+> **Planned, not yet implemented:** other RuneScript packages
+> (`use "games.engine";`), source files (`use "lib/helpers.rs";`, relative to
+> the current directory), and Go packages (`use "go:<package>";`). Today these
+> give `ASX-USE-003`.
 
 ## Comments
 
@@ -35,7 +48,7 @@ package main;
 /* A block comment
    can span several lines. */
 
-void main() {
+public void main() {
     trace("comments are ignored"); // trailing comments too
 }
 ```
@@ -64,26 +77,26 @@ protected int main() {
 
 - If `main` returns `int`, the value becomes the process exit status.
 - If `main` is `void`, the exit status is 0.
-- A visibility modifier (`public`, `protected`, `private`) is optional. In
-  v0.1 the modifier is recorded but has no effect yet.
+- Like every function, `main` starts with an access modifier: `public`,
+  `protected`, or `private` (see [Functions](06-functions.md)).
 
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     trace("no return value needed");
 }
 ```
 
 No class is needed. Programs are made of top-level functions, which can
-appear in any order.
+appear in any order. Functions can also be nested inside other functions.
 
 ## Names
 
 Identifiers are made of ASCII letters, digits, and `_`, and can't start
-with a digit. They are case-sensitive. Keywords such as `if`, `int`, and
-`return` can't be used as names. Words reserved for future features
-(`class`, `struct`, `use`, `float`, `char`, `array`, `matrix`, and the sized types
+with a digit. They are case-sensitive. Keywords such as `if`, `int`, `use`,
+and `return` can't be used as names. Words reserved for future features
+(`class`, `struct`, `float`, `char`, `array`, `matrix`, and the sized types
 like `int64`) can't be used either.
 
 Next: [Types and variables](03-types-and-variables.md)

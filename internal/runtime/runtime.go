@@ -12,6 +12,7 @@ import (
 	"github.com/AurielSolaris/runescript/internal/checker"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/types"
+	"github.com/AurielSolaris/runescript/stdlib"
 )
 
 // MaxCallDepth bounds recursion so runaway programs report an error instead
@@ -19,12 +20,16 @@ import (
 // semantics.
 const MaxCallDepth = 10000
 
-// Value is a runtime value. Integers of every v0.1 type fit in int64.
+// Value is a runtime value. Integers of every current type fit in int64.
 type Value struct {
 	Kind types.Kind
 	Int  int64
 	Str  string
 	Bool bool
+	// Fn is the function of a function value: *ast.FuncDecl or
+	// *ast.LambdaExpr. Functions do not capture variables, so no
+	// environment is needed.
+	Fn ast.Node
 }
 
 func (v Value) String() string {
@@ -79,7 +84,7 @@ func Run(info *checker.Info, out io.Writer) (code int, err error) {
 		}
 	}()
 	v := in.call(info.Entry, nil, info.Entry.Name.Span)
-	if info.Entry.Result.Name == "void" {
+	if info.EntryVoid {
 		return 0, nil
 	}
 	return int(v.Int), nil
@@ -89,19 +94,44 @@ func fail(code diagnostics.Code, span diagnostics.Span, format string, args ...a
 	panic(&Error{diagnostics.New(code, span, format, args...)})
 }
 
+// call invokes a named function definition.
 func (in *interp) call(fn *ast.FuncDecl, args []Value, site diagnostics.Span) Value {
+	f := in.enter(fn.Params, args, site)
+	defer func() { in.depth-- }()
+	in.block(f, fn.Body)
+	return f.ret
+}
+
+// callValue invokes a function value.
+func (in *interp) callValue(v Value, args []Value, site diagnostics.Span) Value {
+	switch fn := v.Fn.(type) {
+	case *ast.FuncDecl:
+		return in.call(fn, args, site)
+	case *ast.LambdaExpr:
+		f := in.enter(fn.Params, args, site)
+		defer func() { in.depth-- }()
+		if fn.Expr != nil {
+			return in.expr(f, fn.Expr)
+		}
+		in.block(f, fn.Body)
+		return f.ret
+	}
+	panic(fmt.Sprintf("runtime: calling non-function value %v", v)) // prevented by the checker
+}
+
+// enter starts a new call frame with the parameters bound. Each function
+// has its own frame: there is no access to the caller's variables.
+func (in *interp) enter(params []*ast.Param, args []Value, site diagnostics.Span) *frame {
 	if in.depth >= MaxCallDepth {
 		fail(diagnostics.RunCallDepth, site, "maximum call depth (%d) exceeded", MaxCallDepth)
 	}
 	in.depth++
-	defer func() { in.depth-- }()
 	f := &frame{scopes: []map[string]*Value{{}}}
-	for i, p := range fn.Params {
+	for i, p := range params {
 		v := args[i]
 		f.scopes[0][p.Name.Name] = &v
 	}
-	in.block(f, fn.Body)
-	return f.ret
+	return f
 }
 
 // ---- statements ----
@@ -128,6 +158,8 @@ func (f *frame) lookup(name string) *Value {
 
 func (in *interp) stmt(f *frame, s ast.Stmt) control {
 	switch s := s.(type) {
+	case *ast.FuncDecl:
+		// Nested functions are resolved statically by the checker.
 	case *ast.VarDecl:
 		v := in.expr(f, s.Init)
 		f.scopes[len(f.scopes)-1][s.Name.Name] = &v
@@ -212,7 +244,12 @@ func (in *interp) expr(f *frame, e ast.Expr) Value {
 	case *ast.ParenExpr:
 		return in.expr(f, e.X)
 	case *ast.Ident:
+		if fn, ok := in.info.FuncRefs[e]; ok {
+			return Value{Kind: types.Func, Fn: fn.Def}
+		}
 		return *f.lookup(e.Name)
+	case *ast.LambdaExpr:
+		return Value{Kind: types.Func, Fn: e}
 	case *ast.CallExpr:
 		return in.callExpr(f, e)
 	case *ast.UnaryExpr:
@@ -227,20 +264,34 @@ func (in *interp) expr(f *frame, e ast.Expr) Value {
 	panic(fmt.Sprintf("runtime: unexpected expression %T", e))
 }
 
+// callExpr evaluates the callee first, then the arguments left to right.
 func (in *interp) callExpr(f *frame, e *ast.CallExpr) Value {
+	var callee Value
+	if e.Callee != nil {
+		callee = in.expr(f, e.Callee)
+	}
 	args := make([]Value, len(e.Args))
 	for i, a := range e.Args {
 		args[i] = in.expr(f, a)
 	}
-	if e.Fn.Name == "trace" {
-		parts := make([]string, len(args))
-		for i, a := range args {
-			parts[i] = a.String()
-		}
-		fmt.Fprintln(in.out, strings.Join(parts, " "))
-		return Value{Kind: types.Void}
+	if nf, ok := in.info.Natives[e]; ok {
+		return in.native(nf, args, e)
 	}
-	return in.call(in.info.Funcs[e.Fn.Name], args, e.Span)
+	if e.Callee != nil {
+		return in.callValue(callee, args, e.Span)
+	}
+	if fn, ok := in.info.Callees[e]; ok {
+		return in.call(fn.Def, args, e.Span)
+	}
+	if e.Fn.Name != "trace" { // a variable holding a function value
+		return in.callValue(*f.lookup(e.Fn.Name), args, e.Span)
+	}
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = a.String()
+	}
+	fmt.Fprintln(in.out, strings.Join(parts, " "))
+	return Value{Kind: types.Void}
 }
 
 func (in *interp) binary(f *frame, e *ast.BinaryExpr) Value {
@@ -307,4 +358,44 @@ func (in *interp) arith(op string, x, y Value, span diagnostics.Span) Value {
 		fail(diagnostics.RunOverflow, span, "integer overflow: %d %s %d = %d does not fit in '%s'", x.Int, op, y.Int, r, t)
 	}
 	return Value{Kind: x.Kind, Int: r}
+}
+
+// native calls a standard library function. Go panics (for example a
+// negative count passed to string.repeat) become runtime errors, and integer
+// results are range-checked against the declared result type.
+func (in *interp) native(f *stdlib.Func, args []Value, e *ast.CallExpr) (result Value) {
+	goArgs := make([]any, len(args))
+	for i, a := range args {
+		switch a.Kind {
+		case types.String:
+			goArgs[i] = a.Str
+		case types.Bool:
+			goArgs[i] = a.Bool
+		default:
+			goArgs[i] = a.Int
+		}
+	}
+	name := e.Pkg.Name + "." + f.Name
+	defer func() {
+		if r := recover(); r != nil {
+			if _, isOurs := r.(*Error); isOurs {
+				panic(r)
+			}
+			fail(diagnostics.RunNativeFailed, e.Span, "%s failed: %v", name, r)
+		}
+	}()
+	out := f.Impl(goArgs)
+	switch f.Result.Kind {
+	case types.Void:
+		return Value{Kind: types.Void}
+	case types.String:
+		return Value{Kind: types.String, Str: out.(string)}
+	case types.Bool:
+		return Value{Kind: types.Bool, Bool: out.(bool)}
+	}
+	n := out.(int64)
+	if !types.InRange(f.Result, n) {
+		fail(diagnostics.RunOverflow, e.Span, "%s returned %d, which does not fit in '%s'", name, n, f.Result)
+	}
+	return Value{Kind: f.Result.Kind, Int: n}
 }

@@ -8,7 +8,7 @@ use braces.
 ```actionscript
 package main;
 
-string classify(int n) {
+public string classify(int n) {
     if (n < 0) {
         return "negative";
     } else if (n == 0) {
@@ -18,7 +18,7 @@ string classify(int n) {
     }
 }
 
-void main() {
+public void main() {
     trace(classify(-5), classify(0), classify(9));   // negative zero positive
 }
 ```
@@ -28,7 +28,7 @@ void main() {
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int n = 3;
     while (n > 0) {
         trace(n);
@@ -45,13 +45,13 @@ void main() {
 ```actionscript
 package main;
 
-void sayHi(string message, int times) {
+public void sayHi(string message, int times) {
     for (int i = 0; i < times; i++) {
         trace(message);
     }
 }
 
-void main() {
+public void main() {
     sayHi("Hello world", 3);
 }
 ```
@@ -62,7 +62,7 @@ Each of the three parts is optional. With no condition, the loop runs until
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int tries = 0;
     for (;;) {
         tries++;
@@ -86,7 +86,7 @@ In a `for` loop, `continue` still runs the step.
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     for (int i = 0; i < 10; i++) {
         if (i % 2 == 0) {
             continue;       // skip even numbers
@@ -110,7 +110,7 @@ every branch returns:
 ```actionscript
 package main;
 
-int sign(int n) {
+public int sign(int n) {
     if (n < 0) {
         return -1;
     } else if (n == 0) {
@@ -120,7 +120,7 @@ int sign(int n) {
     }
 }
 
-void main() {
+public void main() {
     trace(sign(-8), sign(0), sign(8));
 }
 ```
@@ -131,7 +131,7 @@ The compiler doesn't treat a loop as guaranteeing a return. Add a final
 ```actionscript
 package main;
 
-int firstSquareAbove(int limit) {
+public int firstSquareAbove(int limit) {
     for (int i = 0; i < 1000; i++) {
         if (i * i > limit) {
             return i;
@@ -140,7 +140,7 @@ int firstSquareAbove(int limit) {
     return -1;
 }
 
-void main() {
+public void main() {
     trace(firstSquareAbove(50));   // 8
 }
 ```

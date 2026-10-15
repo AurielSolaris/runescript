@@ -3,10 +3,13 @@
 // Every examples/*.rs file is either run and compared against
 // testdata/examples/<name>.out, or, if its name ends in "_error", checked
 // for the diagnostics listed in its `// expect: CODE line:col` comments.
-// testdata/errors/*.rs files follow the same "expect" convention.
+// testdata/errors/*.rs files follow the same "expect" convention, and
+// testdata/runtime/*.rs files must fail at run time (see
+// TestRuntimeErrorPrograms).
 package tests
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/AurielSolaris/runescript/internal/driver"
+	"github.com/AurielSolaris/runescript/internal/runtime"
 )
 
 var expectRE = regexp.MustCompile(`// expect: (\S+) (\d+:\d+)`)
@@ -89,3 +93,40 @@ func read(t *testing.T, path string) []byte {
 
 // normalize tolerates CRLF checkouts of the expected-output files.
 func normalize(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
+
+var runtimeErrRE2 = regexp.MustCompile(`// expect runtime error: (ASX-RUN-\d+) (\d+:\d+)`)
+
+// TestRuntimeErrorPrograms runs testdata/runtime/*.rs. Each must compile,
+// print exactly <name>.out, then stop with the runtime error named in its
+// `// expect runtime error: CODE line:col` comment.
+func TestRuntimeErrorPrograms(t *testing.T) {
+	files, _ := filepath.Glob("testdata/runtime/*.rs")
+	if len(files) == 0 {
+		t.Fatal("no runtime error programs found")
+	}
+	for _, path := range files {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			src := read(t, path)
+			m := runtimeErrRE2.FindStringSubmatch(string(src))
+			if m == nil {
+				t.Fatal("missing `// expect runtime error:` comment")
+			}
+			var out strings.Builder
+			_, diags, err := driver.Run(src, &out)
+			if diags != nil {
+				t.Fatalf("compile errors: %v", diags)
+			}
+			var re *runtime.Error
+			if !errors.As(err, &re) {
+				t.Fatalf("expected runtime error %s, got %v", m[1], err)
+			}
+			if got := re.Diag.Code.String() + " " + re.Diag.Span.Start.String(); got != m[1]+" "+m[2] {
+				t.Errorf("got %s, want %s %s", got, m[1], m[2])
+			}
+			want := normalize(string(read(t, strings.TrimSuffix(path, ".rs")+".out")))
+			if out.String() != want {
+				t.Errorf("output before the error:\ngot:\n%s\nwant:\n%s", out.String(), want)
+			}
+		})
+	}
+}

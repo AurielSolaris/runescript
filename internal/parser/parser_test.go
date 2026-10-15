@@ -51,7 +51,7 @@ func TestParseDottedPackageAndParams(t *testing.T) {
 
 func TestParseStatements(t *testing.T) {
 	f := mustParse(t, `package p;
-void f() {
+public void f() {
     int x = 1;
     x = 2;
     x += 3;
@@ -84,7 +84,7 @@ void f() {
 }
 
 func TestPrecedence(t *testing.T) {
-	f := mustParse(t, "package p;\nbool f() { return 1 + 2 * 3 == 7 && !false || 1 < 2; }")
+	f := mustParse(t, "package p;\npublic bool f() { return 1 + 2 * 3 == 7 && !false || 1 < 2; }")
 	or := f.Funcs[0].Body.Stmts[0].(*ast.ReturnStmt).Value.(*ast.BinaryExpr)
 	if or.Op != "||" {
 		t.Fatalf("top op = %s", or.Op)
@@ -102,7 +102,7 @@ func TestPrecedence(t *testing.T) {
 }
 
 func TestLeftAssociativity(t *testing.T) {
-	f := mustParse(t, "package p;\nint f() { return 10 - 4 - 3; }")
+	f := mustParse(t, "package p;\npublic int f() { return 10 - 4 - 3; }")
 	e := f.Funcs[0].Body.Stmts[0].(*ast.ReturnStmt).Value.(*ast.BinaryExpr)
 	if _, ok := e.X.(*ast.BinaryExpr); !ok {
 		t.Error("subtraction should be left-associative")
@@ -116,20 +116,22 @@ func TestParseErrors(t *testing.T) {
 		code diagnostics.Code
 		pos  string
 	}{
-		{"missing package", "int main() { return 0; }", diagnostics.ParseUnexpected, "1:1"},
+		{"missing package", "public int main() { return 0; }", diagnostics.ParseUnexpected, "1:1"},
 		{"package block", "package main { }", diagnostics.ParseUnexpected, "1:14"},
-		{"missing semicolon", "package p;\nint main() {\n    return 0\n}", diagnostics.ParseUnexpected, "4:1"},
+		{"missing semicolon", "package p;\npublic int main() {\n    return 0\n}", diagnostics.ParseUnexpected, "4:1"},
 		{"function keyword", "package p;\nfunction main() {}", diagnostics.ParseUnexpected, "2:1"},
 		{"two modifiers", "package p;\npublic private void f() {}", diagnostics.ParseUnexpected, "2:8"},
 		{"reserved class", "package p;\nclass Foo {}", diagnostics.ParseNotImplemented, "2:1"},
-		{"use not implemented", "package p;\nuse \"raylib\";", diagnostics.ParseNotImplemented, "2:1"},
-		{"reserved type in body", "package p;\nvoid f() {\n    float x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
-		{"uninitialized var", "package p;\nvoid f() {\n    int x;\n}", diagnostics.ParseUnexpected, "3:10"},
-		{"expression statement", "package p;\nvoid f() {\n    1 + 2;\n}", diagnostics.ParseUnexpected, "3:5"},
-		{"standalone block", "package p;\nvoid f() {\n    { }\n}", diagnostics.ParseNotImplemented, "3:5"},
-		{"if without braces", "package p;\nvoid f() {\n    if (true) trace(1);\n}", diagnostics.ParseUnexpected, "3:15"},
-		{"decl in for post", "package p;\nvoid f() {\n    for (;; int i = 0) { }\n}", diagnostics.ParseUnexpected, "3:13"},
-		{"unclosed body", "package p;\nvoid f() {\n", diagnostics.ParseUnexpected, "3:1"},
+		{"use after function", "package p;\npublic void f() { }\nuse \"std:string\";", diagnostics.ParseUnexpected, "3:1"},
+		{"use without string", "package p;\nuse std;", diagnostics.ParseUnexpected, "2:5"},
+		{"qualified non-call", "package p;\npublic void f() {\n    trace(string.x);\n}", diagnostics.ParseUnexpected, "3:19"},
+		{"reserved type in body", "package p;\npublic void f() {\n    float x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
+		{"uninitialized var", "package p;\npublic void f() {\n    int x;\n}", diagnostics.ParseUnexpected, "3:10"},
+		{"expression statement", "package p;\npublic void f() {\n    1 + 2;\n}", diagnostics.ParseUnexpected, "3:5"},
+		{"standalone block", "package p;\npublic void f() {\n    { }\n}", diagnostics.ParseNotImplemented, "3:5"},
+		{"if without braces", "package p;\npublic void f() {\n    if (true) trace(1);\n}", diagnostics.ParseUnexpected, "3:15"},
+		{"decl in for post", "package p;\npublic void f() {\n    for (;; int i = 0) { }\n}", diagnostics.ParseUnexpected, "3:13"},
+		{"unclosed body", "package p;\npublic void f() {\n", diagnostics.ParseUnexpected, "3:1"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -139,6 +141,111 @@ func TestParseErrors(t *testing.T) {
 			}
 			if d := diags[0]; d.Code != c.code || d.Span.Start.String() != c.pos {
 				t.Errorf("got %s at %s (%s), want %s at %s", d.Code, d.Span.Start, d.Message, c.code, c.pos)
+			}
+		})
+	}
+}
+
+func TestParseUseAndQualifiedCalls(t *testing.T) {
+	f := mustParse(t, `package p;
+use "std:string";
+use "lib/x.rs";
+public void f() {
+    string s = string.toUpper("a");
+    string.trimSpace(s);
+    trace(string.index(s, "A") + 1);
+}`)
+	if len(f.Uses) != 2 || f.Uses[0].Path != "std:string" || f.Uses[1].Path != "lib/x.rs" {
+		t.Fatalf("uses = %+v", f.Uses)
+	}
+	stmts := f.Funcs[0].Body.Stmts
+	decl := stmts[0].(*ast.VarDecl)
+	call := decl.Init.(*ast.CallExpr)
+	if decl.Type.Name != "string" || call.Pkg == nil || call.Pkg.Name != "string" || call.Fn.Name != "toUpper" {
+		t.Errorf("unexpected declaration %+v / %+v", decl, call)
+	}
+	if call.Span.Start.Col != 16 {
+		t.Errorf("qualified call should start at the qualifier, got col %d", call.Span.Start.Col)
+	}
+	if s := stmts[1].(*ast.ExprStmt); s.Call.Pkg.Name != "string" || s.Call.Fn.Name != "trimSpace" {
+		t.Errorf("unexpected statement %+v", s.Call)
+	}
+}
+
+func TestParseFunctionFeatures(t *testing.T) {
+	f := mustParse(t, `package p;
+public int isEven(int);
+private int(int)(string) pick(int(int, int) op, void() cb) {
+    protected int square(int n) { return n * n; }
+    public int later(int n);
+    int(int, int) add = (int a, int b) => a + b;
+    void() hello = () => { trace("hi"); };
+    trace(add(1, 2)(3), (op)(4, 5));
+    return square;
+}`)
+	proto := f.Funcs[0]
+	if proto.Body != nil || proto.Params[0].Name != nil || proto.Visibility != ast.VisPublic {
+		t.Errorf("prototype parsed wrong: %+v", proto)
+	}
+	fn := f.Funcs[1]
+	if got := fn.Result.String(); got != "int(int)(string)" {
+		t.Errorf("result type = %s", got)
+	}
+	if got := fn.Params[0].Type.String(); got != "int(int, int)" {
+		t.Errorf("param type = %s", got)
+	}
+	if got := fn.Params[1].Type.String(); got != "void()" {
+		t.Errorf("param type = %s", got)
+	}
+	stmts := fn.Body.Stmts
+	if nested, ok := stmts[0].(*ast.FuncDecl); !ok || nested.Name.Name != "square" || nested.Visibility != ast.VisProtected || nested.Body == nil {
+		t.Errorf("nested function: %#v", stmts[0])
+	}
+	if nested, ok := stmts[1].(*ast.FuncDecl); !ok || nested.Body != nil {
+		t.Errorf("nested prototype: %#v", stmts[1])
+	}
+	lam := stmts[2].(*ast.VarDecl).Init.(*ast.LambdaExpr)
+	if len(lam.Params) != 2 || lam.Expr == nil || lam.Body != nil {
+		t.Errorf("expression lambda: %+v", lam)
+	}
+	block := stmts[3].(*ast.VarDecl).Init.(*ast.LambdaExpr)
+	if len(block.Params) != 0 || block.Body == nil {
+		t.Errorf("block lambda: %+v", block)
+	}
+	args := stmts[4].(*ast.ExprStmt).Call.Args
+	chained := args[0].(*ast.CallExpr)
+	if chained.Callee == nil || chained.Callee.(*ast.CallExpr).Fn.Name != "add" {
+		t.Errorf("chained call: %+v", chained)
+	}
+	if paren := args[1].(*ast.CallExpr); paren.Callee == nil {
+		t.Errorf("call of parenthesized expression: %+v", paren)
+	}
+}
+
+func TestParenthesizedQualifiedCallIsNotALambda(t *testing.T) {
+	f := mustParse(t, "package p;\nuse \"std:string\";\npublic void f() { trace((string.toUpper(\"a\"))); }")
+	arg := f.Funcs[0].Body.Stmts[0].(*ast.ExprStmt).Call.Args[0]
+	if _, ok := arg.(*ast.ParenExpr); !ok {
+		t.Errorf("got %T", arg)
+	}
+}
+
+func TestParseFunctionErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		pos  string
+	}{
+		{"missing modifier", "package p;\nint main() { return 0; }", "2:1"},
+		{"missing nested modifier", "package p;\npublic void f() {\n    int g() { return 1; }\n}", "3:10"},
+		{"unnamed definition param", "package p;\npublic void f(int) { }", "2:15"},
+		{"lambda missing arrow", "package p;\npublic void f() {\n    void() g = () { };\n}", "3:19"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, diags := Parse([]byte(c.src))
+			if len(diags) != 1 || diags[0].Code != diagnostics.ParseUnexpected || diags[0].Span.Start.String() != c.pos {
+				t.Errorf("got %v, want ASX-PARSE-001 at %s", diags, c.pos)
 			}
 		})
 	}

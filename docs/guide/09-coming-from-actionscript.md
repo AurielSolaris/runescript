@@ -30,7 +30,7 @@ public void sayHi(string message, int times) {
     }
 }
 
-void main() {
+public void main() {
     sayHi("hi", 2);
 }
 ```
@@ -59,6 +59,19 @@ void main() {
 AS3 lets you write `if (count)` or `if (name)`. RuneScript requires a
 `bool`, so write `if (count != 0)`.
 
+## Closures
+
+AS3 closures capture the enclosing function's variables. RuneScript
+functions don't: nested functions and lambdas can only use their own
+parameters and locals, plus other functions. Pass values in as
+parameters instead.
+
+| AS3 | RuneScript |
+|---|---|
+| `function(a:int):int { return a * 2; }` | `(int a) => a * 2` |
+| `var f:Function = add;` | `int(int, int) f = add;` (typed) |
+| `public function f():void` | `public void f()` (the access modifier is required) |
+
 ## Block scope
 
 In AS3, a `var` declared inside a loop is visible in the whole function.
@@ -82,6 +95,8 @@ top-level `main()` function, and no class is needed.
 ## Not yet available
 
 Classes, interfaces, `static`, `Vector.<T>`/arrays, `Number`/floats, string
-concatenation, casts, `null`, `use` (RuneScript's version of `import`),
+concatenation, casts, `null`, `use` for files and non-standard packages,
 metadata, E4X XML, and graphics (a native graphics package is planned). See the
 [roadmap](../ROADMAP.md).
+
+Next: [Standard library: `std:string`](10-std-string.md)

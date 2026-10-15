@@ -12,7 +12,15 @@ type Node interface{ NodeSpan() Span }
 // File is one parsed source file.
 type File struct {
 	Package *PackageDecl
+	Uses    []*UseDecl
 	Funcs   []*FuncDecl
+}
+
+// UseDecl is `use "path";`. Only the "std:" form is implemented.
+type UseDecl struct {
+	Path     string
+	PathSpan Span
+	Span     Span
 }
 
 // PackageDecl is `package a.b.c;`.
@@ -21,8 +29,10 @@ type PackageDecl struct {
 	Span Span
 }
 
-// Visibility is an access modifier. Its semantics on top-level functions
-// are not yet specified (OQ-VIS-01); the parser records it only.
+// Visibility is a function's access modifier. Every function declaration
+// has one. Decided meaning: public = everywhere, private = this file,
+// protected = this package. Programs are single-file so far, so it is not
+// yet enforced.
 type Visibility int
 
 const (
@@ -36,26 +46,51 @@ func (v Visibility) String() string {
 	return [...]string{"", "public", "protected", "private"}[v]
 }
 
-// FuncDecl is `[visibility] Type name(Type p, ...) { ... }`.
+// FuncDecl is `visibility Type name(Type p, ...) { ... }`, or a prototype
+// `visibility Type name(Type p, ...);` when Body is nil. It appears at top
+// level and, as a statement, inside blocks (nested functions).
 type FuncDecl struct {
 	Visibility Visibility
 	Result     *TypeRef
 	Name       *Ident
 	Params     []*Param
-	Body       *Block
+	Body       *Block // nil for a prototype
 	Span       Span
 }
 
-// Param is a single function parameter.
+// Param is a single function parameter. Name is nil only in prototypes.
 type Param struct {
 	Type *TypeRef
 	Name *Ident
 }
 
-// TypeRef is a type name as written in source.
+// TypeRef is a type as written in source: a named type (Name) or a function
+// type (Func), e.g. `int(int, int)`.
 type TypeRef struct {
 	Name string
+	Func *FuncTypeRef
 	Span Span
+}
+
+// FuncTypeRef is `Result(Params...)`.
+type FuncTypeRef struct {
+	Result *TypeRef
+	Params []*TypeRef
+}
+
+// String renders the type as written, e.g. "int(int, int)".
+func (t *TypeRef) String() string {
+	if t.Func == nil {
+		return t.Name
+	}
+	s := t.Func.Result.String() + "("
+	for i, p := range t.Func.Params {
+		if i > 0 {
+			s += ", "
+		}
+		s += p.String()
+	}
+	return s + ")"
 }
 
 // Ident is a name occurrence.
@@ -142,6 +177,7 @@ type BranchStmt struct {
 	Span    Span
 }
 
+func (s *FuncDecl) NodeSpan() Span   { return s.Span }
 func (s *Block) NodeSpan() Span      { return s.Span }
 func (s *VarDecl) NodeSpan() Span    { return s.Span }
 func (s *AssignStmt) NodeSpan() Span { return s.Span }
@@ -153,6 +189,7 @@ func (s *WhileStmt) NodeSpan() Span  { return s.Span }
 func (s *ForStmt) NodeSpan() Span    { return s.Span }
 func (s *BranchStmt) NodeSpan() Span { return s.Span }
 
+func (*FuncDecl) stmt()   {}
 func (*Block) stmt()      {}
 func (*VarDecl) stmt()    {}
 func (*AssignStmt) stmt() {}
@@ -192,11 +229,14 @@ type BoolLit struct {
 	Span  Span
 }
 
-// CallExpr is `name(args)`.
+// CallExpr is `name(args)`, `pkg.name(args)`, or `expr(args)`.
+// Exactly one of Fn and Callee is set; Pkg is set only with Fn.
 type CallExpr struct {
-	Fn   *Ident
-	Args []Expr
-	Span Span
+	Pkg    *Ident // package qualifier, nil for unqualified calls
+	Fn     *Ident // named callee
+	Callee Expr   // any other callee, e.g. makeAdder(1)(2)
+	Args   []Expr
+	Span   Span
 }
 
 // UnaryExpr is `-x` or `!x`.
@@ -214,6 +254,15 @@ type BinaryExpr struct {
 	Span  Span
 }
 
+// LambdaExpr is `(Type a, ...) => expr` or `(Type a, ...) => { ... }`.
+// Exactly one of Expr and Body is set.
+type LambdaExpr struct {
+	Params []*Param
+	Expr   Expr
+	Body   *Block
+	Span   Span
+}
+
 // ParenExpr is `(x)`.
 type ParenExpr struct {
 	X    Expr
@@ -228,6 +277,7 @@ func (e *CallExpr) NodeSpan() Span   { return e.Span }
 func (e *UnaryExpr) NodeSpan() Span  { return e.Span }
 func (e *BinaryExpr) NodeSpan() Span { return e.Span }
 func (e *ParenExpr) NodeSpan() Span  { return e.Span }
+func (e *LambdaExpr) NodeSpan() Span { return e.Span }
 
 func (*IntLit) expr()     {}
 func (*StringLit) expr()  {}
@@ -237,3 +287,4 @@ func (*CallExpr) expr()   {}
 func (*UnaryExpr) expr()  {}
 func (*BinaryExpr) expr() {}
 func (*ParenExpr) expr()  {}
+func (*LambdaExpr) expr() {}

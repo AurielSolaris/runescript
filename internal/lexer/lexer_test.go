@@ -1,6 +1,7 @@
 package lexer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
@@ -40,7 +41,7 @@ func TestTokensAndPositions(t *testing.T) {
 func TestKeywordClasses(t *testing.T) {
 	cases := map[string]Kind{
 		"if": Keyword, "while": Keyword, "bool": Keyword, "true": Keyword,
-		"class": Reserved, "use": Reserved, "float": Reserved, "int64": Reserved, "matrix": Reserved,
+		"use": Keyword, "class": Reserved, "float": Reserved, "int64": Reserved, "matrix": Reserved,
 		"trace": Ident, "function": Ident, "Main": Ident, "_x1": Ident,
 	}
 	for word, kind := range cases {
@@ -88,6 +89,21 @@ func TestLexErrors(t *testing.T) {
 		if d := diags[0]; d.Code != c.code || d.Span.Start.String() != c.pos {
 			t.Errorf("%q: got %s at %s, want %s at %s", c.src, d.Code, d.Span.Start, c.code, c.pos)
 		}
+	}
+}
+
+func TestArrowAndMaximalMunch(t *testing.T) {
+	toks, diags := Lex([]byte("(int a) => a==>b"))
+	if len(diags) != 0 {
+		t.Fatal(diags)
+	}
+	var got []string
+	for _, tok := range toks[:len(toks)-1] {
+		got = append(got, tok.Text)
+	}
+	want := "( int a ) => a == > b"
+	if s := strings.Join(got, " "); s != want {
+		t.Errorf("got %q, want %q", s, want)
 	}
 }
 

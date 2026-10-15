@@ -27,7 +27,7 @@ same.
 
 | Code | Meaning |
 |---|---|
-| `ASX-PARSE-001` | Something unexpected, e.g. a missing `;`, a missing `package`, an AS3-style `function` keyword, a missing initializer |
+| `ASX-PARSE-001` | Something unexpected, e.g. a missing `;`, a missing `package`, a function without an access modifier, an AS3-style `function` keyword, a missing initializer |
 | `ASX-PARSE-002` | A reserved word for a feature that isn't implemented yet (`class`, `float`, …) |
 
 The parser stops at the first syntax error.
@@ -39,9 +39,21 @@ The parser stops at the first syntax error.
 | `ASX-NAME-001` | Undefined variable or function |
 | `ASX-NAME-002` | Name already declared: redeclaration, shadowing, or a duplicate function |
 | `ASX-NAME-003` | Calling something that is a variable, not a function |
-| `ASX-NAME-004` | Using a function's name as a value without calling it |
+| `ASX-NAME-004` | Using the built-in `trace` as a value |
 | `ASX-NAME-005` | Declaring a function named `trace` |
-| `ASX-NAME-006` | Assigning to a parameter |
+| `ASX-NAME-006` | Assigning to a parameter or a function |
+| `ASX-NAME-007` | Package qualifier not in scope, e.g. `string.toUpper` without `use "std:string";` |
+| `ASX-NAME-008` | The package has no function with that name (the help text suggests the camelCase spelling if you used Go's) |
+| `ASX-NAME-009` | Using an enclosing function's variable inside a nested function or lambda (functions don't capture) |
+| `ASX-NAME-010` | A prototype whose function is never defined |
+
+## `use` errors
+
+| Code | Meaning |
+|---|---|
+| `ASX-USE-001` | Unknown standard library package, e.g. `use "std:nope";` |
+| `ASX-USE-002` | The same package is used twice |
+| `ASX-USE-003` | A `use` form that isn't supported yet: RuneScript packages, files, and `go:` packages |
 
 ## Type errors
 
@@ -58,9 +70,11 @@ The parser stops at the first syntax error.
 | `ASX-TYPE-009` | `return value;` in a `void` function, or bare `return;` in a non-void one |
 | `ASX-TYPE-010` | Unknown type name |
 | `ASX-TYPE-011` | Signed and unsigned operands mixed in one operator |
-| `ASX-TYPE-012` | Operator not defined for these operand types |
+| `ASX-TYPE-012` | Operator not defined for these operand types, or tracing a function value |
 | `ASX-TYPE-013` | Condition isn't `bool` |
 | `ASX-TYPE-014` | Division by a constant zero |
+| `ASX-TYPE-015` | A function definition doesn't match its prototype |
+| `ASX-TYPE-016` | Calling a value that isn't a function, e.g. `(1)(2)` |
 
 ## Other compile-time errors
 
@@ -80,5 +94,6 @@ error has already been printed.
 | `ASX-RUN-001` | Calls nested more than 10,000 deep (usually runaway recursion) |
 | `ASX-RUN-002` | Integer overflow: the result doesn't fit its type |
 | `ASX-RUN-003` | Integer division or remainder by zero |
+| `ASX-RUN-004` | A standard library function failed, e.g. `string.repeat` with a negative count |
 
 Next: [Coming from ActionScript 3](09-coming-from-actionscript.md)

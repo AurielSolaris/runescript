@@ -1,7 +1,7 @@
 // The classic.
 package examples.fizzbuzz;
 
-void fizzbuzz(int limit) {
+public void fizzbuzz(int limit) {
     for (int i = 1; i <= limit; i++) {
         if (i % 15 == 0) {
             trace("FizzBuzz");
@@ -15,7 +15,7 @@ void fizzbuzz(int limit) {
     }
 }
 
-int main() {
+public int main() {
     fizzbuzz(15);
     return 0;
 }

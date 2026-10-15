@@ -42,7 +42,7 @@ func (k Kind) String() string { return kindNames[k] }
 
 // keywords implemented by the current milestone.
 var keywords = map[string]bool{
-	"package": true, "return": true,
+	"package": true, "use": true, "return": true,
 	"if": true, "else": true, "while": true, "for": true, "break": true, "continue": true,
 	"true": true, "false": true, "bool": true,
 	"public": true, "protected": true, "private": true,
@@ -52,7 +52,7 @@ var keywords = map[string]bool{
 // reserved words named by the specification for features that are not yet
 // implemented. Reserving them now keeps today's programs valid later.
 var reserved = map[string]bool{
-	"class": true, "struct": true, "use": true,
+	"class": true, "struct": true,
 	"float": true, "char": true, "array": true, "matrix": true,
 	"int8": true, "int16": true, "int32": true, "int64": true,
 	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
@@ -137,7 +137,7 @@ var punct = map[byte]Kind{
 
 // operators, longest first so that maximal munch picks "<=" over "<".
 var operators = []string{
-	"++", "--", "+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
+	"=>", "++", "--", "+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
 	"+", "-", "*", "/", "%", "<", ">", "!", "=",
 }
 

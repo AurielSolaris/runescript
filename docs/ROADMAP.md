@@ -4,7 +4,7 @@ Milestones are small and independently testable. A feature counts as done
 only when tests show it working (`go test ./...`). A milestone that depends
 on an undecided language rule waits until the owner decides it.
 
-## v0.1: Core language ✅ (current)
+## v0.1: Core language ✅
 
 Scope set by the owner: keep it very simple. Variables and assignment,
 conditionals, loops, and basic functions.
@@ -28,28 +28,48 @@ conditionals, loops, and basic functions.
 - [x] Logo: `assets/runescript.svg` and an icon variant, rasterized to PNG via headless Edge (`scripts/render-logo.sh`)
 - [x] Docs: specification, user guide, roadmap
 
-## v0.2: Settle the v0.1 provisional rules
+## v0.2: Standard library and functions (current)
 
-No new syntax until these are decided. Each decision gets an update to the
-spec and the tests.
+### Standard library, part 1 ✅
+- [x] `use "std:<name>";` declarations and qualified calls (`string.toUpper(s)`)
+- [x] Native-package registry in `stdlib/`: Go-implemented functions with checked RuneScript signatures
+- [x] `std:string`: all 25 functions from Go's `strings` package expressible with
+  `string`/`int`/`bool`, camelCase names, byte offsets
+- [x] Docs (`docs/guide/10-std-string.md`) and an example (`examples/strings.rs`)
 
+### Functions ✅
+- [x] Required access modifier on every function: `public|private|protected <type> <name>(…)`
+- [x] Prototypes (forward declarations), with signature checking
+- [x] Nested functions, including recursion and mutual recursion through prototypes
+- [x] Function types `int(int, int)`, function values, callbacks, functions returning functions
+- [x] Lambdas `(int a) => a + 1` and `(int a) => { … }`
+- [x] Function boundaries: no capture of enclosing variables
+- [x] Docs (guide chapter 6) and an example (`examples/callbacks.rs`)
+- [ ] Enforce `private` (file) and `protected` (package) once multi-file programs exist (v0.3)
+
+### Tests and examples ✅
+- [x] Fuzz tests for the parser/checker and the interpreter (no crashes on arbitrary input)
+- [x] Golden error programs for functions and `use`; runtime-error golden programs with expected partial output
+- [x] Diagnostics are reported in source order
+- [x] Examples: `callbacks.rs`, `primes.rs`, `strings.rs`, `boundary_error.rs`, plus `examples/README.md`
+
+### Settle v0.1 provisional rules
 - [ ] Final source file extension (`.rs` conflicts with Rust)
 - [ ] Final diagnostic prefix (currently `ASX`)
-- [ ] Integer widening model (variable storage vs. expression results), overflow behaviour, and the width of `uint`
-- [ ] Explicit checked conversion syntax, then implement it so the `ASX-TYPE-004` help text has something to point to
+- [ ] Integer widening model, overflow behaviour, and the width of `uint`
+- [ ] Explicit checked conversion syntax
 - [ ] Unsigned → signed and mixed-signedness rules
 - [ ] Entry-point rules and visibility semantics for top-level functions
-- [ ] Confirm or relax the other v0.1 restrictions: required initializers, read-only parameters, no shadowing, mandatory braces
+- [ ] Confirm or relax: required initializers, read-only parameters, no shadowing, mandatory braces
 
-## v0.3: `use` (packages and files)
+## v0.3: `use` for packages and files
 
 Syntax decided by the owner: `use "<package_name>";` and `use "<file_path>";`,
-with paths relative to the current working directory.
+with paths relative to the current working directory. (`std:` works since v0.2.)
 
-- [ ] Decide how a package name is told apart from a file path, how used
-  names are qualified, and what visibility exposes
+- [ ] Decide how a package name is told apart from a file path, aliases, and
+  what visibility exposes
 - [ ] Multi-file programs: load, parse, and check every used file once; detect cycles
-- [ ] A native-package mechanism: Go-implemented functions registered under a package name
 - [ ] Tests: missing file, cycles, name clashes, running from a different working directory
 
 ## v0.4: Strings and output
@@ -64,6 +84,7 @@ with paths relative to the current working directory.
 - [ ] Widening as decided in v0.2, with boundary and non-contraction tests
 - [ ] `float`, `float32`, `float64`; precision-aware widening
 - [ ] Additional literal forms (hex, separators) if approved
+- [ ] `std:math`: Go's `math` package in full, once floats exist
 
 ## v0.6: Aggregates
 
@@ -91,6 +112,20 @@ Depends on: `use` (v0.3), floats (v0.5), and structs for colours and vectors (v0
 - [ ] `class` declarations, fields, methods, constructors
 - [ ] Visibility enforcement
 - [ ] Inheritance / interfaces (design first)
+- [ ] `std:string` additions that need arrays, multiple returns, or classes
+  (`split`, `fields`, `join`, `cut`, builder/replacer)
+
+## v0.9: `std:symrs` (symbolic mathematics)
+
+A built-in port of the owner's SympJS library: symbols, expression trees,
+simplification, differentiation, integration, equation solving, matrices,
+complex numbers, and Taylor and Fourier series.
+
+- [ ] Design the RuneScript API (expression values with chained methods need classes or an opaque `Expr` type)
+- [ ] Port in layers: expressions and simplification → `diff`/`int` → solving → trig → complex → matrices → Taylor/Fourier
+- [ ] Output as text and LaTeX instead of SympJS's HTML renderer (there's no browser)
+
+Depends on: floats (v0.5), arrays (v0.6), classes or opaque native types (v0.8), function values (v0.2).
 
 ## Later
 

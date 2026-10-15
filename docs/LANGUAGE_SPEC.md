@@ -1,6 +1,6 @@
 # RuneScript Language Specification
 
-**Version 0.1 (draft).** This is the formal companion to `CLAUDE.md`. If
+**Version 0.2 (draft, in progress).** This is the formal companion to `CLAUDE.md`. If
 the two disagree, the disagreement is flagged in §11 rather than silently
 resolved.
 
@@ -8,7 +8,7 @@ Every rule carries one of these labels:
 
 | Label | Meaning |
 |---|---|
-| **[v0.1]** | Implemented and covered by tests. |
+| **[v0.1]**, **[v0.2]** | Implemented, and covered by tests, in that version. |
 | **[v0.1, provisional]** | Implemented, but the owner has not decided the rule. It is the most conservative choice and may change. |
 | **[planned]** | Required by the design; not implemented. |
 | **[undecided]** | Not yet designed. Programs using it are rejected. |
@@ -41,7 +41,7 @@ comment is an error.
 Implemented keywords **[v0.1]**:
 
 ```
-package return if else while for break continue true false
+package use return if else while for break continue true false
 public protected private
 int sint uint bool string void
 ```
@@ -50,7 +50,7 @@ Reserved for planned features **[v0.1, provisional]**. They are rejected
 with `ASX-PARSE-002`:
 
 ```
-class struct use float char array matrix
+class struct float char array matrix
 int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64
 ```
 
@@ -77,22 +77,25 @@ redeclared.
 && || !
 ```
 
-## 3. Grammar (v0.1)
+## 3. Grammar (v0.2)
 
 EBNF. `{ x }` means zero or more, `[ x ]` means optional.
 
 ```ebnf
-File         = PackageDecl { FuncDecl } EOF ;
+File         = PackageDecl { UseDecl } { FuncDecl } EOF ;
 PackageDecl  = "package" Ident { "." Ident } ";" ;
+UseDecl      = "use" StringLit ";" ;
 
-FuncDecl     = [ Visibility ] Type Ident "(" [ Params ] ")" Block ;
+FuncDecl     = Visibility Type Ident "(" [ Params ] ")" ( Block | ";" ) ;
 Visibility   = "public" | "protected" | "private" ;
 Params       = Param { "," Param } ;
-Param        = Type Ident ;
-Type         = "int" | "sint" | "uint" | "bool" | "string" | "void" | Ident ;
+Param        = Type [ Ident ] ;          (* names are optional only in prototypes *)
+Type         = BaseType { "(" [ Type { "," Type } ] ")" } ;   (* function types *)
+BaseType     = "int" | "sint" | "uint" | "bool" | "string" | "void" | Ident ;
 
 Block        = "{" { Stmt } "}" ;
-Stmt         = SimpleStmt ";"
+Stmt         = FuncDecl                 (* nested function or prototype *)
+             | SimpleStmt ";"
              | "return" [ Expr ] ";"
              | "break" ";" | "continue" ";"
              | IfStmt | WhileStmt | ForStmt ;
@@ -113,10 +116,13 @@ EqExpr       = RelExpr { ( "==" | "!=" ) RelExpr } ;
 RelExpr      = AddExpr { ( "<" | "<=" | ">" | ">=" ) AddExpr } ;
 AddExpr      = MulExpr { ( "+" | "-" ) MulExpr } ;
 MulExpr      = Unary   { ( "*" | "/" | "%" ) Unary } ;
-Unary        = ( "-" | "!" ) Unary | Primary ;
+Unary        = ( "-" | "!" ) Unary | Postfix ;
+Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" } ;   (* calls of function values *)
 Primary      = IntLit | StringLit | "true" | "false"
-             | Ident | Call | "(" Expr ")" ;
-Call         = Ident "(" [ Expr { "," Expr } ] ")" ;
+             | Ident | Call | Lambda | "(" Expr ")" ;
+Lambda       = "(" [ Type Ident { "," Type Ident } ] ")" "=>" ( Expr | Block ) ;
+Call         = [ Qualifier "." ] Ident "(" [ Expr { "," Expr } ] ")" ;
+Qualifier    = Ident | "string" ;   (* the package qualifier; see §4.2 *)
 ```
 
 Notes:
@@ -126,8 +132,12 @@ Notes:
 - **[v0.1, provisional]** Bodies of `if`, `else`, `while`, and `for` must be
   braced blocks. Standalone `{ }` blocks are not statements.
 - **[v0.1, provisional]** Only calls can be used as expression statements.
+- **[v0.2]** `(` begins a lambda when it is followed by `)` or by a type and
+  a name. Otherwise it begins a parenthesized expression.
 - **[v0.1, provisional]** `++`/`--` are postfix statements only; they can't
   appear inside expressions.
+- **[v0.2]** A qualifier can only be followed by a call: `string.toUpper(s)`.
+  Packages export nothing but functions so far.
 - **[v0.1]** A `Type` that is an identifier parses, but it is reported as
   `ASX-TYPE-010 unknown type` until user-defined types exist.
 
@@ -139,52 +149,75 @@ Notes:
   brace-delimited block (unlike AS3).
 - **[undecided]** How packages map to directories, and multi-file packages.
 
-### 4.2 Using other packages and files **[planned; syntax decided]**
-The owner has chosen this syntax for bringing in another package or source
-file:
+### 4.2 Using packages and files: `use`
+Syntax (decided by the owner):
 
-```actionscript
-use "<package_name>";        // e.g. use "rune.gfx";
-use "<file_path>";           // path relative to the current working directory
+```text
+use "std:<name>";          // standard library package   [v0.2]
+use "<package_name>";      // RuneScript package          [planned]
+use "<file_path>";         // source file, relative to the current working directory [planned]
+use "go:<package>";        // Go package                  [planned]
 ```
 
-`use` is reserved in v0.1, and writing it gives `ASX-PARSE-002`. Still
-**[undecided]**:
-- how the compiler tells a package name from a file path (e.g. a path
-  contains `/` or ends in the source extension);
-- where `use` may appear (presumably after `package`, before any function);
-- how a used package's names are referred to (qualified as `gfx.drawText`,
-  or brought directly into scope);
-- what visibility `use` exposes, and whether cycles are allowed.
-
-Resolving file paths against the *current working directory* means the
-same program can resolve differently depending on where it is launched
-from. The owner chose this deliberately, and it is recorded here so that
-tools (CLI, tests, editor support) apply it consistently.
+- **[v0.2]** `use` declarations come after `package` and before any
+  function (`ASX-PARSE-001` otherwise).
+- **[v0.2]** A package's functions are called through its **qualifier**, the
+  last segment of its name: `use "std:string";` → `string.toUpper(s)`. A
+  type keyword can be a qualifier, so `string.` names package `std:string`
+  while `string` alone is still the type.
+- **[v0.2]** Using a qualifier without the matching `use` is
+  `ASX-NAME-007`. An unknown function is `ASX-NAME-008`. An unknown `std:`
+  package is `ASX-USE-001`, and using one twice is `ASX-USE-002`.
+- **[v0.2]** All other forms are rejected with `ASX-USE-003` for now.
+- **[undecided]** How a package name is told apart from a file path, aliases,
+  cycles, and what visibility a used file exports. Resolving file paths
+  against the *current working directory* means the same program can resolve
+  differently depending on where it is launched from. The owner chose this
+  deliberately.
 
 ### 4.3 Functions
-- **[v0.1]** A function declaration is written return type, name, then typed
-  parameters: `int add(int a, int b) { … }`. There is no `function`
-  keyword.
-- **[v0.1]** Functions are top-level. A file may declare any number of them,
-  and a function can be called before its declaration. Recursion is
-  supported.
+- **[v0.2, decided]** Every function declaration, nested ones included,
+  has the form `<access> <return type> <name>(<params>) { … }`. `<access>` is
+  required and is one of `public`, `private`, `protected`. There is no
+  `function` keyword. A missing modifier is `ASX-PARSE-001`.
+- **[decided; enforcement planned]** `public` means usable everywhere,
+  `private` means this file only, and `protected` means this package only.
+  Programs are single-file, so this is not enforced yet. On nested functions
+  the modifier is required but has no effect.
+- **[v0.1]** Top-level functions are visible throughout the file and can be
+  called before their definition. Recursion is supported.
 - **[v0.1]** Arguments are passed by value. Arity and argument types are
-  checked statically.
-- **[v0.1, provisional]** Parameters are read-only.
-- **[v0.1, provisional]** Function names must be unique: there is no
-  overloading.
-- **[v0.1, provisional]** Visibility modifiers are parsed and recorded, but
-  have no effect yet. At most one modifier is allowed. Their meaning on
-  top-level functions and the default visibility are **[undecided]**.
-- **[undecided]** Default arguments, return-type inference, nested
-  functions, and function values.
+  checked statically. **[provisional]** Parameters are read-only.
+- **[v0.1, provisional]** No overloading: a name declares one function.
+- **[v0.2] Prototypes.** `<access> <type> <name>(<types>);` declares a
+  function without a body. Parameter names are optional. The definition
+  must follow in the same scope with an identical type (`ASX-TYPE-015`). A
+  prototype may appear at most once, before the definition (`ASX-NAME-002`),
+  and must be defined (`ASX-NAME-010`).
+- **[v0.2] Nested functions.** A function declared in a block is visible from
+  its declaration (or prototype) to the end of that block, and within its own
+  body. Mutual recursion between nested functions uses a prototype.
+- **[v0.2, decided] Function boundaries: no capture.** A function or lambda
+  body can use its own parameters and locals, plus every *function* visible
+  where it is declared. It cannot use the variables or parameters of
+  enclosing functions (`ASX-NAME-009`). Names of enclosing variables may be
+  reused inside the boundary. `break`/`continue` don't cross boundaries.
+- **[v0.2] Function values.** A function name used without a call is a value
+  of its function type (§5.6). Function values are called with ordinary call
+  syntax, including chained calls `f(1)(2)`. The callee is evaluated before
+  the arguments.
+- **[v0.2] Lambdas.** `(T a, …) => expr` or `(T a, …) => { … }`. Parameter
+  types are always written. Where a function type is expected (assignment,
+  argument, return) and the parameter types match, the lambda takes that
+  type's result type. Otherwise its result type is the expression's type, or
+  that of the first `return` (or `void`). Lambdas take no access modifier.
+- **[undecided]** Default arguments, variadic parameters, generic functions,
+  overloading, capturing closures.
 
 ### 4.4 Entry point **[v0.1, provisional]**
 A program runs by calling a top-level function `main` that takes no
 parameters and returns `int`/`sint` or `void`. An `int` result becomes the
-process exit code; `void` means exit code 0. Any visibility modifier is
-accepted on `main`; the canonical form is:
+process exit code; `void` means exit code 0. The canonical form is:
 
 ```actionscript
 package main;
@@ -193,6 +226,9 @@ protected int main() {
     return 0;
 }
 ```
+
+Every function needs an access modifier, so `main` has one too; any of the
+three is accepted.
 
 ## 5. Types
 
@@ -204,10 +240,18 @@ protected int main() {
 | `sint` | [v0.1] | **The same type as `int`**, written differently. It has no separate representation. |
 | `uint` | [v0.1, provisional width] | Unsigned integer. v0.1 representation: 32-bit (0 … 4294967295). |
 | `bool` | [v0.1] | `true`, `false`. |
-| `string` | [v0.1] | Immutable text. |
+| `string` | [v0.1] | Immutable UTF-8 text. **[v0.2, decided]** Positions and lengths are byte offsets, as in Go. |
 | `void` | [v0.1] | Means "no value". Valid only as a return type; you can't store it, pass it, or trace it. |
 
 There is no `any` type and never will be (CLAUDE.md §4).
+
+### 5.1a Function types **[v0.2]**
+`R(P1, P2, …)` is the type of functions taking `P1, P2, …` and returning
+`R` (C-style, owner's choice). Suffixes nest left to right: `int(int)(string)`
+takes a `string` and returns an `int(int)`. Two function types are identical
+when their parameter and result types are identical. Function values can be
+stored, passed, returned, and called, but not traced, compared, or used with
+operators (`ASX-TYPE-012`). `void` can be a result but not a parameter.
 
 ### 5.2 Planned types **[planned/undecided]**
 `float` (default float32, widening), `char`, `int8 int16 int32`,
@@ -245,7 +289,7 @@ destination of type `D` only if:
 
 | S → D | Result |
 |---|---|
-| same type (`int`/`sint` count as the same) | allowed |
+| same type (`int`/`sint` count as the same; function types structurally) | allowed |
 | untyped constant → integer type | allowed if the value fits (§5.3) |
 | signed (`int`/`sint`) → `uint` | **error `ASX-TYPE-004`**, whatever the runtime value |
 | `uint` → `int`/`sint` | **error `ASX-TYPE-005`** [provisional: rules undecided] |
@@ -327,6 +371,19 @@ An integer constant argument is typed `int`.
 trace("x =", 42, true);   // x = 42 true
 ```
 
+### 8.2 Standard library **[v0.2]**
+Standard library packages are implemented natively and brought in with
+`use "std:<name>";`. Their function names are Go's names converted to
+camelCase **[decided]**. Integer results are range-checked against their
+declared RuneScript type. A failure inside a library function is a runtime
+error (`ASX-RUN-004`).
+
+| Package | Contents |
+|---|---|
+| `std:string` | The 25 functions of Go's `strings` that can be expressed with `string`/`int`/`bool` (see `docs/guide/10-std-string.md`) |
+| `std:math` | [planned] Go's `math`, once floating-point types exist |
+| `std:symrs` | [planned] Symbolic mathematics, a port of the owner's SympJS library; needs objects, floats, and arrays |
+
 ## 9. Diagnostics and runtime errors
 
 Format:
@@ -340,7 +397,7 @@ file.rs:LINE:COL: error CODE: message
 
 The `ASX` code prefix is **provisional**. Each code is
 `ASX-<STAGE>-<NNN>`, where the stages are `LEX`, `PARSE`, `NAME`, `TYPE`,
-`FLOW`, `ENTRY`, and `RUN`. The full list is in `docs/guide/08-diagnostics.md`.
+`FLOW`, `USE`, `ENTRY`, and `RUN`. The full list is in `docs/guide/08-diagnostics.md`.
 
 The checker reports every semantic error it finds. The parser stops at the
 first syntax error. A runtime error ends the program with exit status 1 and
@@ -355,7 +412,10 @@ purpose:
 | Topic | ActionScript 3 | RuneScript |
 |---|---|---|
 | Package | `package a.b { … }` block | `package a.b;` statement |
-| Function | `function add(a:int, b:int):int { }` | `int add(int a, int b) { }` |
+| Function | `function add(a:int, b:int):int { }` | `public int add(int a, int b) { }` (access modifier required) |
+| Function values | `var f:Function = add;` (untyped) | `int(int, int) f = add;` (typed) |
+| Anonymous functions | `function(a:int):int { … }`, Royale `=>` | `(int a) => a * 2` |
+| Closures | Capture enclosing variables | No capture: nested functions and lambdas see only their own variables and other functions |
 | Variable | `var n:int = 0;` | `int n = 0;` |
 | Semicolons | Optional | Required |
 | Untyped values | `*` and missing annotations allowed | No `any`; every declaration is explicitly typed |
@@ -369,7 +429,7 @@ purpose:
 | Variable scope | `var` is function-scoped and hoisted | Block-scoped; no shadowing [provisional] |
 | Visibility | `public protected private internal`; default `internal` | `public protected private`; default and meaning undecided |
 | Casts | `T(x)` and `x as T` | Explicit checked conversions [undecided] |
-| Imports | `import a.b.C;` | `use "a.b";` or `use "path/file";` [planned] |
+| Imports | `import a.b.C;` | `use "std:string";` [v0.2]; `use "a.b";`, `use "path/file";`, `use "go:pkg";` [planned] |
 | `trace` | `trace(...args)`, space-separated | Same, written to stdout |
 
 **Games and graphics.** AS3 was used mostly for games and interactive
@@ -380,7 +440,7 @@ recommended backend is raylib; this is not yet confirmed.
 AS3 and Apache Royale features that are **[undecided]** for RuneScript:
 classes and interfaces, `static`, abstract classes, private constructors,
 metadata, E4X XML, `Vector.<T>` (vs. `Array<T>` generics), type inference,
-arrow functions, `?.`, `??`, import aliases, and verbatim strings.
+`?.`, `??`, import aliases, and verbatim strings.
 
 ## 11. Conflicts with CLAUDE.md
 

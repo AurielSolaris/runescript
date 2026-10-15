@@ -10,8 +10,9 @@
 
 RuneScript keeps ActionScript's identity (`package`, `trace`, `int`/`uint`,
 `public`/`protected`/`private`) and changes the syntax to a C-family style:
-types come before names, there's no `function` keyword, and semicolons are
-required. Its type checking is strict: nothing is implicitly `any`, and
+types come before names, every function starts with an access modifier
+(`public int add(int a, int b)`) instead of a `function` keyword, and
+semicolons are required. Its type checking is strict: nothing is implicitly `any`, and
 signed and unsigned integers never mix silently.
 
 It runs as a standalone program: no browser, no HTML, no Flash Player.
@@ -20,7 +21,7 @@ It is **not** source-compatible with ActionScript 3.
 ```actionscript
 package main;
 
-void sayHi(string message, int times) {
+public void sayHi(string message, int times) {
     for (int i = 0; i < times; i++) {
         trace(message);
     }
@@ -32,24 +33,26 @@ protected int main() {
 }
 ```
 
-## Status: v0.1 (early development)
+## Status: v0.2 in progress (early development)
 
 **Works now**, and is covered by tests:
 
-- Packages, top-level functions with typed parameters, recursion
+- Packages; functions declared `public|private|protected <type> <name>(…)`; recursion
+- Nested functions, prototypes, function types (`int(int, int)`), callbacks, and lambdas (`(int a) => a * 2`)
 - `int`/`sint`, `uint`, `bool`, `string`, `void`
 - Variables, `=`, `+= -= *= /= %=`, `++`/`--`
 - Arithmetic, comparison, and logical operators
 - `if`/`else if`/`else`, `while`, `for`, `break`, `continue`, `return`
 - `trace(...)`
+- Standard library: `use "std:string";` gives Go's `strings` functions as `string.toUpper(s)` and so on
 - Compile-time type checking with located diagnostics, including rejection
   of signed → unsigned assignment
 - Integer overflow and division by zero are reported as runtime errors and
   never wrap silently
 
 **Not yet implemented:** classes, structs, arrays, floats, `char`, string
-concatenation, `use` (packages and files), type conversions, and the
-planned native graphics package. See the [roadmap](docs/ROADMAP.md).
+concatenation, `use` for files and non-standard packages, type conversions, `std:math`, `std:symrs`, and the planned native
+graphics package. See the [roadmap](docs/ROADMAP.md).
 
 ## Build and run
 
@@ -65,24 +68,34 @@ go test ./...
 > The `.rs` file extension is provisional, since it clashes with Rust. The
 > CLI accepts any file name.
 
+## Tests
+
+```sh
+go test ./...                                  # unit, golden, docs, and CLI tests
+go test ./tests -run '^$' -fuzz=FuzzCheck      # fuzz the parser and checker
+go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
+```
+
+The suite includes:
+- unit tests for every compiler stage;
+- golden tests that run every example and compare its output;
+- error programs whose expected diagnostics are written inline as
+  `// expect: CODE line:col`;
+- runtime-error programs;
+- a check that every program in the documentation compiles.
+
 ## Examples
 
-| File | Shows |
-|---|---|
-| [`hello.rs`](examples/hello.rs) | The minimal program |
-| [`variables.rs`](examples/variables.rs) | Declarations, assignment, compound assignment |
-| [`conditionals.rs`](examples/conditionals.rs) | `if` / `else if` / `else`, boolean logic |
-| [`loops.rs`](examples/loops.rs) | `for`, `while`, `break`, `continue` |
-| [`functions.rs`](examples/functions.rs) | Parameters, return values, recursion |
-| [`fizzbuzz.rs`](examples/fizzbuzz.rs) | Putting it together |
-| [`signedness_error.rs`](examples/signedness_error.rs) | A program the compiler rejects, on purpose |
-
-Each example's output is checked by `tests/golden_test.go`.
+[`examples/`](examples/README.md) has programs for every feature: the
+basics, `std:string`, callbacks and lambdas, a prime counter, and two
+programs the compiler rejects on purpose. Every example's output is
+checked by the test suite.
 
 ## Documentation
 
-- [Guide](docs/guide/README.md): tour of every v0.1 feature, with examples (all compiled by the tests)
+- [Guide](docs/guide/README.md): tour of every feature, with examples (all compiled by the tests)
 - [Language specification](docs/LANGUAGE_SPEC.md): grammar and rules, with each rule's implementation status
+- [Standard library: std:string](docs/guide/10-std-string.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)
 - [Coming from ActionScript 3](docs/guide/09-coming-from-actionscript.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -99,6 +112,7 @@ internal/checker/      name resolution and type checking
 internal/runtime/      tree-walking interpreter
 internal/diagnostics/  error codes and formatting
 internal/driver/       wires the stages together
+stdlib/                standard library packages (std:string), implemented in Go
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests
 assets/                logo: SVG source and PNGs generated from it

@@ -18,8 +18,9 @@ func write(t *testing.T, src string) string {
 
 func TestCLI(t *testing.T) {
 	ok := write(t, "package main;\nprotected int main() {\n    trace(\"hello\");\n    return 3;\n}\n")
-	bad := write(t, "package main;\nint main() {\n    sint s = -10;\n    uint u = s;\n    return 0;\n}\n")
-	crash := write(t, "package main;\nint main() {\n    int z = 0;\n    return 1 / z;\n}\n")
+	bad := write(t, "package main;\npublic int main() {\n    sint s = -10;\n    uint u = s;\n    return 0;\n}\n")
+	v02 := write(t, "package main;\nuse \"std:string\";\npublic int main() {\n    string(string) shout = (string s) => string.toUpper(s);\n    trace(shout(\"rune\"));\n    private int seven() { return 7; }\n    return seven();\n}\n")
+	crash := write(t, "package main;\npublic int main() {\n    int z = 0;\n    return 1 / z;\n}\n")
 
 	cases := []struct {
 		name           string
@@ -29,6 +30,7 @@ func TestCLI(t *testing.T) {
 	}{
 		{"run", []string{"run", ok}, 3, "hello\n", ""},
 		{"check ok", []string{"check", ok}, 0, "", ""},
+		{"v0.2 features", []string{"run", v02}, 7, "RUNE\n", ""},
 		{"check bad", []string{"check", bad}, exitCompileError, "", "error ASX-TYPE-004"},
 		{"run bad", []string{"run", bad}, exitCompileError, "", "prog.rs:4:14"},
 		{"runtime error", []string{"run", crash}, exitRuntimeError, "", "error ASX-RUN-003"},

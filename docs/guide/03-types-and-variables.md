@@ -7,7 +7,7 @@ Write the type first, then the name, then an initial value:
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int count = 10;
     uint total = 250;
     bool ready = true;
@@ -35,7 +35,7 @@ implicit default values in v0.1.
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     sint a = -5;
     int b = a;      // fine: same type
     sint c = b;     // fine
@@ -50,7 +50,7 @@ String escapes: `\n` (newline), `\t` (tab), `\r`, `\\`, and `\"`.
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int x = 1;
     x = 10;     // 10
     x += 5;     // 15
@@ -79,7 +79,7 @@ A variable declared in a `for` header exists only inside that loop.
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     if (true) {
         int inner = 1;
         trace(inner);
@@ -101,7 +101,7 @@ visible variable, parameter, or function:
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int x = 1;
     if (true) {
         int x = 2; // error: ASX-NAME-002
@@ -119,7 +119,7 @@ error even when it happens to be positive:
 ```actionscript
 package main;
 
-int main() {
+public int main() {
     sint signedValue = -10;
     uint unsignedValue = signedValue; // error: ASX-TYPE-004
     return 0;
@@ -139,7 +139,7 @@ receives it, as long as the value fits:
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     uint a = 42;            // fine: 42 fits in uint
     uint b = 6 * 7;         // fine: constants are computed at compile time
     int c = -2147483648;    // fine: the smallest int
@@ -150,7 +150,7 @@ void main() {
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     uint u = -1;            // error: ASX-TYPE-007
 }
 ```
@@ -158,7 +158,7 @@ void main() {
 ```actionscript
 package main;
 
-void main() {
+public void main() {
     int big = 3000000000;   // error: ASX-TYPE-006
 }
 ```

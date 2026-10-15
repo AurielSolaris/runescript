@@ -115,10 +115,28 @@ func (p *parser) file() *ast.File {
 			"expected package declaration, found %s", t.Describe())
 	}
 	f.Package = p.packageDecl()
+	for p.isKeyword("use") {
+		f.Uses = append(f.Uses, p.useDecl())
+	}
 	for !p.is(lexer.EOF, "") {
+		if p.isKeyword("use") {
+			p.fail(diagnostics.ParseUnexpected, p.tok().Span, "use declarations must come before any function")
+		}
 		f.Funcs = append(f.Funcs, p.funcDecl())
 	}
 	return f
+}
+
+func (p *parser) useDecl() *ast.UseDecl {
+	start := p.expectKeyword("use")
+	if !p.is(lexer.String, "") {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+			`the package or file is written as a string, e.g. use "std:string";`,
+			"expected package path string after 'use', found %s", p.tok().Describe())
+	}
+	path := p.next()
+	end := p.expect(lexer.Semicolon, "';' after use declaration")
+	return &ast.UseDecl{Path: path.Text, PathSpan: path.Span, Span: span(start.Span, end.Span)}
 }
 
 func (p *parser) packageDecl() *ast.PackageDecl {
@@ -143,20 +161,29 @@ var visibilities = map[string]ast.Visibility{
 	"public": ast.VisPublic, "protected": ast.VisProtected, "private": ast.VisPrivate,
 }
 
+// funcDecl parses `visibility Type name(params) { body }` or the prototype
+// form ending in ';'. The access modifier is required on every function.
 func (p *parser) funcDecl() *ast.FuncDecl {
 	start := p.tok().Span
 	fn := &ast.FuncDecl{}
-	if v, ok := visibilities[p.tok().Text]; ok && p.tok().Kind == lexer.Keyword {
-		fn.Visibility = v
-		p.next()
-		if _, again := visibilities[p.tok().Text]; again && p.tok().Kind == lexer.Keyword {
-			p.fail(diagnostics.ParseUnexpected, p.tok().Span, "multiple visibility modifiers")
-		}
-	}
 	if p.is(lexer.Ident, "function") {
 		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
-			"write the return type before the name, e.g. `int add(int a, int b) { ... }`",
+			"write `public|private|protected <return type> <name>(...)`, e.g. `public int add(int a, int b) { ... }`",
 			"RuneScript does not use the 'function' keyword")
+	}
+	if p.tok().Kind == lexer.Reserved {
+		p.notImplemented(p.tok())
+	}
+	v, ok := visibilities[p.tok().Text]
+	if !ok || p.tok().Kind != lexer.Keyword {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+			"functions are declared `public|private|protected <return type> <name>(...)`",
+			"expected access modifier (public, private, or protected) to begin a function, found %s", p.tok().Describe())
+	}
+	fn.Visibility = v
+	p.next()
+	if _, again := visibilities[p.tok().Text]; again && p.tok().Kind == lexer.Keyword {
+		p.fail(diagnostics.ParseUnexpected, p.tok().Span, "multiple access modifiers")
 	}
 	fn.Result = p.typeRef("return type")
 	fn.Name = p.ident("function name")
@@ -164,7 +191,9 @@ func (p *parser) funcDecl() *ast.FuncDecl {
 	if !p.is(lexer.RParen, "") {
 		for {
 			prm := &ast.Param{Type: p.typeRef("parameter type")}
-			prm.Name = p.ident("parameter name")
+			if p.is(lexer.Ident, "") {
+				prm.Name = p.ident("parameter name")
+			}
 			fn.Params = append(fn.Params, prm)
 			if !p.is(lexer.Comma, "") {
 				break
@@ -173,6 +202,18 @@ func (p *parser) funcDecl() *ast.FuncDecl {
 		}
 	}
 	p.expect(lexer.RParen, "')' after parameters")
+	if p.is(lexer.Semicolon, "") {
+		end := p.next()
+		fn.Span = span(start, end.Span)
+		return fn // prototype
+	}
+	for _, prm := range fn.Params {
+		if prm.Name == nil {
+			p.failHelp(diagnostics.ParseUnexpected, prm.Type.Span,
+				"parameter names may be left out only in prototypes (declarations ending in ';')",
+				"parameter of type '%s' needs a name", prm.Type)
+		}
+	}
 	fn.Body = p.block()
 	fn.Span = span(start, fn.Body.Span)
 	return fn
@@ -184,20 +225,45 @@ var typeKeywords = map[string]bool{
 
 func (p *parser) isTypeStart() bool {
 	t := p.tok()
-	return (t.Kind == lexer.Keyword && typeKeywords[t.Text]) ||
+	return (t.Kind == lexer.Keyword && typeKeywords[t.Text] && p.peekTok(1).Kind != lexer.Dot) ||
 		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Ident)
 }
 
-// typeRef accepts a built-in type keyword or an identifier; unknown names
-// are reported by the checker.
+// isQualifiedStart reports whether the next tokens begin `pkg.name`. A type
+// keyword may be a qualifier: `string.toUpper(s)` uses package std:string.
+func (p *parser) isQualifiedStart() bool {
+	t := p.tok()
+	return (t.Kind == lexer.Ident || (t.Kind == lexer.Keyword && typeKeywords[t.Text])) &&
+		p.peekTok(1).Kind == lexer.Dot
+}
+
+// typeRef parses a type: a built-in type keyword or an identifier (unknown
+// names are reported by the checker), followed by any number of function
+// type suffixes: `int(int, int)` is a function taking two ints and
+// returning int; `int(int)(string)` takes a string and returns an int(int).
 func (p *parser) typeRef(what string) *ast.TypeRef {
 	t := p.tok()
-	if (t.Kind == lexer.Keyword && typeKeywords[t.Text]) || t.Kind == lexer.Ident {
-		p.next()
-		return &ast.TypeRef{Name: t.Text, Span: t.Span}
+	if !((t.Kind == lexer.Keyword && typeKeywords[t.Text]) || t.Kind == lexer.Ident) {
+		p.unexpected(what)
 	}
-	p.unexpected(what)
-	return nil
+	p.next()
+	ref := &ast.TypeRef{Name: t.Text, Span: t.Span}
+	for p.is(lexer.LParen, "") {
+		p.next()
+		fn := &ast.FuncTypeRef{Result: ref}
+		if !p.is(lexer.RParen, "") {
+			for {
+				fn.Params = append(fn.Params, p.typeRef("parameter type"))
+				if !p.is(lexer.Comma, "") {
+					break
+				}
+				p.next()
+			}
+		}
+		end := p.expect(lexer.RParen, "')' to close function type")
+		ref = &ast.TypeRef{Func: fn, Span: span(t.Span, end.Span)}
+	}
+	return ref
 }
 
 func (p *parser) ident(what string) *ast.Ident {
@@ -254,6 +320,8 @@ func (p *parser) stmt() ast.Stmt {
 			"unexpected '{'")
 	case t.Kind == lexer.Reserved:
 		p.notImplemented(t)
+	case t.Kind == lexer.Keyword && visibilities[t.Text] != ast.VisNone:
+		return p.funcDecl() // nested function or prototype
 	}
 	s := p.simpleStmt(true)
 	end := p.expect(lexer.Semicolon, "';' after statement")
@@ -285,6 +353,11 @@ func (p *parser) simpleStmt(allowDecl bool) ast.Stmt {
 		}
 		typ := p.typeRef("type")
 		name := p.ident("variable name")
+		if p.is(lexer.LParen, "") {
+			p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+				"functions are declared `public|private|protected <return type> <name>(...)`, also inside other functions",
+				"function '%s' needs an access modifier", name.Name)
+		}
 		if !p.is(lexer.Assign, "") {
 			p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
 				"variables must be initialized when declared in v0.1, e.g. `int x = 0;`",
@@ -293,6 +366,13 @@ func (p *parser) simpleStmt(allowDecl bool) ast.Stmt {
 		p.next()
 		init := p.expr()
 		return &ast.VarDecl{Type: typ, Name: name, Init: init, Span: span(typ.Span, init.NodeSpan())}
+	}
+	if p.isQualifiedStart() || t.Kind == lexer.LParen {
+		e := p.expr()
+		if call, ok := e.(*ast.CallExpr); ok {
+			return &ast.ExprStmt{Call: call}
+		}
+		p.fail(diagnostics.ParseUnexpected, e.NodeSpan(), "only function calls can be used as statements")
 	}
 	if t.Kind != lexer.Ident {
 		p.unexpected("statement")
@@ -395,11 +475,84 @@ func (p *parser) unary() ast.Expr {
 		x := p.unary()
 		return &ast.UnaryExpr{Op: t.Text, X: x, Span: span(t.Span, x.NodeSpan())}
 	}
-	return p.primary()
+	return p.postfix(p.primary())
+}
+
+// postfix parses calls applied to an expression: f(1)(2), (g)(x).
+func (p *parser) postfix(x ast.Expr) ast.Expr {
+	for p.is(lexer.LParen, "") {
+		call := p.callArgs(nil)
+		call.Callee = x
+		call.Span.Start = x.NodeSpan().Start
+		x = call
+	}
+	return x
+}
+
+// isLambdaStart reports whether '(' begins a lambda parameter list rather
+// than a parenthesized expression: `()` or `(Type name`.
+func (p *parser) isLambdaStart() bool {
+	if !p.is(lexer.LParen, "") {
+		return false
+	}
+	t1, t2 := p.peekTok(1), p.peekTok(2)
+	switch {
+	case t1.Kind == lexer.RParen:
+		return true // `()` is never a parenthesized expression
+	case t1.Kind == lexer.Keyword && typeKeywords[t1.Text]:
+		return t2.Kind != lexer.Dot // `(string.trim(x))` is a parenthesized call
+	case t1.Kind == lexer.Ident:
+		return t2.Kind == lexer.Ident
+	}
+	return false
+}
+
+// lambda parses `(Type a, ...) => expr` or `(Type a, ...) => { ... }`.
+func (p *parser) lambda() *ast.LambdaExpr {
+	start := p.expect(lexer.LParen, "'('")
+	lam := &ast.LambdaExpr{}
+	if !p.is(lexer.RParen, "") {
+		for {
+			prm := &ast.Param{Type: p.typeRef("parameter type")}
+			prm.Name = p.ident("parameter name")
+			lam.Params = append(lam.Params, prm)
+			if !p.is(lexer.Comma, "") {
+				break
+			}
+			p.next()
+		}
+	}
+	p.expect(lexer.RParen, "')' after lambda parameters")
+	if !p.is(lexer.Op, "=>") {
+		p.unexpected("'=>' after lambda parameters")
+	}
+	p.next()
+	if p.is(lexer.LBrace, "") {
+		lam.Body = p.block()
+		lam.Span = span(start.Span, lam.Body.Span)
+	} else {
+		lam.Expr = p.expr()
+		lam.Span = span(start.Span, lam.Expr.NodeSpan())
+	}
+	return lam
 }
 
 func (p *parser) primary() ast.Expr {
 	t := p.tok()
+	if p.isQualifiedStart() {
+		pkg := &ast.Ident{Name: p.next().Text, Span: t.Span}
+		p.next() // '.'
+		name := p.ident("function name after '" + pkg.Name + ".'")
+		if !p.is(lexer.LParen, "") {
+			p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+				"packages currently export only functions",
+				"expected '(' to call %s.%s, found %s", pkg.Name, name.Name, p.tok().Describe())
+		}
+		call := p.callArgs(name)
+		call.Pkg = pkg
+		call.Span.Start = pkg.Span.Start
+		return call
+	}
 	switch t.Kind {
 	case lexer.Int:
 		p.next()
@@ -414,6 +567,9 @@ func (p *parser) primary() ast.Expr {
 			return &ast.BoolLit{Value: t.Text == "true", Span: t.Span}
 		}
 	case lexer.LParen:
+		if p.isLambdaStart() {
+			return p.lambda()
+		}
 		p.next()
 		x := p.expr()
 		end := p.expect(lexer.RParen, "')'")
@@ -423,21 +579,30 @@ func (p *parser) primary() ast.Expr {
 		if !p.is(lexer.LParen, "") {
 			return id
 		}
-		p.next()
-		call := &ast.CallExpr{Fn: id}
-		if !p.is(lexer.RParen, "") {
-			for {
-				call.Args = append(call.Args, p.expr())
-				if !p.is(lexer.Comma, "") {
-					break
-				}
-				p.next()
-			}
-		}
-		end := p.expect(lexer.RParen, "')' after arguments")
-		call.Span = span(id.Span, end.Span)
-		return call
+		return p.callArgs(id)
 	}
 	p.unexpected("expression")
 	return nil
+}
+
+// callArgs parses `(args)` after a callee. fn is nil when the caller sets
+// Callee itself.
+func (p *parser) callArgs(fn *ast.Ident) *ast.CallExpr {
+	p.expect(lexer.LParen, "'('")
+	call := &ast.CallExpr{Fn: fn}
+	if !p.is(lexer.RParen, "") {
+		for {
+			call.Args = append(call.Args, p.expr())
+			if !p.is(lexer.Comma, "") {
+				break
+			}
+			p.next()
+		}
+	}
+	end := p.expect(lexer.RParen, "')' after arguments")
+	call.Span.End = end.Span.End
+	if fn != nil {
+		call.Span.Start = fn.Span.Start
+	}
+	return call
 }

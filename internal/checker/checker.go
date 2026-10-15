@@ -1,17 +1,23 @@
 // Package checker performs name resolution and static type checking.
 //
 // Where the specification is undecided, the checker rejects the program
-// rather than choosing a semantics. Rejection
-// is forward-compatible: a later decision can accept more programs without
-// changing the meaning of programs that are accepted today.
+// rather than choosing a semantics. Rejection is forward-compatible: a later
+// decision can accept more programs without changing the meaning of
+// programs that are accepted today.
+//
+// The checker is split into checker.go (scopes and declarations),
+// stmts.go, and exprs.go.
 package checker
 
 import (
 	"math/big"
+	"sort"
+	"strings"
 
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/types"
+	"github.com/AurielSolaris/runescript/stdlib"
 )
 
 // Info is the result of checking, consumed by the runtime.
@@ -22,23 +28,54 @@ type Info struct {
 	// folded and converted to a concrete type. The runtime uses these
 	// values instead of evaluating the expression.
 	Consts map[ast.Expr]int64
-	// Funcs maps function names to declarations.
-	Funcs map[string]*ast.FuncDecl
-	// Entry is the program entry point.
-	Entry *ast.FuncDecl
+	// Callees maps direct calls of named functions (top-level or nested)
+	// to the function called.
+	Callees map[*ast.CallExpr]*FuncSym
+	// FuncRefs maps identifiers that name a function used as a value.
+	FuncRefs map[*ast.Ident]*FuncSym
+	// Natives maps calls to standard library functions to their
+	// implementation.
+	Natives map[*ast.CallExpr]*stdlib.Func
+	// Entry is the program entry point; EntryVoid reports whether it
+	// returns void.
+	Entry     *ast.FuncDecl
+	EntryVoid bool
 }
 
-type variable struct {
-	typ     *types.Type
+// FuncSym is a named function: top-level or nested, possibly declared by a
+// prototype before its definition.
+type FuncSym struct {
+	Name  string
+	Type  *types.Type
+	Def   *ast.FuncDecl // nil until the definition is seen
+	Proto *ast.FuncDecl // the prototype, if any
+}
+
+// symbol is anything a name can refer to inside a function.
+type symbol struct {
+	typ     *types.Type // variable type
 	isParam bool
+	fn      *FuncSym // non-nil for named functions
+}
+
+// scope is one lexical scope. A boundary scope is the outermost scope of a
+// function or lambda body: variables declared outside it are not visible
+// inside it (functions do not capture), but functions are.
+type scope struct {
+	syms     map[string]*symbol
+	order    []string
+	boundary bool
 }
 
 type checker struct {
-	info      *Info
-	diags     []*diagnostics.Diagnostic
-	scopes    []map[string]*variable
-	fn        *ast.FuncDecl
-	result    *types.Type
+	info   *Info
+	diags  []*diagnostics.Diagnostic
+	scopes []*scope
+	uses   map[string]*stdlib.Package // by qualifier
+
+	// state of the function or lambda being checked
+	fnName    string
+	result    *types.Type // nil while inferring a lambda's result type
 	loopDepth int
 }
 
@@ -52,15 +89,31 @@ var invalid = operand{typ: types.InvalidT}
 
 // Check type-checks file. It returns all diagnostics found.
 func Check(file *ast.File) (*Info, []*diagnostics.Diagnostic) {
-	c := &checker{info: &Info{
-		Types:  map[ast.Expr]*types.Type{},
-		Consts: map[ast.Expr]int64{},
-		Funcs:  map[string]*ast.FuncDecl{},
-	}}
-	c.collect(file)
-	for _, fn := range file.Funcs {
-		c.funcBody(fn)
+	c := &checker{
+		info: &Info{
+			Types:    map[ast.Expr]*types.Type{},
+			Consts:   map[ast.Expr]int64{},
+			Callees:  map[*ast.CallExpr]*FuncSym{},
+			FuncRefs: map[*ast.Ident]*FuncSym{},
+			Natives:  map[*ast.CallExpr]*stdlib.Func{},
+		},
+		uses:   map[string]*stdlib.Package{},
+		scopes: []*scope{{syms: map[string]*symbol{}}},
 	}
+	c.useDecls(file)
+
+	// Top-level functions are visible throughout the file, so declare them
+	// all before checking any body.
+	sigs := make([]*types.Type, len(file.Funcs))
+	for i, fn := range file.Funcs {
+		sigs[i] = c.declareFunc(fn)
+	}
+	for i, fn := range file.Funcs {
+		if fn.Body != nil {
+			c.funcBody(fn, sigs[i])
+		}
+	}
+	c.reportUndefined(c.scopes[0])
 	c.entry(file)
 	return c.info, c.diags
 }
@@ -71,25 +124,120 @@ func (c *checker) errorf(code diagnostics.Code, span diagnostics.Span, format st
 	return d
 }
 
-// ---- declarations ----
+// ---- use declarations ----
 
-func (c *checker) collect(file *ast.File) {
-	for _, fn := range file.Funcs {
-		name := fn.Name.Name
-		if name == "trace" {
-			c.errorf(diagnostics.NameBuiltinReused, fn.Name.Span, "'trace' is a built-in function and cannot be redeclared")
+// useDecls resolves `use` declarations. Only "std:" packages exist so far;
+// other packages, files, and "go:" packages are planned.
+func (c *checker) useDecls(file *ast.File) {
+	for _, u := range file.Uses {
+		name, isStd := strings.CutPrefix(u.Path, "std:")
+		if !isStd {
+			c.errorf(diagnostics.UseUnsupported, u.PathSpan, "cannot use %q: only standard library packages (\"std:...\") are supported so far", u.Path).
+				WithHelp("using other RuneScript packages, source files, and Go packages is planned")
 			continue
 		}
-		if prev, dup := c.info.Funcs[name]; dup {
-			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "function '%s' is already declared at %s", name, prev.Name.Span.Start).
-				WithHelp("function overloading is not yet specified")
+		pkg := stdlib.Lookup(name)
+		if pkg == nil {
+			paths := stdlib.Paths()
+			sort.Strings(paths)
+			c.errorf(diagnostics.UseUnknownPackage, u.PathSpan, "unknown standard library package %q", u.Path).
+				WithHelp("available: std:" + strings.Join(paths, ", std:"))
 			continue
 		}
-		c.info.Funcs[name] = fn
+		if _, dup := c.uses[pkg.Qualifier]; dup {
+			c.errorf(diagnostics.UseDuplicate, u.Span, "%q is already used", u.Path)
+			continue
+		}
+		c.uses[pkg.Qualifier] = pkg
 	}
 }
 
+// ---- scopes ----
+
+func (c *checker) push(boundary bool) {
+	c.scopes = append(c.scopes, &scope{syms: map[string]*symbol{}, boundary: boundary})
+}
+
+func (c *checker) pop() {
+	c.reportUndefined(c.scopes[len(c.scopes)-1])
+	c.scopes = c.scopes[:len(c.scopes)-1]
+}
+
+func (c *checker) top() *scope { return c.scopes[len(c.scopes)-1] }
+
+// lookup finds name in the visible scopes. crossed reports whether the
+// symbol lies outside the current function boundary.
+func (c *checker) lookup(name string) (sym *symbol, crossed bool) {
+	for i := len(c.scopes) - 1; i >= 0; i-- {
+		if s, ok := c.scopes[i].syms[name]; ok {
+			return s, crossed
+		}
+		if c.scopes[i].boundary {
+			crossed = true
+		}
+	}
+	return nil, false
+}
+
+func (s *scope) add(name string, sym *symbol) {
+	if _, exists := s.syms[name]; !exists {
+		s.order = append(s.order, name)
+	}
+	s.syms[name] = sym
+}
+
+// conflict reports whether declaring name would reuse a visible name.
+// Variables of enclosing functions are not visible across a function
+// boundary, so they do not conflict. Shadowing is otherwise rejected
+// (OQ-SCOPE-01).
+func (c *checker) conflict(id *ast.Ident) bool {
+	if id.Name == "trace" {
+		c.errorf(diagnostics.NameBuiltinReused, id.Span, "'trace' is a built-in function and cannot be redeclared")
+		return true
+	}
+	prev, crossed := c.lookup(id.Name)
+	switch {
+	case prev == nil, crossed && prev.fn == nil:
+		return false
+	case prev.fn != nil:
+		c.errorf(diagnostics.NameRedeclared, id.Span, "'%s' is already declared as a function", id.Name).
+			WithHelp("shadowing is not allowed; choose a different name")
+	default:
+		c.errorf(diagnostics.NameRedeclared, id.Span, "'%s' is already declared in this function", id.Name).
+			WithHelp("shadowing is not allowed; choose a different name")
+	}
+	return true
+}
+
+func (c *checker) declareVar(id *ast.Ident, t *types.Type, isParam bool) {
+	c.conflict(id)
+	c.top().add(id.Name, &symbol{typ: t, isParam: isParam})
+}
+
+// reportUndefined reports prototypes in s that never got a definition.
+func (c *checker) reportUndefined(s *scope) {
+	for _, name := range s.order {
+		if f := s.syms[name].fn; f != nil && f.Def == nil && f.Proto != nil {
+			c.errorf(diagnostics.NameNeverDefined, f.Proto.Name.Span, "function '%s' is declared but never defined", name).
+				WithHelp("add a definition with a body in the same scope")
+		}
+	}
+}
+
+// ---- functions ----
+
 func (c *checker) resolveType(ref *ast.TypeRef) *types.Type {
+	if ref.Func != nil {
+		params := make([]*types.Type, len(ref.Func.Params))
+		for i, p := range ref.Func.Params {
+			params[i] = c.resolveType(p)
+			if params[i].Kind == types.Void {
+				c.errorf(diagnostics.TypeVoidValue, p.Span, "function type parameters cannot be 'void'")
+				params[i] = types.InvalidT
+			}
+		}
+		return types.NewFunc(params, c.resolveType(ref.Func.Result))
+	}
 	t := types.Lookup(ref.Name)
 	if t == nil {
 		c.errorf(diagnostics.TypeUnknown, ref.Span, "unknown type '%s'", ref.Name)
@@ -98,32 +246,108 @@ func (c *checker) resolveType(ref *ast.TypeRef) *types.Type {
 	return t
 }
 
-func (c *checker) funcBody(fn *ast.FuncDecl) {
-	c.fn = fn
-	c.result = c.resolveType(fn.Result)
-	c.scopes = []map[string]*variable{{}}
-	for _, p := range fn.Params {
-		t := c.resolveType(p.Type)
-		if t.Kind == types.Void {
-			c.errorf(diagnostics.TypeVoidValue, p.Type.Span, "parameter '%s' cannot have type 'void'", p.Name.Name)
-			t = types.InvalidT
+// funcType resolves a declaration's signature.
+func (c *checker) funcType(fn *ast.FuncDecl) *types.Type {
+	params := make([]*types.Type, len(fn.Params))
+	for i, p := range fn.Params {
+		params[i] = c.resolveType(p.Type)
+		if params[i].Kind == types.Void {
+			c.errorf(diagnostics.TypeVoidValue, p.Type.Span, "parameter '%s' cannot have type 'void'", paramName(p)).
+				WithHelp("use an empty parameter list for a function that takes nothing")
+			params[i] = types.InvalidT
 		}
-		c.declare(p.Name, t, true)
+	}
+	return types.NewFunc(params, c.resolveType(fn.Result))
+}
+
+func paramName(p *ast.Param) string {
+	if p.Name == nil {
+		return "_"
+	}
+	return p.Name.Name
+}
+
+// declareFunc declares a top-level or nested function (definition or
+// prototype) in the innermost scope and returns its signature.
+func (c *checker) declareFunc(fn *ast.FuncDecl) *types.Type {
+	t := c.funcType(fn)
+	name := fn.Name.Name
+	if existing, ok := c.top().syms[name]; ok {
+		f := existing.fn
+		switch {
+		case f != nil && f.Def == nil && fn.Body != nil:
+			if !types.Identical(f.Type, t) {
+				c.errorf(diagnostics.TypeProtoMismatch, fn.Name.Span,
+					"definition of '%s' has type '%s', but its prototype at %s declares '%s'",
+					name, t, f.Proto.Name.Span.Start, f.Type)
+			}
+			f.Def = fn
+		case f != nil:
+			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "function '%s' is already declared at %s", name, firstDecl(f).Name.Span.Start).
+				WithHelp("functions cannot be overloaded; a prototype may appear once, before the definition")
+		default:
+			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "'%s' is already declared in this function", name)
+		}
+		return t
+	}
+	if c.conflict(fn.Name) {
+		return t
+	}
+	f := &FuncSym{Name: name, Type: t}
+	if fn.Body != nil {
+		f.Def = fn
+	} else {
+		f.Proto = fn
+	}
+	c.top().add(name, &symbol{fn: f})
+	return t
+}
+
+func firstDecl(f *FuncSym) *ast.FuncDecl {
+	if f.Proto != nil {
+		return f.Proto
+	}
+	return f.Def
+}
+
+// funcBody checks a function definition's body inside a new boundary scope.
+func (c *checker) funcBody(fn *ast.FuncDecl, t *types.Type) {
+	defer c.saveFuncState()()
+	c.fnName = "function '" + fn.Name.Name + "'"
+	c.result = t.Result
+	c.push(true)
+	for i, p := range fn.Params {
+		c.declareVar(p.Name, t.Params[i], true)
 	}
 	c.stmts(fn.Body.Stmts)
-	if c.result.Kind != types.Void && c.result.Kind != types.Invalid && !terminates(fn.Body.Stmts) {
-		end := fn.Body.Span.End
-		start := end
-		start.Offset--
-		start.Col--
-		c.errorf(diagnostics.TypeMissingReturn, diagnostics.Span{Start: start, End: end},
-			"function '%s' must return a value of type '%s' on every path", fn.Name.Name, c.result).
-			WithHelp("add a return statement at the end of the function")
+	c.pop()
+	c.checkReturns(fn.Body)
+}
+
+// saveFuncState saves the per-function state and returns a function that
+// restores it, for checking nested functions and lambdas.
+func (c *checker) saveFuncState() func() {
+	name, result, loops := c.fnName, c.result, c.loopDepth
+	c.loopDepth = 0
+	return func() { c.fnName, c.result, c.loopDepth = name, result, loops }
+}
+
+// checkReturns reports a non-void body that can finish without returning.
+func (c *checker) checkReturns(body *ast.Block) {
+	if c.result == nil || c.result.Kind == types.Void || c.result.Kind == types.Invalid || terminates(body.Stmts) {
+		return
 	}
+	end := body.Span.End
+	start := end
+	start.Offset--
+	start.Col--
+	c.errorf(diagnostics.TypeMissingReturn, diagnostics.Span{Start: start, End: end},
+		"%s must return a value of type '%s' on every path", c.fnName, c.result).
+		WithHelp("add a return statement at the end")
 }
 
 // terminates reports whether stmts always end in a return. Loops are never
-// considered terminating in v0.1.
+// considered terminating (OQ-FLOW-01).
 func terminates(stmts []ast.Stmt) bool {
 	if len(stmts) == 0 {
 		return false
@@ -151,450 +375,20 @@ func ifTerminates(s *ast.IfStmt) bool {
 }
 
 func (c *checker) entry(file *ast.File) {
-	fn, ok := c.info.Funcs["main"]
-	if !ok {
-		c.errorf(diagnostics.EntryMissing, file.Package.Span, "no entry point: function 'main' is not declared").
-			WithHelp("declare `int main() { return 0; }`")
+	sym := c.scopes[0].syms["main"]
+	if sym == nil || sym.fn == nil || sym.fn.Def == nil {
+		c.errorf(diagnostics.EntryMissing, file.Package.Span, "no entry point: function 'main' is not defined").
+			WithHelp("define `public int main() { return 0; }`")
 		return
 	}
-	res := types.Lookup(fn.Result.Name)
-	if len(fn.Params) != 0 || res == nil || (res.Kind != types.Signed && res.Kind != types.Void) {
-		c.errorf(diagnostics.EntryBadSignature, fn.Name.Span, "'main' must take no parameters and return 'int' or 'void'").
-			WithHelp("entry-point parameters (e.g. command-line arguments) are not yet specified")
+	t := sym.fn.Type
+	if len(t.Params) != 0 || (t.Result.Kind != types.Signed && t.Result.Kind != types.Void) {
+		if t.Result.Kind != types.Invalid {
+			c.errorf(diagnostics.EntryBadSignature, sym.fn.Def.Name.Span, "'main' must take no parameters and return 'int' or 'void'").
+				WithHelp("entry-point parameters (e.g. command-line arguments) are not yet specified")
+		}
 		return
 	}
-	c.info.Entry = fn
-}
-
-// ---- scopes ----
-
-func (c *checker) push() { c.scopes = append(c.scopes, map[string]*variable{}) }
-func (c *checker) pop()  { c.scopes = c.scopes[:len(c.scopes)-1] }
-
-func (c *checker) lookup(name string) *variable {
-	for i := len(c.scopes) - 1; i >= 0; i-- {
-		if v, ok := c.scopes[i][name]; ok {
-			return v
-		}
-	}
-	return nil
-}
-
-// declare adds a variable to the innermost scope. Shadowing any visible
-// variable or function is rejected in v0.1.
-func (c *checker) declare(id *ast.Ident, t *types.Type, isParam bool) {
-	switch {
-	case c.lookup(id.Name) != nil:
-		c.errorf(diagnostics.NameRedeclared, id.Span, "'%s' is already declared in this function", id.Name).
-			WithHelp("shadowing is not allowed in v0.1; choose a different name")
-	case c.info.Funcs[id.Name] != nil || id.Name == "trace":
-		c.errorf(diagnostics.NameRedeclared, id.Span, "'%s' is already declared as a function", id.Name)
-	}
-	c.scopes[len(c.scopes)-1][id.Name] = &variable{typ: t, isParam: isParam}
-}
-
-// ---- statements ----
-
-func (c *checker) stmts(list []ast.Stmt) {
-	for _, s := range list {
-		c.stmt(s)
-	}
-}
-
-func (c *checker) block(b *ast.Block) {
-	c.push()
-	c.stmts(b.Stmts)
-	c.pop()
-}
-
-func (c *checker) stmt(s ast.Stmt) {
-	switch s := s.(type) {
-	case *ast.VarDecl:
-		t := c.resolveType(s.Type)
-		if t.Kind == types.Void {
-			c.errorf(diagnostics.TypeVoidValue, s.Type.Span, "variable '%s' cannot have type 'void'", s.Name.Name)
-			t = types.InvalidT
-		}
-		c.assign(t, s.Init, "assign")
-		c.declare(s.Name, t, false)
-	case *ast.AssignStmt:
-		c.assignStmt(s)
-	case *ast.IncDecStmt:
-		if v := c.target(s.Target); v != nil && v.typ.Kind != types.Invalid && !types.IsInteger(v.typ) {
-			c.errorf(diagnostics.TypeBadOperand, s.Span, "operator '%s' requires an integer variable, but '%s' has type '%s'", s.Op, s.Target.Name, v.typ)
-		}
-	case *ast.ExprStmt:
-		c.call(s.Call)
-	case *ast.ReturnStmt:
-		c.returnStmt(s)
-	case *ast.IfStmt:
-		c.cond(s.Cond)
-		c.block(s.Then)
-		if s.Else != nil {
-			if b, ok := s.Else.(*ast.Block); ok {
-				c.block(b)
-			} else {
-				c.stmt(s.Else)
-			}
-		}
-	case *ast.WhileStmt:
-		c.cond(s.Cond)
-		c.loopBody(s.Body)
-	case *ast.ForStmt:
-		c.push()
-		if s.Init != nil {
-			c.stmt(s.Init)
-		}
-		if s.Cond != nil {
-			c.cond(s.Cond)
-		}
-		if s.Post != nil {
-			c.stmt(s.Post)
-		}
-		c.loopBody(s.Body)
-		c.pop()
-	case *ast.BranchStmt:
-		if c.loopDepth == 0 {
-			c.errorf(diagnostics.FlowBranchOutsideLoop, s.Span, "'%s' is only allowed inside a loop", s.Keyword)
-		}
-	}
-}
-
-func (c *checker) loopBody(b *ast.Block) {
-	c.loopDepth++
-	c.block(b)
-	c.loopDepth--
-}
-
-// target resolves an assignment target; parameters are read-only.
-func (c *checker) target(id *ast.Ident) *variable {
-	v := c.lookup(id.Name)
-	if v == nil {
-		c.errorf(diagnostics.NameUndefined, id.Span, "undefined variable '%s'", id.Name)
-		return nil
-	}
-	if v.isParam {
-		c.errorf(diagnostics.NameAssignToParam, id.Span, "cannot assign to parameter '%s'", id.Name).
-			WithHelp("parameters are read-only in v0.1; copy the value into a local variable")
-		return nil
-	}
-	return v
-}
-
-func (c *checker) assignStmt(s *ast.AssignStmt) {
-	v := c.target(s.Target)
-	if v == nil {
-		c.expr(s.Value)
-		return
-	}
-	if s.Op == "=" {
-		c.assign(v.typ, s.Value, "assign")
-		return
-	}
-	// x op= y is checked as x = x op y.
-	op := s.Op[:1]
-	y := c.expr(s.Value)
-	t := c.binaryType(op, operand{typ: v.typ}, y, s.Target, s.Value, s.Span)
-	if t.typ.Kind != types.Invalid && !types.Identical(t.typ, v.typ) {
-		c.errorf(diagnostics.TypeMismatch, s.Span, "operator '%s' produces '%s', which cannot be stored in '%s'", s.Op, t.typ, v.typ)
-	}
-}
-
-func (c *checker) returnStmt(s *ast.ReturnStmt) {
-	switch {
-	case c.result.Kind == types.Void && s.Value != nil:
-		c.expr(s.Value)
-		c.errorf(diagnostics.TypeBadReturn, s.Value.NodeSpan(), "function '%s' returns 'void' and cannot return a value", c.fn.Name.Name)
-	case c.result.Kind != types.Void && s.Value == nil:
-		if c.result.Kind != types.Invalid {
-			c.errorf(diagnostics.TypeBadReturn, s.Span, "function '%s' must return a value of type '%s'", c.fn.Name.Name, c.result)
-		}
-	case s.Value != nil:
-		c.assign(c.result, s.Value, "return")
-	}
-}
-
-func (c *checker) cond(e ast.Expr) {
-	op := c.defaulted(e)
-	if op.typ.Kind != types.Bool && op.typ.Kind != types.Invalid {
-		c.errorf(diagnostics.TypeCondition, e.NodeSpan(), "condition must be 'bool', found '%s'", op.typ).
-			WithHelp("integers are not implicitly converted to bool; compare explicitly, e.g. `x != 0`")
-	}
-}
-
-// ---- assignment compatibility ----
-
-var verbs = map[string]string{"assign": "assign", "pass": "pass", "return": "return"}
-
-// assign checks that e can be stored in a destination of type dst.
-// verb is "assign", "pass", or "return" and only affects wording.
-func (c *checker) assign(dst *types.Type, e ast.Expr, verb string) {
-	src := c.expr(e)
-	if src.typ.Kind == types.Invalid || dst.Kind == types.Invalid {
-		return
-	}
-	span := e.NodeSpan()
-	switch {
-	case src.typ.Kind == types.UntypedInt:
-		if !types.IsInteger(dst) {
-			c.errorf(diagnostics.TypeMismatch, span, "Cannot %s integer constant to '%s'.", verbs[verb], dst)
-			return
-		}
-		c.convertConst(e, src.konst, dst)
-	case src.typ.Kind == types.Void:
-		c.errorf(diagnostics.TypeVoidValue, span, "expression has type 'void' and cannot be used as a value")
-	case types.Identical(src.typ, dst):
-	case src.typ.Kind == types.Signed && dst.Kind == types.Unsigned:
-		c.errorf(diagnostics.TypeSignedToUnsigned, span, "Cannot %s signed integer '%s' to unsigned integer '%s'.", verbs[verb], src.typ, dst).
-			WithHelp("Use an explicit checked conversion (syntax not yet specified), or change the destination type.")
-	case src.typ.Kind == types.Unsigned && dst.Kind == types.Signed:
-		c.errorf(diagnostics.TypeUnsignedToSigned, span, "Cannot %s unsigned integer '%s' to signed integer '%s'.", verbs[verb], src.typ, dst).
-			WithHelp("Unsigned-to-signed conversion rules are not yet specified; change the destination type.")
-	default:
-		c.errorf(diagnostics.TypeMismatch, span, "Cannot %s '%s' to '%s'.", verbs[verb], src.typ, dst)
-	}
-}
-
-// convertConst gives an untyped constant the concrete integer type dst,
-// recording its value for the runtime.
-func (c *checker) convertConst(e ast.Expr, v *big.Int, dst *types.Type) bool {
-	span := e.NodeSpan()
-	if dst.Kind == types.Unsigned && v.Sign() < 0 {
-		c.errorf(diagnostics.TypeNegativeToUnsigned, span, "Cannot convert negative constant %s to unsigned integer '%s'.", v, dst).
-			WithHelp("An unsigned integer cannot hold a negative value; change the destination type.")
-		return false
-	}
-	if !v.IsInt64() || !types.InRange(dst, v.Int64()) {
-		c.errorf(diagnostics.TypeConstOutOfRange, span, "constant %s does not fit in '%s'", v, dst).
-			WithHelp(rangeHelp(dst))
-		return false
-	}
-	c.info.Types[e] = dst
-	c.info.Consts[e] = v.Int64()
-	return true
-}
-
-func rangeHelp(t *types.Type) string {
-	if t.Kind == types.Unsigned {
-		return "v0.1 represents 'uint' as 32 bits (0 to 4294967295); widening is not yet implemented"
-	}
-	return "v0.1 represents 'int' as 32 bits (-2147483648 to 2147483647); widening is not yet implemented"
-}
-
-// defaulted checks e and converts an untyped constant to 'int'.
-func (c *checker) defaulted(e ast.Expr) operand {
-	op := c.expr(e)
-	if op.typ.Kind == types.UntypedInt {
-		if !c.convertConst(e, op.konst, types.Int) {
-			return invalid
-		}
-		return operand{typ: types.Int}
-	}
-	return op
-}
-
-// ---- expressions ----
-
-func (c *checker) expr(e ast.Expr) operand {
-	op := c.exprInner(e)
-	if op.typ.Kind != types.UntypedInt {
-		c.info.Types[e] = op.typ
-	}
-	return op
-}
-
-func (c *checker) exprInner(e ast.Expr) operand {
-	switch e := e.(type) {
-	case *ast.IntLit:
-		return operand{typ: types.UntypedConst, konst: new(big.Int).SetUint64(e.Value)}
-	case *ast.StringLit:
-		return operand{typ: types.StringT}
-	case *ast.BoolLit:
-		return operand{typ: types.BoolT}
-	case *ast.ParenExpr:
-		return c.expr(e.X)
-	case *ast.Ident:
-		if v := c.lookup(e.Name); v != nil {
-			return operand{typ: v.typ}
-		}
-		if c.info.Funcs[e.Name] != nil || e.Name == "trace" {
-			c.errorf(diagnostics.NameNotAValue, e.Span, "function '%s' cannot be used as a value", e.Name).
-				WithHelp("did you mean to call it, e.g. " + e.Name + "()?")
-			return invalid
-		}
-		c.errorf(diagnostics.NameUndefined, e.Span, "undefined name '%s'", e.Name)
-		return invalid
-	case *ast.CallExpr:
-		return operand{typ: c.call(e)}
-	case *ast.UnaryExpr:
-		return c.unary(e)
-	case *ast.BinaryExpr:
-		x := c.expr(e.X)
-		y := c.expr(e.Y)
-		return c.binaryType(e.Op, x, y, e.X, e.Y, e.OpPos)
-	}
-	return invalid
-}
-
-func (c *checker) unary(e *ast.UnaryExpr) operand {
-	x := c.expr(e.X)
-	switch {
-	case x.typ.Kind == types.Invalid:
-		return invalid
-	case e.Op == "-" && x.typ.Kind == types.UntypedInt:
-		return operand{typ: types.UntypedConst, konst: new(big.Int).Neg(x.konst)}
-	case e.Op == "-" && x.typ.Kind == types.Signed:
-		return x
-	case e.Op == "-" && x.typ.Kind == types.Unsigned:
-		c.errorf(diagnostics.TypeBadOperand, e.Span, "cannot negate unsigned integer '%s'", x.typ)
-		return invalid
-	case e.Op == "!" && x.typ.Kind == types.Bool:
-		return x
-	}
-	c.errorf(diagnostics.TypeBadOperand, e.Span, "operator '%s' is not defined on '%s'", e.Op, x.typ)
-	return invalid
-}
-
-// binaryType checks `x op y`. xe and ye are the operand expressions (used to
-// record constant conversions); opSpan is where errors are reported.
-func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan diagnostics.Span) operand {
-	if x.typ.Kind == types.Invalid || y.typ.Kind == types.Invalid {
-		return invalid
-	}
-	switch op {
-	case "&&", "||":
-		if x.typ.Kind != types.Bool || y.typ.Kind != types.Bool {
-			c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' requires 'bool' operands, found '%s' and '%s'", op, x.typ, y.typ)
-			return invalid
-		}
-		return operand{typ: types.BoolT}
-	case "==", "!=":
-		if x.typ.Kind == y.typ.Kind && (x.typ.Kind == types.Bool || x.typ.Kind == types.String) {
-			return operand{typ: types.BoolT}
-		}
-	}
-	if !types.IsInteger(x.typ) || !types.IsInteger(y.typ) {
-		help := ""
-		if op == "+" && (x.typ.Kind == types.String || y.typ.Kind == types.String) {
-			help = "string concatenation is not yet specified; pass several arguments to trace instead"
-		}
-		c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' is not defined on '%s' and '%s'", op, x.typ, y.typ).WithHelp(help)
-		return invalid
-	}
-	comparison := op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" || op == ">="
-
-	// Two constants: fold arithmetic exactly; compare as 'int'.
-	if x.typ.Kind == types.UntypedInt && y.typ.Kind == types.UntypedInt {
-		if comparison {
-			if !c.convertConst(xe, x.konst, types.Int) || !c.convertConst(ye, y.konst, types.Int) {
-				return invalid
-			}
-			return operand{typ: types.BoolT}
-		}
-		if (op == "/" || op == "%") && y.konst.Sign() == 0 {
-			c.errorf(diagnostics.TypeConstDivByZero, opSpan, "constant division by zero")
-			return invalid
-		}
-		return operand{typ: types.UntypedConst, konst: fold(op, x.konst, y.konst)}
-	}
-
-	// One constant: it takes the other operand's type.
-	t := x.typ
-	switch {
-	case x.typ.Kind == types.UntypedInt:
-		t = y.typ
-		if !c.convertConst(xe, x.konst, t) {
-			return invalid
-		}
-	case y.typ.Kind == types.UntypedInt:
-		if !c.convertConst(ye, y.konst, t) {
-			return invalid
-		}
-	case x.typ.Kind != y.typ.Kind:
-		c.errorf(diagnostics.TypeMixedSignedness, opSpan, "operator '%s' mixes signed '%s' and unsigned '%s'", op, signedOf(x.typ, y.typ), unsignedOf(x.typ, y.typ)).
-			WithHelp("mixed-signedness arithmetic and comparison are not yet specified")
-		return invalid
-	}
-	if comparison {
-		return operand{typ: types.BoolT}
-	}
-	return operand{typ: t}
-}
-
-func signedOf(a, b *types.Type) *types.Type {
-	if a.Kind == types.Signed {
-		return a
-	}
-	return b
-}
-
-func unsignedOf(a, b *types.Type) *types.Type {
-	if a.Kind == types.Unsigned {
-		return a
-	}
-	return b
-}
-
-// fold evaluates a constant arithmetic operation exactly. Division
-// truncates toward zero, matching the runtime.
-func fold(op string, x, y *big.Int) *big.Int {
-	r := new(big.Int)
-	switch op {
-	case "+":
-		return r.Add(x, y)
-	case "-":
-		return r.Sub(x, y)
-	case "*":
-		return r.Mul(x, y)
-	case "/":
-		return r.Quo(x, y)
-	case "%":
-		return r.Rem(x, y)
-	}
-	panic("unknown operator " + op)
-}
-
-// call checks a call and returns its result type.
-func (c *checker) call(e *ast.CallExpr) *types.Type {
-	name := e.Fn.Name
-	if c.lookup(name) != nil {
-		c.errorf(diagnostics.NameNotCallable, e.Fn.Span, "'%s' is a variable, not a function", name)
-		return types.InvalidT
-	}
-	if name == "trace" {
-		for _, a := range e.Args {
-			op := c.defaulted(a)
-			if op.typ.Kind == types.Void {
-				c.errorf(diagnostics.TypeVoidValue, a.NodeSpan(), "expression has type 'void' and cannot be traced")
-			}
-		}
-		return types.VoidT
-	}
-	fn := c.info.Funcs[name]
-	if fn == nil {
-		c.errorf(diagnostics.NameUndefined, e.Fn.Span, "undefined function '%s'", name)
-		for _, a := range e.Args {
-			c.expr(a)
-		}
-		return types.InvalidT
-	}
-	if len(e.Args) != len(fn.Params) {
-		c.errorf(diagnostics.TypeArgCount, e.Span, "function '%s' expects %d argument(s), found %d", name, len(fn.Params), len(e.Args))
-		for _, a := range e.Args {
-			c.expr(a)
-		}
-	} else {
-		for i, a := range e.Args {
-			pt := types.Lookup(fn.Params[i].Type.Name)
-			if pt == nil || pt.Kind == types.Void {
-				c.expr(a)
-				continue
-			}
-			c.assign(pt, a, "pass")
-		}
-	}
-	if rt := types.Lookup(fn.Result.Name); rt != nil {
-		return rt
-	}
-	return types.InvalidT
+	c.info.Entry = sym.fn.Def
+	c.info.EntryVoid = t.Result.Kind == types.Void
 }

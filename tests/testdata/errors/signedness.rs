@@ -2,14 +2,14 @@
 // as is the reverse direction (whose conversion rules are not yet decided).
 package tests.errors;
 
-uint fromReturn(int s) {
+public uint fromReturn(int s) {
     return s; // expect: ASX-TYPE-004 6:12
 }
 
-void takesUnsigned(uint u) {
+public void takesUnsigned(uint u) {
 }
 
-int main() {
+public int main() {
     sint s = 5;                 // positive at runtime, but its type is signed
     uint a = s;                 // expect: ASX-TYPE-004 14:14
     uint b = 0;
