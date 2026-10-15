@@ -1,0 +1,10 @@
+# Local reference material (Apache Royale AS3 docs); not part of this project.
+.ref/
+
+# Design notes kept local by the project owner.
+docs/OPEN_QUESTIONS.md
+
+# Build output
+/runescript
+/runescript.exe
+*.test

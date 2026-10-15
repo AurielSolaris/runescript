@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">RuneScript</title>
+  <!--
+    RuneScript logo: an electrically charged snowflake drawn as runic staves.
+    Hand-authored. One arm is defined once and rotated six times; two
+    lightning bolts sit in opposite gaps. Canonical source for runescript.png.
+    Colours: rune blue #1F6FEB (snowflake), charge amber #FFB020 (bolts).
+    For monochrome use, set both to a single colour.
+  -->
+  <defs>
+    <g id="arm" fill="none" stroke="#1F6FEB" stroke-width="11" stroke-linecap="square" stroke-linejoin="miter">
+      <!-- stave -->
+      <path d="M128 102 V30"/>
+      <!-- inner rune branches (algiz-like fork) -->
+      <path d="M106 54 L128 76 L150 54"/>
+      <!-- tip: open arrow, like the rune tiwaz -->
+      <path d="M114 40 L128 26 L142 40"/>
+    </g>
+    <path id="bolt" fill="#FFB020" d="M136 38 L116 72 L127 72 L120 97 L145 61 L133 61 L144 38 Z"/>
+  </defs>
+
+  <use xlink:href="#arm" href="#arm"/>
+  <use xlink:href="#arm" href="#arm" transform="rotate(60 128 128)"/>
+  <use xlink:href="#arm" href="#arm" transform="rotate(120 128 128)"/>
+  <use xlink:href="#arm" href="#arm" transform="rotate(180 128 128)"/>
+  <use xlink:href="#arm" href="#arm" transform="rotate(240 128 128)"/>
+  <use xlink:href="#arm" href="#arm" transform="rotate(300 128 128)"/>
+
+  <!-- hexagonal core -->
+  <path d="M128 106 L147 117 L147 139 L128 150 L109 139 L109 117 Z"
+        fill="none" stroke="#1F6FEB" stroke-width="11" stroke-linejoin="miter"/>
+
+  <!-- electrical charge: two bolts in opposite gaps between arms -->
+  <use xlink:href="#bolt" href="#bolt" transform="rotate(30 128 128)"/>
+  <use xlink:href="#bolt" href="#bolt" transform="rotate(210 128 128)"/>
+</svg>

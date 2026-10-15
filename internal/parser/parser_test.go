@@ -1,0 +1,145 @@
+package parser
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/AurielSolaris/runescript/internal/ast"
+	"github.com/AurielSolaris/runescript/internal/diagnostics"
+)
+
+func mustParse(t *testing.T, src string) *ast.File {
+	t.Helper()
+	f, diags := Parse([]byte(src))
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	return f
+}
+
+func TestParseCanonicalEntryPoint(t *testing.T) {
+	f := mustParse(t, "package main;\n\nprotected int main() {\n    // do stuff\n    return 0;\n}\n")
+	if got := f.Package.Name; len(got) != 1 || got[0] != "main" {
+		t.Errorf("package = %v", got)
+	}
+	if len(f.Funcs) != 1 {
+		t.Fatalf("got %d funcs", len(f.Funcs))
+	}
+	fn := f.Funcs[0]
+	if fn.Visibility != ast.VisProtected || fn.Result.Name != "int" || fn.Name.Name != "main" || len(fn.Params) != 0 {
+		t.Errorf("unexpected function header: %+v", fn)
+	}
+	if ret, ok := fn.Body.Stmts[0].(*ast.ReturnStmt); !ok || ret.Value.(*ast.IntLit).Value != 0 {
+		t.Errorf("unexpected body: %#v", fn.Body.Stmts)
+	}
+}
+
+func TestParseDottedPackageAndParams(t *testing.T) {
+	f := mustParse(t, "package org.apache.royale;\nprivate void sayHi(string message, int times) { trace(message, times); }")
+	if len(f.Package.Name) != 3 || f.Package.Name[2] != "royale" {
+		t.Errorf("package = %v", f.Package.Name)
+	}
+	fn := f.Funcs[0]
+	if fn.Visibility != ast.VisPrivate || len(fn.Params) != 2 || fn.Params[1].Type.Name != "int" || fn.Params[1].Name.Name != "times" {
+		t.Errorf("unexpected header %+v", fn)
+	}
+	call := fn.Body.Stmts[0].(*ast.ExprStmt).Call
+	if call.Fn.Name != "trace" || len(call.Args) != 2 {
+		t.Errorf("unexpected call %+v", call)
+	}
+}
+
+func TestParseStatements(t *testing.T) {
+	f := mustParse(t, `package p;
+void f() {
+    int x = 1;
+    x = 2;
+    x += 3;
+    x++;
+    if (x > 1) { } else if (x < 0) { } else { }
+    while (x < 10) { x++; break; }
+    for (int i = 0; i < 3; i++) { continue; }
+    for (;;) { break; }
+    return;
+}`)
+	stmts := f.Funcs[0].Body.Stmts
+	kinds := []string{"*ast.VarDecl", "*ast.AssignStmt", "*ast.AssignStmt", "*ast.IncDecStmt",
+		"*ast.IfStmt", "*ast.WhileStmt", "*ast.ForStmt", "*ast.ForStmt", "*ast.ReturnStmt"}
+	if len(stmts) != len(kinds) {
+		t.Fatalf("got %d statements", len(stmts))
+	}
+	for i, k := range kinds {
+		if got := fmt.Sprintf("%T", stmts[i]); got != k {
+			t.Errorf("stmt %d: got %s, want %s", i, got, k)
+		}
+	}
+	elif := stmts[4].(*ast.IfStmt).Else.(*ast.IfStmt)
+	if _, ok := elif.Else.(*ast.Block); !ok {
+		t.Error("else-if chain not parsed")
+	}
+	empty := stmts[7].(*ast.ForStmt)
+	if empty.Init != nil || empty.Cond != nil || empty.Post != nil {
+		t.Error("empty for clauses should be nil")
+	}
+}
+
+func TestPrecedence(t *testing.T) {
+	f := mustParse(t, "package p;\nbool f() { return 1 + 2 * 3 == 7 && !false || 1 < 2; }")
+	or := f.Funcs[0].Body.Stmts[0].(*ast.ReturnStmt).Value.(*ast.BinaryExpr)
+	if or.Op != "||" {
+		t.Fatalf("top op = %s", or.Op)
+	}
+	and := or.X.(*ast.BinaryExpr)
+	eq := and.X.(*ast.BinaryExpr)
+	plus := eq.X.(*ast.BinaryExpr)
+	mul := plus.Y.(*ast.BinaryExpr)
+	if and.Op != "&&" || eq.Op != "==" || plus.Op != "+" || mul.Op != "*" {
+		t.Errorf("wrong tree: %s %s %s %s", and.Op, eq.Op, plus.Op, mul.Op)
+	}
+	if _, ok := and.Y.(*ast.UnaryExpr); !ok {
+		t.Error("expected unary ! on right of &&")
+	}
+}
+
+func TestLeftAssociativity(t *testing.T) {
+	f := mustParse(t, "package p;\nint f() { return 10 - 4 - 3; }")
+	e := f.Funcs[0].Body.Stmts[0].(*ast.ReturnStmt).Value.(*ast.BinaryExpr)
+	if _, ok := e.X.(*ast.BinaryExpr); !ok {
+		t.Error("subtraction should be left-associative")
+	}
+}
+
+func TestParseErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		code diagnostics.Code
+		pos  string
+	}{
+		{"missing package", "int main() { return 0; }", diagnostics.ParseUnexpected, "1:1"},
+		{"package block", "package main { }", diagnostics.ParseUnexpected, "1:14"},
+		{"missing semicolon", "package p;\nint main() {\n    return 0\n}", diagnostics.ParseUnexpected, "4:1"},
+		{"function keyword", "package p;\nfunction main() {}", diagnostics.ParseUnexpected, "2:1"},
+		{"two modifiers", "package p;\npublic private void f() {}", diagnostics.ParseUnexpected, "2:8"},
+		{"reserved class", "package p;\nclass Foo {}", diagnostics.ParseNotImplemented, "2:1"},
+		{"use not implemented", "package p;\nuse \"raylib\";", diagnostics.ParseNotImplemented, "2:1"},
+		{"reserved type in body", "package p;\nvoid f() {\n    float x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
+		{"uninitialized var", "package p;\nvoid f() {\n    int x;\n}", diagnostics.ParseUnexpected, "3:10"},
+		{"expression statement", "package p;\nvoid f() {\n    1 + 2;\n}", diagnostics.ParseUnexpected, "3:5"},
+		{"standalone block", "package p;\nvoid f() {\n    { }\n}", diagnostics.ParseNotImplemented, "3:5"},
+		{"if without braces", "package p;\nvoid f() {\n    if (true) trace(1);\n}", diagnostics.ParseUnexpected, "3:15"},
+		{"decl in for post", "package p;\nvoid f() {\n    for (;; int i = 0) { }\n}", diagnostics.ParseUnexpected, "3:13"},
+		{"unclosed body", "package p;\nvoid f() {\n", diagnostics.ParseUnexpected, "3:1"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, diags := Parse([]byte(c.src))
+			if len(diags) != 1 {
+				t.Fatalf("got %d diagnostics, want 1: %v", len(diags), diags)
+			}
+			if d := diags[0]; d.Code != c.code || d.Span.Start.String() != c.pos {
+				t.Errorf("got %s at %s (%s), want %s at %s", d.Code, d.Span.Start, d.Message, c.code, c.pos)
+			}
+		})
+	}
+}
