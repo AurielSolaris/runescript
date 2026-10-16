@@ -297,6 +297,12 @@ type InterpString struct {
 	Span  Span
 }
 
+// CharLit is a character literal such as 'a', with escapes decoded.
+type CharLit struct {
+	Value rune
+	Span  Span
+}
+
 // BoolLit is `true` or `false`.
 type BoolLit struct {
 	Value bool
@@ -368,6 +374,7 @@ type SelectorExpr struct {
 func (e *IntLit) NodeSpan() Span       { return e.Span }
 func (e *StringLit) NodeSpan() Span    { return e.Span }
 func (e *InterpString) NodeSpan() Span { return e.Span }
+func (e *CharLit) NodeSpan() Span      { return e.Span }
 func (e *BoolLit) NodeSpan() Span      { return e.Span }
 func (e *Ident) NodeSpan() Span        { return e.Span }
 func (e *CallExpr) NodeSpan() Span     { return e.Span }
@@ -383,6 +390,7 @@ func (e *LambdaExpr) NodeSpan() Span   { return e.Span }
 func (*IntLit) expr()       {}
 func (*StringLit) expr()    {}
 func (*InterpString) expr() {}
+func (*CharLit) expr()      {}
 func (*BoolLit) expr()      {}
 func (*Ident) expr()        {}
 func (*CallExpr) expr()     {}

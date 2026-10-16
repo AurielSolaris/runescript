@@ -56,6 +56,7 @@ package use return if else while for break continue true false
 public protected private
 int sint uint bool string void
 float float32 float64                 [v0.3]
+char                                  [2026-10-16]
 try catch finally throw new           [v0.3]
 extern                                [2026-10-16]
 ```
@@ -70,7 +71,7 @@ Reserved for planned features **[v0.1, provisional]**. They are rejected
 with `ASX-PARSE-002`:
 
 ```
-class struct char array matrix
+class struct array matrix
 int8 int16 int32 int64 uint8 uint16 uint32 uint64
 ```
 
@@ -98,7 +99,9 @@ redeclared.
   need digits (`.5` and `5.` are not literals). A literal stands for the
   nearest float64 to its decimal value; one too large for float64, or so
   small it would round to zero, is `ASX-LEX-005`.
-- **Char [undecided]**: `'a'` is rejected with `ASX-LEX-006`.
+- **Char [decided 2026-10-16]**: exactly one character between single
+  quotes: `'a'`, `'é'`, `'😀'`. Escapes are those of strings plus `\'`.
+  Anything other than one character (`''`, `'ab'`) is `ASX-LEX-006`.
 
 ### 2.5 Operators and punctuation **[v0.1]**
 ```
@@ -156,9 +159,9 @@ AddExpr      = MulExpr { ( "+" | "-" ) MulExpr } ;
 MulExpr      = Unary   { ( "*" | "/" | "%" ) Unary } ;
 Unary        = ( "-" | "!" ) Unary | Cast | Postfix ;
 Cast         = "(" CastType ")" Unary ;
-CastType     = "int" | "sint" | "uint" | "float" | "float32" | "float64" | "string" | "bool" ;
+CastType     = "int" | "sint" | "uint" | "float" | "float32" | "float64" | "string" | "bool" | "char" ;
 Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" | "." Ident } ;   (* calls, fields *)
-Primary      = IntLit | FloatLit | StringLit | InterpString | "true" | "false"
+Primary      = IntLit | FloatLit | StringLit | InterpString | CharLit | "true" | "false"
              | Ident | Call | Lambda | New | "(" Expr ")" ;
 InterpString = '$"' { Text | "{" Expr "}" } '"' ;   (* §2.4 *)
 New          = "new" Ident "(" [ Expr { "," Expr } ] ")" ;
@@ -333,6 +336,7 @@ three is accepted.
 | `sint` | [v0.1] | **The same type as `int`**, written differently. It has no separate representation. |
 | `uint` | [v0.1, provisional width] | Unsigned integer. v0.1 representation: 32-bit (0 … 4294967295). |
 | `bool` | [v0.1] | `true`, `false`. |
+| `char` | [2026-10-16] | One Unicode scalar value: U+0000 … U+10FFFF except the surrogates U+D800 … U+DFFF. Not a number: `==`, `!=`, `<`, `<=`, `>`, `>=` compare code points; there is no arithmetic. **[provisional]** chars cannot cross the JavaScript boundary or be held in a rune. |
 | `string` | [v0.1] | Immutable UTF-8 text. **[v0.2, decided]** Positions and lengths are byte offsets, as in Go. |
 | `float` | [v0.3, provisional] | Generic floating point (§5.1b). Default representation float32, widening to float64. |
 | `float32`, `float64` | [v0.3, provisional] | IEEE 754 binary32 and binary64. Explicit widths: they never widen. |
@@ -435,7 +439,7 @@ There are no implicit conversions between numbers, `bool`, and `string`.
 ### 5.6 Conversions **[v0.3, decided syntax]**
 `(T) x` converts `x` to `T`, C style (owner decision; this settles
 OQ-CONV-01). `T` is `int`, `sint`, `uint`, `float`, `float32`, `float64`,
-`string`, or `bool`. Conversions are **checked**: they never wrap, and a
+`string`, `bool`, or `char`. Conversions are **checked**: they never wrap, and a
 value that can't be converted throws instead (`ASX-RUN-006` if nothing
 catches it).
 
@@ -449,6 +453,11 @@ catches it).
 | `string` → integer | an optional sign and decimal digits, nothing else: `"-42"` | not of that form: `TypeError`; out of range: `RangeError` |
 | `string` → float | sign, digits, optional fraction and exponent (`"64.7"`, `"1e5"`), or `"NaN"`, `"Infinity"`, `"-Infinity"`; parsed to the nearest float64 (`Infinity` if too large), then rounded for `float32` | not of that form: `TypeError` |
 | `string` → `bool` | exactly `"true"` or `"false"` | otherwise: `TypeError` |
+| `char` → integer | its code point: `(int) 'a'` is `97` | never |
+| integer → `char` | the character with that code point | not a Unicode scalar value: `RangeError` |
+| `char` → `string` | a one-character string | never |
+| `string` → `char` | its one character | not exactly one character: `TypeError` |
+| `char` ↔ float, `bool` | not allowed: `ASX-TYPE-017` | |
 | `bool` ↔ number, errors, functions | not allowed: `ASX-TYPE-017` | |
 
 A conversion of a constant happens at compile time, and its failure is a
@@ -466,8 +475,8 @@ compile-time error: `(uint) -2.5` is `ASX-TYPE-007`, `(int) 3e10` is
 | `+ - * /` [v0.3] | two floats of the same type | that type (§5.1b) |
 | `+` [2026-10-16] | two `string`s | `string`: the two joined |
 | unary `-` | a signed integer or a float | the same type (`uint` is rejected) |
-| `< <= > >=` | two integers of the same signedness, or two floats of the same type | `bool` |
-| `== !=` | two numbers as above, two `bool`s, or two `string`s | `bool` |
+| `< <= > >=` | two integers of the same signedness, two floats of the same type, or two `char`s | `bool` |
+| `== !=` | two numbers as above, two `bool`s, two `char`s, or two `string`s | `bool` |
 | `&& \|\|` | `bool` | `bool`; short-circuit evaluation |
 | `!` | `bool` | `bool` |
 

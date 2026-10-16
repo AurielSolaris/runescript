@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/AurielSolaris/runescript/internal/types"
 	"github.com/AurielSolaris/runescript/stdlib"
@@ -31,6 +32,44 @@ func randomString(r *rand.Rand) string {
 	}
 	return s
 }
+
+// callbacks are the char callbacks the random cases pass, written in Go
+// and, identically, in JavaScript (callbacksJS).
+var callbacks = map[string]any{
+	"lowerASCII": func(r rune) bool { return r >= 'a' && r <= 'z' },
+	"isA":        func(r rune) bool { return r == 'a' },
+	"nonASCII":   func(r rune) bool { return r > 127 },
+	"always":     func(rune) bool { return true },
+	"never":      func(rune) bool { return false },
+	"upperASCII": func(r rune) rune {
+		if r >= 'a' && r <= 'z' {
+			return r - 32
+		}
+		return r
+	},
+	"astral": func(r rune) rune {
+		if r == 'a' {
+			return 0x1F600
+		}
+		return r
+	},
+	"same": func(r rune) rune { return r },
+}
+
+const callbacksJS = `const callbacks = {
+  lowerASCII: (c) => c >= 97 && c <= 122,
+  isA: (c) => c === 97,
+  nonASCII: (c) => c > 127,
+  always: () => true,
+  never: () => false,
+  upperASCII: (c) => (c >= 97 && c <= 122 ? c - 32 : c),
+  astral: (c) => (c === 97 ? 0x1F600 : c),
+  same: (c) => c,
+};
+`
+
+var predicates = []string{"lowerASCII", "isA", "nonASCII", "always", "never"}
+var mappers = []string{"upperASCII", "astral", "same"}
 
 type stdCase struct {
 	Fn   string `json:"fn"`
@@ -63,25 +102,41 @@ func TestStdStringMatchesGo(t *testing.T) {
 	for _, name := range names {
 		f := pkg.Funcs[name]
 		for i := 0; i < 300; i++ {
-			args := make([]any, len(f.Params))
+			args := make([]any, len(f.Params))   // for JSON
+			goArgs := make([]any, len(f.Params)) // for Impl
 			for j, p := range f.Params {
-				if p.Kind == types.String {
+				switch p.Kind {
+				case types.String:
 					args[j] = randomString(r)
-				} else {
+				case types.Char:
+					c, _ := utf8.DecodeRuneInString(alphabet[r.Intn(len(alphabet))])
+					args[j], goArgs[j] = c, c
+					continue
+				case types.Func:
+					names := predicates
+					if p.Result.Kind == types.Char {
+						names = mappers
+					}
+					name := names[r.Intn(len(names))]
+					args[j], goArgs[j] = map[string]string{"callback": name}, callbacks[name]
+					continue
+				default:
 					args[j] = int64(r.Intn(6) - 2) // -2 .. 3
 				}
+				goArgs[j] = args[j]
 			}
-			cases = append(cases, goCase(f, args))
+			cases = append(cases, goCase(f, args, goArgs))
 		}
 	}
 
 	data, _ := json.Marshal(cases)
 	dir := t.TempDir()
-	script := Runtime() + `
+	script := Runtime() + callbacksJS + `
 const cases = JSON.parse(require("node:fs").readFileSync(process.argv[2], "utf8"));
+const arg = (a) => (a !== null && typeof a === "object" ? callbacks[a.callback] : a);
 const results = cases.map((c) => {
   try {
-    return { got: $rt.std.string[c.fn](...c.args) };
+    return { got: $rt.std.string[c.fn](...c.args.map(arg)) };
   } catch (e) {
     return { fails: true, message: String(e) };
   }
@@ -127,13 +182,13 @@ process.stdout.write(JSON.stringify(results));
 	}
 }
 
-func goCase(f *stdlib.Func, args []any) (c stdCase) {
+func goCase(f *stdlib.Func, args, goArgs []any) (c stdCase) {
 	c = stdCase{Fn: f.Name, Args: args}
 	defer func() {
 		if recover() != nil {
 			c.Fails, c.Want = true, nil
 		}
 	}()
-	c.Want = f.Impl(args)
+	c.Want = f.Impl(goArgs)
 	return c
 }

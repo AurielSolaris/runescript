@@ -171,6 +171,8 @@ type (
 		Span  Span
 	}
 	BoolConst struct{ Value bool }
+	// CharConst is a char constant, a Unicode scalar value.
+	CharConst struct{ Value rune }
 	// FloatConst is a floating-point constant of float type T, exactly
 	// representable in T.
 	FloatConst struct {
@@ -287,6 +289,7 @@ type (
 func (e *IntConst) Type() *types.Type    { return e.T }
 func (e *StringConst) Type() *types.Type { return types.StringT }
 func (e *BoolConst) Type() *types.Type   { return types.BoolT }
+func (e *CharConst) Type() *types.Type   { return types.CharT }
 func (e *Load) Type() *types.Type        { return e.Var.Type }
 func (e *FuncRef) Type() *types.Type     { return e.Func.Type }
 func (e *Lambda) Type() *types.Type      { return e.Func.Type }

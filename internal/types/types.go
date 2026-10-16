@@ -38,6 +38,9 @@ const (
 	// (rune:dom). Signal<T> is a built-in; general generics are open
 	// (OQ-TYPE-01).
 	Signal
+	// Char is one Unicode scalar value: 0 to 0x10FFFF, except the
+	// surrogates 0xD800 to 0xDFFF (OQ-CHAR-01).
+	Char
 )
 
 // Type is a semantic type. Name preserves the spelling used in source so
@@ -95,6 +98,7 @@ var (
 	Uint         = &Type{Kind: Unsigned, Name: "uint"}
 	BoolT        = &Type{Kind: Bool, Name: "bool"}
 	StringT      = &Type{Kind: String, Name: "string"}
+	CharT        = &Type{Kind: Char, Name: "char"}
 	VoidT        = &Type{Kind: Void, Name: "void"}
 	UntypedConst = &Type{Kind: UntypedInt, Name: "untyped integer constant"}
 	InvalidT     = &Type{Kind: Invalid, Name: "invalid"}
@@ -125,7 +129,7 @@ var (
 )
 
 var byName = map[string]*Type{
-	"int": Int, "sint": Sint, "uint": Uint, "bool": BoolT, "string": StringT, "void": VoidT,
+	"int": Int, "sint": Sint, "uint": Uint, "bool": BoolT, "string": StringT, "char": CharT, "void": VoidT,
 	"float": FloatT, "float32": Float32, "float64": Float64,
 	"Error": ErrorT, "RangeError": RangeErrorT, "TypeError": TypeErrorT, "ArgumentError": ArgumentErrorT,
 }
@@ -194,6 +198,12 @@ func Identical(a, b *Type) bool {
 // IsInteger reports whether t is a signed, unsigned, or untyped integer.
 func IsInteger(t *Type) bool {
 	return t.Kind == Signed || t.Kind == Unsigned || t.Kind == UntypedInt
+}
+
+// ValidChar reports whether n is a Unicode scalar value, the values a
+// char can hold.
+func ValidChar(n int64) bool {
+	return n >= 0 && n <= 0x10FFFF && (n < 0xD800 || n > 0xDFFF)
 }
 
 // Representable ranges of the v0.1 default integer representations.

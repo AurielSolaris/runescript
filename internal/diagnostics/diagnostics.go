@@ -26,7 +26,7 @@ const (
 	LexInvalidEscape        Code = "LEX-003"
 	LexUnterminatedBlock    Code = "LEX-004"
 	LexInvalidNumber        Code = "LEX-005"
-	LexUnsupportedLiteral   Code = "LEX-006"
+	LexBadChar              Code = "LEX-006" // a character literal without exactly one character
 	LexInvalidUTF8          Code = "LEX-007"
 	LexUnterminatedTemplate Code = "LEX-008"
 

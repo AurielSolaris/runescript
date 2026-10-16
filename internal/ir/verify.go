@@ -75,7 +75,7 @@ func (v *verifier) fn(f *Func) {
 func (v *verifier) storable(t *types.Type, what string) {
 	switch t.Kind {
 	case types.Signed, types.Unsigned, types.Bool, types.String, types.Func, types.Float, types.Error,
-		types.Element, types.Signal:
+		types.Element, types.Signal, types.Char:
 		return
 	}
 	v.fail("%s has type %s, which cannot hold a value", what, t)
@@ -211,6 +211,10 @@ func (v *verifier) expr(e Expr) *types.Type {
 		if t := v.expr(e.X); t.Kind != types.Error || want == nil || !types.Identical(want, e.T) {
 			v.fail("field %s of %s", e.Name, t)
 		}
+	case *CharConst:
+		if !types.ValidChar(int64(e.Value)) {
+			v.fail("char constant %d is not a Unicode scalar value", e.Value)
+		}
 	case *StringConst, *BoolConst, *Load:
 	case *FuncRef:
 		if e.Func.Type == nil {
@@ -241,7 +245,7 @@ func (v *verifier) expr(e Expr) *types.Type {
 		}
 		ordered := e.Op != "==" && e.Op != "!="
 		switch {
-		case x.Kind == types.Signed || x.Kind == types.Unsigned || x.Kind == types.Float:
+		case x.Kind == types.Signed || x.Kind == types.Unsigned || x.Kind == types.Float || x.Kind == types.Char:
 		case !ordered && (x.Kind == types.Bool || x.Kind == types.String):
 		default:
 			v.fail("operator %s is not defined on %s", e.Op, x)
@@ -290,7 +294,7 @@ func (v *verifier) expr(e Expr) *types.Type {
 	case *Trace:
 		for _, a := range e.Args {
 			switch t := v.expr(a); t.Kind {
-			case types.Signed, types.Unsigned, types.Bool, types.String, types.Float, types.Error:
+			case types.Signed, types.Unsigned, types.Bool, types.String, types.Float, types.Error, types.Char:
 			default:
 				v.fail("trace of %s", t)
 			}
@@ -318,7 +322,12 @@ func Convertible(from, to *types.Type) bool {
 	num := func(t *types.Type) bool {
 		return t.Kind == types.Signed || t.Kind == types.Unsigned || t.Kind == types.Float
 	}
+	integer := func(t *types.Type) bool { return t.Kind == types.Signed || t.Kind == types.Unsigned }
 	switch {
+	case from.Kind == types.Char:
+		return to.Kind == types.Char || to.Kind == types.String || integer(to)
+	case to.Kind == types.Char:
+		return integer(from) || from.Kind == types.String
 	case num(from) && num(to):
 		return true
 	case to.Kind == types.String:

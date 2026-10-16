@@ -26,6 +26,7 @@ const (
 	StrHead
 	StrMid
 	StrTail
+	Char // character literal; Token.Text holds the one decoded character
 	Keyword
 	Reserved // reserved for a future feature; not usable as an identifier
 	LParen
@@ -41,7 +42,7 @@ const (
 
 var kindNames = map[Kind]string{
 	EOF: "end of file", Ident: "identifier", Int: "integer literal", Float: "floating-point literal",
-	String: "string literal", StrHead: "interpolated string", StrMid: "'}'", StrTail: "'}'", Keyword: "keyword", Reserved: "reserved word",
+	String: "string literal", StrHead: "interpolated string", StrMid: "'}'", StrTail: "'}'", Char: "character literal", Keyword: "keyword", Reserved: "reserved word",
 	LParen: "'('", RParen: "')'", LBrace: "'{'", RBrace: "'}'", Comma: "','",
 	Semicolon: "';'", Dot: "'.'", Assign: "'='", Op: "operator",
 }
@@ -55,7 +56,7 @@ var keywords = map[string]bool{
 	"true": true, "false": true, "bool": true,
 	"public": true, "protected": true, "private": true,
 	"int": true, "sint": true, "uint": true, "string": true, "void": true,
-	"float": true, "float32": true, "float64": true,
+	"float": true, "float32": true, "float64": true, "char": true,
 	"try": true, "catch": true, "finally": true, "throw": true, "new": true,
 	"extern": true,
 }
@@ -64,7 +65,7 @@ var keywords = map[string]bool{
 // implemented. Reserving them now keeps today's programs valid later.
 var reserved = map[string]bool{
 	"class": true, "struct": true,
-	"char": true, "array": true, "matrix": true,
+	"array": true, "matrix": true,
 	"int8": true, "int16": true, "int32": true, "int64": true,
 	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
 }
@@ -201,9 +202,7 @@ func (l *lexer) token() {
 	case c == '$' && l.peek(1) == '"':
 		l.interpString(start)
 	case c == '\'':
-		l.advance()
-		l.errorf(diagnostics.LexUnsupportedLiteral, start, "character literals are not supported yet").
-			WithHelp("the 'char' type and its literal syntax are not yet specified")
+		l.char(start)
 	default:
 		if k, ok := punct[c]; ok {
 			l.advance()
@@ -362,6 +361,42 @@ func (l *lexer) string(start diagnostics.Pos) {
 		_, size := utf8.DecodeRune(l.src[l.off:])
 		b.Write(l.src[l.off : l.off+size])
 		l.advance()
+	}
+}
+
+// char lexes a character literal: one character or escape between single
+// quotes (OQ-CHAR-01). \' is a quote; the other escapes are those of
+// strings.
+func (l *lexer) char(start diagnostics.Pos) {
+	l.advance() // opening quote
+	var b strings.Builder
+	for {
+		if l.off >= len(l.src) || l.src[l.off] == '\n' {
+			l.errorf(diagnostics.LexUnterminatedString, start, "unterminated character literal")
+			return
+		}
+		c := l.src[l.off]
+		switch {
+		case c == '\'':
+			l.advance()
+			if n := utf8.RuneCountInString(b.String()); n != 1 {
+				l.errorf(diagnostics.LexBadChar, start, "a character literal holds exactly one character, found %d", n).
+					WithHelp(`use a string, "…", for text`)
+				return
+			}
+			l.emit(Char, b.String(), start)
+			return
+		case c == '\\' && l.peek(1) == '\'':
+			b.WriteByte('\'')
+			l.advance()
+			l.advance()
+		case c == '\\':
+			l.escape(&b)
+		default:
+			_, size := utf8.DecodeRune(l.src[l.off:])
+			b.Write(l.src[l.off : l.off+size])
+			l.advance()
+		}
 	}
 }
 

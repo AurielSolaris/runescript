@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/AurielSolaris/runescript/internal/conv"
@@ -554,6 +555,9 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		return quote(e.Value), precCall
 	case *ir.BoolConst:
 		return strconv.FormatBool(e.Value), precCall
+	case *ir.CharConst:
+		// A char is its code point; the comment shows the character.
+		return fmt.Sprintf("%d /* %s */", e.Value, charComment(e.Value)), precCall
 	case *ir.FloatConst:
 		var s string
 		switch {
@@ -652,7 +656,14 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		}
 		parts := []string{strconv.Itoa(g.site(e.Site)), quote(e.Pkg + "." + e.Func.Name), result,
 			g.use("std") + "." + e.Func.Package + "." + e.Func.Name}
+		site := g.site(e.Site)
 		for _, a := range e.Args {
+			if a.Type().Kind == types.Func {
+				// A RuneScript function value takes a trailing call site;
+				// the library calls it with the character only.
+				parts = append(parts, fmt.Sprintf("($c) => %s($c, %d)", g.expr(a, precCall), site))
+				continue
+			}
 			parts = append(parts, g.expr(a, precAssign))
 		}
 		return g.use("native") + "(" + strings.Join(parts, ", ") + ")", precCall
@@ -688,6 +699,8 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 			parts[i] = g.expr(a, precAssign)
 			if t := a.Type(); t.Kind == types.Float && t.Bits == 32 {
 				parts[i] = g.use("f32str") + "(" + parts[i] + ")"
+			} else if t.Kind == types.Char {
+				parts[i] = "String.fromCodePoint(" + g.expr(a, precAssign) + ")"
 			}
 		}
 		return g.use("trace") + "(" + strings.Join(parts, ", ") + ")", precCall
@@ -769,8 +782,19 @@ func kindCode(t *types.Type) string {
 		return "s"
 	case types.Bool:
 		return "b"
+	case types.Char:
+		return "c"
 	}
 	panic("jsgen: conversion of " + t.Name)
+}
+
+// charComment renders a char constant for a comment: the character
+// itself if it is printable and cannot end the comment, else U+XXXX.
+func charComment(r rune) string {
+	if unicode.IsPrint(r) && r != '*' && r != '/' {
+		return "'" + string(r) + "'"
+	}
+	return fmt.Sprintf("U+%04X", r)
 }
 
 // entryFile is the name of the file declaring main.

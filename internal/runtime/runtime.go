@@ -8,6 +8,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/checker"
@@ -49,6 +50,8 @@ func (v Value) String() string {
 		return conv.FormatFloat(v.F, v.Bits)
 	case types.Error:
 		return v.Err.String()
+	case types.Char:
+		return string(rune(v.Int))
 	}
 	return strconv.FormatInt(v.Int, 10)
 }
@@ -444,6 +447,8 @@ func (in *interp) expr(f *frame, e ast.Expr) Value {
 		return Value{Kind: types.String, Str: b.String()}
 	case *ast.BoolLit:
 		return Value{Kind: types.Bool, Bool: e.Value}
+	case *ast.CharLit:
+		return Value{Kind: types.Char, Int: int64(e.Value)}
 	case *ast.ParenExpr:
 		return in.expr(f, e.X)
 	case *ast.Ident:
@@ -637,6 +642,21 @@ func (in *interp) convert(v Value, from, to *types.Type, span diagnostics.Span) 
 	switch to.Kind {
 	case types.String:
 		return Value{Kind: types.String, Str: v.String()}
+	case types.Char:
+		switch v.Kind {
+		case types.Char:
+			return v
+		case types.String:
+			r, size := utf8.DecodeRuneInString(v.Str)
+			if v.Str == "" || size != len(v.Str) {
+				notValid("a single character")
+			}
+			return Value{Kind: types.Char, Int: int64(r)}
+		}
+		if !types.ValidChar(v.Int) {
+			in.raise(types.RangeErrorT, diagnostics.RunConversion, span, fmt.Sprintf("cannot convert %s to 'char': not a Unicode scalar value", quoted(v)))
+		}
+		return Value{Kind: types.Char, Int: v.Int}
 	case types.Bool:
 		if v.Kind == types.Bool {
 			return v
@@ -649,7 +669,7 @@ func (in *interp) convert(v Value, from, to *types.Type, span diagnostics.Span) 
 	case types.Signed, types.Unsigned:
 		var n int64
 		switch v.Kind {
-		case types.Signed, types.Unsigned:
+		case types.Signed, types.Unsigned, types.Char:
 			n = v.Int
 		case types.Float:
 			t := math.Trunc(v.F)
@@ -713,6 +733,10 @@ func (in *interp) native(f *stdlib.Func, args []Value, e *ast.CallExpr) (result 
 			goArgs[i] = a.Str
 		case types.Bool:
 			goArgs[i] = a.Bool
+		case types.Char:
+			goArgs[i] = rune(a.Int)
+		case types.Func:
+			goArgs[i] = in.goFunc(a, f.Params[i], e.Span)
 		default:
 			goArgs[i] = a.Int
 		}
@@ -737,10 +761,30 @@ func (in *interp) native(f *stdlib.Func, args []Value, e *ast.CallExpr) (result 
 		return Value{Kind: types.String, Str: out.(string)}
 	case types.Bool:
 		return Value{Kind: types.Bool, Bool: out.(bool)}
+	case types.Char:
+		return Value{Kind: types.Char, Int: int64(out.(rune))}
 	}
 	n := out.(int64)
 	if !types.InRange(f.Result, n) {
 		in.fail(diagnostics.RunOverflow, e.Span, "%s returned %d, which does not fit in '%s'", name, n, f.Result)
 	}
 	return Value{Kind: f.Result.Kind, Int: n}
+}
+
+// goFunc wraps the function value v, of type t, as the Go function a
+// standard library function expects: func(rune) bool or func(rune) rune.
+// Each call is a RuneScript call from site, so errors and the call-depth
+// limit work as usual.
+func (in *interp) goFunc(v Value, t *types.Type, site diagnostics.Span) any {
+	switch {
+	case len(t.Params) == 1 && t.Params[0].Kind == types.Char && t.Result.Kind == types.Bool:
+		return func(r rune) bool {
+			return in.callValue(v, []Value{{Kind: types.Char, Int: int64(r)}}, site).Bool
+		}
+	case len(t.Params) == 1 && t.Params[0].Kind == types.Char && t.Result.Kind == types.Char:
+		return func(r rune) rune {
+			return rune(in.callValue(v, []Value{{Kind: types.Char, Int: int64(r)}}, site).Int)
+		}
+	}
+	panic("runtime: no Go form for function type " + t.Name) // a stdlib signature bug
 }

@@ -119,6 +119,8 @@ func (l *lowerer) typeOf(ref *ast.TypeRef) *types.Type {
 		return types.NewFunc(params, l.typeOf(ref.Func.Result))
 	}
 	switch ref.Name {
+	case "char":
+		return types.CharT
 	case "Element":
 		return types.ElementT
 	case "Signal":
@@ -326,6 +328,8 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		return concat(parts...)
 	case *ast.BoolLit:
 		return &BoolConst{Value: e.Value}
+	case *ast.CharLit:
+		return &CharConst{Value: e.Value}
 	case *ast.IntLit:
 		l.ice("integer literal at %s was not given a type", e.Span.Start)
 	case *ast.Ident:

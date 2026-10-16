@@ -129,7 +129,7 @@ func TestParseErrors(t *testing.T) {
 		{"empty hole", "package p;\npublic void f() {\n    trace($\"a{}\");\n}", diagnostics.ParseUnexpected, "3:15"},
 		{"two values in a hole", "package p;\npublic void f() {\n    trace($\"{a b}\");\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"cast of nothing", "package p;\npublic void f() {\n    trace((int));\n}", diagnostics.ParseUnexpected, "3:16"},
-		{"reserved type in body", "package p;\npublic void f() {\n    char x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
+		{"reserved type in body", "package p;\npublic void f() {\n    array x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
 		{"uninitialized var", "package p;\npublic void f() {\n    int x;\n}", diagnostics.ParseUnexpected, "3:10"},
 		{"expression statement", "package p;\npublic void f() {\n    1 + 2;\n}", diagnostics.ParseUnexpected, "3:5"},
 		{"standalone block", "package p;\npublic void f() {\n    { }\n}", diagnostics.ParseNotImplemented, "3:5"},

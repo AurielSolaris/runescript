@@ -5,6 +5,7 @@ package parser
 
 import (
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
@@ -280,7 +281,7 @@ func (p *parser) funcDecl() *ast.FuncDecl {
 
 var typeKeywords = map[string]bool{
 	"int": true, "sint": true, "uint": true, "string": true, "bool": true, "void": true,
-	"float": true, "float32": true, "float64": true,
+	"float": true, "float32": true, "float64": true, "char": true,
 }
 
 // errorTypes are the built-in error type names.
@@ -289,7 +290,7 @@ var errorTypes = map[string]bool{"Error": true, "RangeError": true, "TypeError":
 // castTypes are the types a `(Type) x` conversion can name.
 var castTypes = map[string]bool{
 	"int": true, "sint": true, "uint": true, "string": true, "bool": true,
-	"float": true, "float32": true, "float64": true,
+	"float": true, "float32": true, "float64": true, "char": true,
 }
 
 func (p *parser) isTypeStart() bool {
@@ -781,6 +782,10 @@ func (p *parser) primary() ast.Expr {
 		return &ast.StringLit{Value: t.Text, Span: t.Span}
 	case lexer.StrHead:
 		return p.interpString()
+	case lexer.Char:
+		p.next()
+		r, _ := utf8.DecodeRuneInString(t.Text)
+		return &ast.CharLit{Value: r, Span: t.Span}
 	case lexer.Keyword:
 		if t.Text == "true" || t.Text == "false" {
 			p.next()

@@ -219,6 +219,8 @@ func (c *checker) exprInner(e ast.Expr) operand {
 	case *ast.InterpString:
 		c.interpString(e)
 		return operand{typ: types.StringT}
+	case *ast.CharLit:
+		return operand{typ: types.CharT}
 	case *ast.BoolLit:
 		return operand{typ: types.BoolT}
 	case *ast.ParenExpr:
@@ -326,6 +328,12 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 			return operand{typ: types.StringT}
 		}
 	}
+	if x.typ.Kind == types.Char && y.typ.Kind == types.Char {
+		switch op {
+		case "==", "!=", "<", "<=", ">", ">=":
+			return operand{typ: types.BoolT} // by code point
+		}
+	}
 	if isFloat(x.typ) || isFloat(y.typ) {
 		if types.IsNumeric(x.typ) && types.IsNumeric(y.typ) {
 			return c.floatBinary(op, x, y, xe, ye, opSpan)
@@ -338,6 +346,8 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 			help = `'+' joins two strings and converts nothing; write (string) x, or use an interpolated string such as $"n={x}"`
 		case x.typ.Kind == types.Func || y.typ.Kind == types.Func:
 			help = "function values cannot be compared or used in arithmetic"
+		case x.typ.Kind == types.Char || y.typ.Kind == types.Char:
+			help = "a char is not a number; convert it, e.g. (int) c, or compare two chars"
 		}
 		c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' is not defined on '%s' and '%s'", op, x.typ, y.typ).WithHelp(help)
 		return invalid
@@ -753,10 +763,15 @@ func (c *checker) floatConstCast(e *ast.CastExpr, v float64, to *types.Type, _ s
 }
 
 // convertible reports whether (to) x is allowed for x of type from.
-// Numbers convert to each other; numbers, bools, and strings convert to
-// string; strings convert to numbers and bool.
+// Numbers convert to each other; numbers, bools, chars, and strings convert
+// to string; strings convert to numbers, bool, and char; chars and
+// integers convert to each other.
 func convertible(from, to *types.Type) bool {
 	switch {
+	case from.Kind == types.Char:
+		return to.Kind == types.Char || to.Kind == types.String || types.IsInteger(to)
+	case to.Kind == types.Char:
+		return types.IsInteger(from) || from.Kind == types.String
 	case types.IsNumeric(from) && types.IsNumeric(to):
 		return true
 	case to.Kind == types.String:

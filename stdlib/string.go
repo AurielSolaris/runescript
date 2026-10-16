@@ -14,14 +14,28 @@ import (
 // Functions whose signatures need types RuneScript does not have yet are
 // omitted; docs/guide/10-std-string.md lists them with the reason.
 func init() {
-	S, I, B := types.StringT, types.Int, types.BoolT
+	S, I, B, C := types.StringT, types.Int, types.BoolT, types.CharT
 	str := func(a any) string { return a.(string) }
 	num := func(a any) int { return int(a.(int64)) }
+	// Callbacks take a char (OQ-CHAR-01). The runtime passes them as Go
+	// functions of these types.
+	pred := types.NewFunc([]*types.Type{C}, B)
+	mapper := types.NewFunc([]*types.Type{C}, C)
+	isFn := func(a any) func(rune) bool { return a.(func(rune) bool) }
 
 	funcs := []*Func{
 		fn("clone", S, func(a []any) any { return strings.Clone(str(a[0])) }, S),
 		fn("compare", I, func(a []any) any { return int64(strings.Compare(str(a[0]), str(a[1]))) }, S, S),
 		fn("contains", B, func(a []any) any { return strings.Contains(str(a[0]), str(a[1])) }, S, S),
+		fn("containsFunc", B, func(a []any) any { return strings.ContainsFunc(str(a[0]), isFn(a[1])) }, S, pred),
+		fn("containsRune", B, func(a []any) any { return strings.ContainsRune(str(a[0]), a[1].(rune)) }, S, C),
+		fn("indexFunc", I, func(a []any) any { return int64(strings.IndexFunc(str(a[0]), isFn(a[1]))) }, S, pred),
+		fn("indexRune", I, func(a []any) any { return int64(strings.IndexRune(str(a[0]), a[1].(rune))) }, S, C),
+		fn("lastIndexFunc", I, func(a []any) any { return int64(strings.LastIndexFunc(str(a[0]), isFn(a[1]))) }, S, pred),
+		fn("map", S, func(a []any) any { return strings.Map(a[0].(func(rune) rune), str(a[1])) }, mapper, S),
+		fn("trimFunc", S, func(a []any) any { return strings.TrimFunc(str(a[0]), isFn(a[1])) }, S, pred),
+		fn("trimLeftFunc", S, func(a []any) any { return strings.TrimLeftFunc(str(a[0]), isFn(a[1])) }, S, pred),
+		fn("trimRightFunc", S, func(a []any) any { return strings.TrimRightFunc(str(a[0]), isFn(a[1])) }, S, pred),
 		fn("containsAny", B, func(a []any) any { return strings.ContainsAny(str(a[0]), str(a[1])) }, S, S),
 		fn("count", I, func(a []any) any { return int64(strings.Count(str(a[0]), str(a[1]))) }, S, S),
 		fn("equalFold", B, func(a []any) any { return strings.EqualFold(str(a[0]), str(a[1])) }, S, S),

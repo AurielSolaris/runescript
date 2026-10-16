@@ -140,13 +140,27 @@ const $rt = (() => {
   // The rules follow internal/conv and the interpreter exactly.
   const INT_RE = /^[+-]?[0-9]+$/;
   const FLOAT_RE = /^([+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?|NaN|[+-]?Infinity)$/;
-  const show = (v, from) => (from === "s" ? `"${v}"` : from === "f32" ? f32str(v) : String(v));
+  const show = (v, from) =>
+    from === "s" ? `"${v}"` : from === "f32" ? f32str(v) : from === "c" ? String.fromCodePoint(v) : String(v);
   function cast(v, from, to, name, site) {
     const outOfRange = () => fail(CODES.conversion, site, `cannot convert ${show(v, from)} to '${name}': out of range`, "RangeError");
     const notValid = (what) => fail(CODES.conversion, site, `cannot convert ${show(v, from)} to '${name}': not ${what}`, "TypeError");
     switch (to) {
       case "s":
         return show(v, from === "s" ? "" : from);
+      case "c": {
+        // chars are code points (OQ-CHAR-01)
+        if (from === "c") return v;
+        if (from === "s") {
+          const cs = Array.from(v);
+          if (cs.length !== 1) notValid("a single character");
+          return cs[0].codePointAt(0);
+        }
+        if (!(v >= 0 && v <= 0x10FFFF && (v < 0xD800 || v > 0xDFFF))) {
+          fail(CODES.conversion, site, `cannot convert ${show(v, from)} to 'char': not a Unicode scalar value`, "RangeError");
+        }
+        return v;
+      }
       case "b":
         if (from === "b") return v;
         if (v === "true" || v === "false") return v === "true";
@@ -567,21 +581,45 @@ const $rt = (() => {
     return byteIndex(s, found);
   }
 
-  function trimLeft(s, set) {
+  // The trim helpers take a predicate on code points: a set's has, or a
+  // RuneScript callback. They call it in the same order as Go does.
+  function trimLeft(s, has) {
     let i = 0;
-    while (i < s.length && set.has(s.codePointAt(i))) i += width(s.codePointAt(i));
+    while (i < s.length && has(s.codePointAt(i))) i += width(s.codePointAt(i));
     return s.slice(i);
   }
-  function trimRight(s, set) {
+  // before is the code point ending at UTF-16 index j.
+  const before = (s, j) => s.codePointAt(j >= 2 && s.charCodeAt(j - 1) >= 0xDC00 && s.charCodeAt(j - 1) <= 0xDFFF ? j - 2 : j - 1);
+  function trimRight(s, has) {
     let j = s.length;
     while (j > 0) {
-      const cp = s.codePointAt(j >= 2 && s.charCodeAt(j - 1) >= 0xDC00 && s.charCodeAt(j - 1) <= 0xDFFF ? j - 2 : j - 1);
-      if (!set.has(cp)) break;
+      const cp = before(s, j);
+      if (!has(cp)) break;
       j -= width(cp);
     }
     return s.slice(0, j);
   }
-  const cutset = (chars) => new Set(codePoints(chars));
+  const cutset = (chars) => { const set = new Set(codePoints(chars)); return (cp) => set.has(cp); };
+  const spaces = (cp) => SPACE.has(cp);
+
+  // indexFunc is the byte offset of the first (or, if last, the last)
+  // character f accepts, or -1.
+  function indexFunc(s, f, last) {
+    if (last) {
+      for (let j = s.length; j > 0;) {
+        const cp = before(s, j);
+        j -= width(cp);
+        if (f(cp)) return byteIndex(s, j);
+      }
+      return -1;
+    }
+    for (let i = 0; i < s.length;) {
+      const cp = s.codePointAt(i);
+      if (f(cp)) return byteIndex(s, i);
+      i += width(cp);
+    }
+    return -1;
+  }
 
   // compareUnits orders UTF-16 code units by code point, which is UTF-8
   // byte order: surrogates (D800-DFFF) sort after E000-FFFF.
@@ -648,6 +686,8 @@ const $rt = (() => {
     },
     contains: (s, sub) => s.includes(sub),
     containsAny: (s, chars) => indexAny(s, chars, false) >= 0,
+    containsFunc: (s, f) => indexFunc(s, f, false) >= 0,
+    containsRune: (s, c) => s.includes(String.fromCodePoint(c)),
     count,
     equalFold(s, t) {
       const a = codePoints(s), b = codePoints(t), f = fold();
@@ -659,8 +699,12 @@ const $rt = (() => {
     hasSuffix: (s, p) => s.endsWith(p),
     index: (s, sub) => byteIndex(s, s.indexOf(sub)),
     indexAny: (s, chars) => indexAny(s, chars, false),
+    indexFunc: (s, f) => indexFunc(s, f, false),
+    indexRune: (s, c) => byteIndex(s, s.indexOf(String.fromCodePoint(c))),
     lastIndex: (s, sub) => byteIndex(s, s.lastIndexOf(sub)),
     lastIndexAny: (s, chars) => indexAny(s, chars, true),
+    lastIndexFunc: (s, f) => indexFunc(s, f, true),
+    map: (f, s) => Array.from(s, (c) => String.fromCodePoint(f(c.codePointAt(0)))).join(""),
     len: (s) => utf8Len(s),
     repeat(s, n) {
       if (n < 0) throw new Error("strings: negative Repeat count");
@@ -680,7 +724,10 @@ const $rt = (() => {
     trimLeft: (s, chars) => (s === "" || chars === "" ? s : trimLeft(s, cutset(chars))),
     trimPrefix: (s, p) => (s.startsWith(p) ? s.slice(p.length) : s),
     trimRight: (s, chars) => (s === "" || chars === "" ? s : trimRight(s, cutset(chars))),
-    trimSpace: (s) => trimRight(trimLeft(s, SPACE), SPACE),
+    trimSpace: (s) => trimRight(trimLeft(s, spaces), spaces),
+    trimFunc: (s, f) => trimRight(trimLeft(s, f), f),
+    trimLeftFunc: (s, f) => trimLeft(s, f),
+    trimRightFunc: (s, f) => trimRight(s, f),
     trimSuffix: (s, p) => (p !== "" && s.endsWith(p) ? s.slice(0, s.length - p.length) : s),
   };
 

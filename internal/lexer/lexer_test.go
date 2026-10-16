@@ -42,7 +42,7 @@ func TestKeywordClasses(t *testing.T) {
 	cases := map[string]Kind{
 		"if": Keyword, "while": Keyword, "bool": Keyword, "true": Keyword,
 		"use": Keyword, "class": Reserved, "float": Keyword, "float32": Keyword, "try": Keyword, "new": Keyword,
-		"char": Reserved, "int64": Reserved, "matrix": Reserved, "Error": Ident, "as": Ident,
+		"char": Keyword, "array": Reserved, "int64": Reserved, "matrix": Reserved, "Error": Ident, "as": Ident,
 		"trace": Ident, "function": Ident, "Main": Ident, "_x1": Ident,
 	}
 	for word, kind := range cases {
@@ -81,7 +81,10 @@ func TestLexErrors(t *testing.T) {
 		{"00.5", diagnostics.LexInvalidNumber, "1:1"},
 		{"1e999", diagnostics.LexInvalidNumber, "1:1"},
 		{"1e-999", diagnostics.LexInvalidNumber, "1:1"},
-		{"'a'", diagnostics.LexUnsupportedLiteral, "1:1"},
+		{"'ab'", diagnostics.LexBadChar, "1:1"},
+		{"''", diagnostics.LexBadChar, "1:1"},
+		{"'a", diagnostics.LexUnterminatedString, "1:1"},
+		{`x = '\q'`, diagnostics.LexInvalidEscape, "1:6"},
 		{"x # y", diagnostics.LexUnexpectedChar, "1:3"},
 		{"a & b", diagnostics.LexUnexpectedChar, "1:3"},
 	}
@@ -191,5 +194,21 @@ func TestInterpolatedStringErrors(t *testing.T) {
 		if d := diags[0]; d.Code != c.code || d.Span.Start.String() != c.pos {
 			t.Errorf("%q: got %s at %s, want %s at %s", c.src, d.Code, d.Span.Start, c.code, c.pos)
 		}
+	}
+}
+
+func TestCharLiterals(t *testing.T) {
+	toks, diags := Lex([]byte(`'a' 'é' '😀' '\n' '\'' '"' '\\' char`))
+	if len(diags) != 0 {
+		t.Fatal(diags)
+	}
+	want := []string{"a", "é", "😀", "\n", "'", `"`, `\`}
+	for i, w := range want {
+		if toks[i].Kind != Char || toks[i].Text != w {
+			t.Errorf("token %d: got %v %q, want character literal %q", i, toks[i].Kind, toks[i].Text, w)
+		}
+	}
+	if k := toks[len(want)]; k.Kind != Keyword || k.Text != "char" {
+		t.Errorf("char: got %v %q, want keyword", k.Kind, k.Text)
 	}
 }
