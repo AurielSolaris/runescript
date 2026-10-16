@@ -10,6 +10,10 @@
 // infinite); floats follow IEEE 754, as in ActionScript 3; bool is
 // a boolean; string is a well-formed string; errors are RSError objects;
 // function values are functions taking a trailing call-site argument.
+//
+// The runtime is modular: its marked sections (extern, dom, string) are
+// included only in programs that use them, so a plain script carries no
+// DOM or extern code (see sections in jsgen.go).
 
 class RuneScriptError extends Error {
   constructor(code, file, line, col, detail) {
@@ -228,6 +232,7 @@ const $rt = (() => {
     return r;
   }
 
+  //@section extern
   // ---- extern (JavaScript) functions (OQ-JS-02) ----
   //
   // Arguments need no checks: RuneScript values are already valid
@@ -321,6 +326,9 @@ const $rt = (() => {
     return bad();
   }
 
+  //@end
+
+  //@section dom
   // ---- runes and the DOM (rune:dom, OQ-DOM-01) ----
   //
   // A rune is a signal, as in SolidJS. A binding is a computation that
@@ -491,6 +499,9 @@ const $rt = (() => {
     target.appendChild(node);
   }
 
+  //@end
+
+  //@section string
   // ---- std:string ----
   //
   // Positions and lengths are UTF-8 byte offsets, as in Go (owner decision,
@@ -673,6 +684,8 @@ const $rt = (() => {
     trimSuffix: (s, p) => (p !== "" && s.endsWith(p) ? s.slice(0, s.length - p.length) : s),
   };
 
+  //@end
+
   // run calls the entry point. options.trace receives each line of trace
   // output (default console.log). The result is main's int result, or 0.
   function run(program, options = {}) {
@@ -696,8 +709,16 @@ const $rt = (() => {
     addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
-    enter, leave, unwind, trace, native, ext, RSError, run, std: { string },
+    enter, leave, unwind, trace, native, RSError, run,
+    //@section extern
+    ext,
+    //@end
+    //@section string
+    std: { string },
+    //@end
+    //@section dom
     signal, el, text, attr, bindText, bindNode, bindAttr, on, when, renderApp,
+    //@end
   };
 })();
 // ---- end of RuneScript runtime --------------------------------------------

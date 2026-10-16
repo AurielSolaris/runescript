@@ -88,7 +88,8 @@ func TestQuote(t *testing.T) {
 func TestTablesOnlyWhenUsed(t *testing.T) {
 	plain, _ := generate(t, "package p;\npublic void main() { trace(1); }\n")
 	upper, _ := generate(t, "package p;\nuse \"std:string\";\npublic void main() { trace(string.toUpper(\"a\")); }\n")
-	if !strings.Contains(plain, "upper = lazy([])") || strings.Contains(upper, "upper = lazy([])") {
+	// A program without std:string has no std:string section at all.
+	if strings.Contains(plain, "upper = lazy(") || strings.Contains(upper, "upper = lazy([])") {
 		t.Error("toUpper table inclusion is wrong")
 	}
 	if !strings.Contains(upper, "lower = lazy([])") {

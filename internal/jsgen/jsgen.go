@@ -74,11 +74,53 @@ func Generate(p *ir.Program, opts Options) (out []byte, diags []*diagnostics.Dia
 	return []byte(g.module(p, opts, entrySite)), nil, nil
 }
 
-// Runtime returns the runtime with every table present. It is used to test
-// the runtime directly.
+// Runtime returns the runtime with every section and table present. It is
+// used to test the runtime directly.
 func Runtime() string {
-	return fillRuntime(map[string]bool{"upper": true, "lower": true, "title": true, "fold": true})
+	return fillRuntime(map[string]bool{"upper": true, "lower": true, "title": true, "fold": true},
+		map[string]bool{"extern": true, "dom": true, "string": true})
 }
+
+// helperSections names the optional runtime section (runtime.js,
+// `//@section`) each helper lives in. A program gets a section only if it
+// uses one of its helpers, so scripts carry no DOM or extern code: the web
+// support is a layer on top of the scripting language, not part of it.
+var helperSections = map[string]string{
+	"ext": "extern", "std": "string",
+	"signal": "dom", "el": "dom", "text": "dom", "attr": "dom", "bindText": "dom",
+	"bindNode": "dom", "bindAttr": "dom", "on": "dom", "when": "dom", "renderApp": "dom",
+}
+
+// sections removes the optional runtime sections not in keep, and the
+// section markers themselves.
+func sections(src string, keep map[string]bool) string {
+	var out strings.Builder
+	skip, open := false, false
+	for _, line := range strings.SplitAfter(src, "\n") {
+		t := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(t, "//@section "):
+			if open {
+				panic("jsgen: nested runtime section")
+			}
+			name := strings.TrimPrefix(t, "//@section ")
+			if _, ok := sectionNames[name]; !ok {
+				panic("jsgen: unknown runtime section " + name)
+			}
+			skip, open = !keep[name], true
+		case t == "//@end":
+			skip, open = false, false
+		case !skip:
+			out.WriteString(line)
+		}
+	}
+	if open {
+		panic("jsgen: unterminated runtime section")
+	}
+	return out.String()
+}
+
+var sectionNames = map[string]bool{"extern": true, "dom": true, "string": true}
 
 type gen struct {
 	b       strings.Builder
@@ -183,7 +225,13 @@ func (g *gen) module(p *ir.Program, opts Options, entrySite int) string {
 	if len(g.imports) > 0 {
 		m.WriteString("\n")
 	}
-	m.WriteString(fillRuntime(g.tables))
+	keep := map[string]bool{}
+	for h := range g.helpers {
+		if sec, ok := helperSections[h]; ok {
+			keep[sec] = true
+		}
+	}
+	m.WriteString(fillRuntime(g.tables, keep))
 	m.WriteString("\n// ---- program ----\n\n")
 	m.WriteString("const $program = (($rt) => {\n")
 	m.WriteString("  \"use strict\";\n")
@@ -254,7 +302,7 @@ if (import.meta.main) {
 }
 `
 
-func fillRuntime(tables map[string]bool) string {
+func fillRuntime(tables, keep map[string]bool) string {
 	codes, _ := json.Marshal(map[string]string{
 		"callDepth":     diagnostics.RunCallDepth.String(),
 		"overflow":      diagnostics.RunOverflow.String(),
@@ -282,7 +330,7 @@ func fillRuntime(tables map[string]bool) string {
 		"/*@FOLD@*/", table("fold", foldRuns),
 		"/*@SPACE@*/", ints(spaces()),
 		"/*@F32STR@*/", conv.Float32JS,
-	).Replace(runtimeJS)
+	).Replace(sections(runtimeJS, keep))
 }
 
 func ints(v []int64) string {
