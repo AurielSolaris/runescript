@@ -1,4 +1,4 @@
-<!-- source: docs/guide/10-std-string.md @ c31fd14 -->
+<!-- source: docs/guide/10-std-string.md @ 34d09ef -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/10-std-string.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 

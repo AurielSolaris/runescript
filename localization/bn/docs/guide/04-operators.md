@@ -1,4 +1,4 @@
-<!-- source: docs/guide/04-operators.md @ 52427d9 -->
+<!-- source: docs/guide/04-operators.md @ 34d09ef -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/04-operators.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 
