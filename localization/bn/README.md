@@ -60,6 +60,11 @@ protected int main() {
   ActionScript-এর মতোই `NaN` ও `Infinity` সহ IEEE 754
 - যাচাইকৃত C-ধাঁচের রূপান্তর: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
   ([গাইড](docs/guide/13-floats-and-conversions.md))
+- নির্দিষ্ট প্রস্থের পূর্ণসংখ্যা `int8` … `uint64` (JavaScript-এ ৬৪-বিটের মান BigInt),
+  `_` বিভাজকসহ হেক্স/বাইনারি/অক্টাল লিটারাল, বিট অপারেটর, এবং `std:math`, যার ফল দুটি
+  টার্গেটে বিট-বিট এক ([গাইড](docs/guide/18-numbers.md))
+- স্ট্রাক্ট: `Point{x: 1, y: 2}` দিয়ে তৈরি মান-টাইপ, অ্যাসাইনমেন্টে কপি হয়, ফিল্ড ধরে তুলনা
+  হয় ([গাইড](docs/guide/19-structs.md))
 - স্ক্রিপ্টের জন্য লেখা ও তালিকা: স্ট্রিংয়ের জন্য `+` ও `$"{count} files"`, `char`,
   এবং সীমা-যাচাই করা ইনডেক্সসহ `Array<T>` ([গাইড](docs/guide/16-text-and-arrays.md));
   `std:string` Go-র `strings` প্যাকেজ জুড়ে আছে, `split`, `fields`, `join` ও
@@ -92,8 +97,8 @@ TypeScript তার ঘোষণাগুলোকে বিশ্বাস ক
 JavaScript থেকে আসা প্রতিটি মান যাচাই করে, এবং এতে কোনো `any`, কোনো অন্তর্নিহিত
 রূপান্তর বা কোনো যাচাইহীন কাস্ট নেই।
 
-**এখনো তৈরি হয়নি:** ক্লাস, স্ট্রাক্ট, for-each লুপ, কমান্ড-লাইন আর্গুমেন্ট,
-`go:` প্যাকেজ, `std:math`, `std:symrs`, JavaScript-এর সীমানা
+**এখনো তৈরি হয়নি:** ক্লাস, for-each লুপ, কমান্ড-লাইন আর্গুমেন্ট,
+`go:` প্যাকেজ, `std:symrs`, JavaScript-এর সীমানা
 পেরিয়ে অবজেক্ট, অ্যারে ও কলব্যাক, `rune:process`, টেমপ্লেটে `$foreach` ও কম্পোনেন্ট
 ট্যাগ, এবং পরিকল্পিত নেটিভ গ্রাফিক্স প্যাকেজ। দেখুন [রোডম্যাপ](../../docs/ROADMAP.md) (ইংরেজিতে)।
 
@@ -170,6 +175,8 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [স্ট্যান্ডার্ড লাইব্রেরি: std:string](docs/guide/10-std-string.md)
 - [লেখা ও তালিকা: +, $"…", char, Array<T>](docs/guide/16-text-and-arrays.md)
 - [null নেই, any নেই, জেনেরিক নেই](docs/guide/17-no-null-any-generics.md)
+- [সংখ্যার গভীরে: প্রস্থ, লিটারাল, বিট, std:math](docs/guide/18-numbers.md)
+- [স্ট্রাক্ট](docs/guide/19-structs.md)
 - [JavaScript-এ কম্পাইল](docs/guide/11-javascript.md)
 - [ডায়াগনস্টিক তালিকা](docs/guide/08-diagnostics.md)
 - [ActionScript 3 থেকে আসছেন?](docs/guide/09-coming-from-actionscript.md)

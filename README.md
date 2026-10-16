@@ -56,6 +56,12 @@ protected int main() {
   IEEE 754 with `NaN` and `Infinity`, as in ActionScript
 - Checked C-style conversions: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
   ([guide](docs/guide/13-floats-and-conversions.md))
+- Exact-width integers `int8` … `uint64` (64-bit values are BigInts in
+  JavaScript), hex/binary/octal literals with `_` separators, bit
+  operators, and `std:math`, whose results are bit-identical on both
+  targets ([guide](docs/guide/18-numbers.md))
+- Structs: value types built with `Point{x: 1, y: 2}`, copied on
+  assignment, compared field by field ([guide](docs/guide/19-structs.md))
 - Text and lists for scripting: `+` and `$"{count} files"` for strings,
   `char`, and `Array<T>` with bounds-checked indexing
   ([guide](docs/guide/16-text-and-arrays.md)); `std:string` covers Go's
@@ -91,8 +97,8 @@ TypeScript, which trusts its declarations and erases them, RuneScript
 checks every value that crosses in from JavaScript, and it has no `any`, no
 implicit conversions, and no unchecked casts.
 
-**Not yet implemented:** classes, structs, for-each loops, command-line
-arguments, `go:` packages, `std:math`, `std:symrs`, objects, arrays, and
+**Not yet implemented:** classes, for-each loops, command-line
+arguments, `go:` packages, `std:symrs`, objects, arrays, structs, and
 callbacks across the JavaScript boundary, `rune:process`, `$foreach` and
 component tags in templates, and the planned native graphics package. See
 the [roadmap](docs/ROADMAP.md).
@@ -172,6 +178,8 @@ test suite; the web examples run on a fake DOM under Node.js.
 - [Standard library: std:string](docs/guide/10-std-string.md)
 - [Text and lists: +, $"…", char, Array<T>](docs/guide/16-text-and-arrays.md)
 - [No null, no any, no generics](docs/guide/17-no-null-any-generics.md)
+- [Numbers in depth: widths, literals, bits, std:math](docs/guide/18-numbers.md)
+- [Structs](docs/guide/19-structs.md)
 - [Compiling to JavaScript](docs/guide/11-javascript.md)
 - [Web pages with rune:dom](docs/guide/15-web-pages.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)

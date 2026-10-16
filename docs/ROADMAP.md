@@ -150,7 +150,7 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
   catchable (except the call-depth limit)
 - [x] Interpreter and JavaScript target behave identically (differential
   tests), and error unwinding stays linear in the call depth
-- [ ] `std:math`
+- [x] `std:math` (2026-10-17)
 
 ### Installation and source text ✅
 - [x] `install.sh` (Linux, macOS) and `install.ps1` (Windows): check Go
@@ -170,22 +170,24 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [x] String concatenation `+` (strings only) and interpolation `$"…{x}…"` (2026-10-16)
 - [x] `string.len`, `string.slice`, `string.runeCount` in bytes; `char` as a Unicode scalar with `'a'` literals (2026-10-16)
 - [x] `std:string` functions that take `char` and callbacks: `containsRune`, `indexRune`, `indexFunc`, `trimFunc`, `map`, … (2026-10-16)
-- [ ] Escape sequences: Unicode escapes
+- [x] Escape sequences: `\u{...}` Unicode escapes and `\0` (2026-10-17)
 
 ## v0.5: Numbers
 
-- [ ] Explicit-width integers (`int8`…`int64`, `uint8`…`uint64`)
+- [x] Explicit-width integers (`int8`…`int64`, `uint8`…`uint64`), checked in every width; BigInt on the JavaScript target (2026-10-17)
+- [x] Bitwise operators and shifts, with checked shift counts and trapping `<<` (2026-10-17)
 - [ ] Widening as decided in v0.2, with boundary and non-contraction tests
 - [x] `float`, `float32`, `float64` (v0.3); widening is exact, so
   representation only matters once floats are stored in arrays/structs
-- [ ] Additional literal forms (hex, separators) if approved
-- [ ] `std:math`: Go's `math` package in full, once floats exist
+- [x] Literal forms: hex `0xFF`, binary `0b1010`, octal `0o17`, `_` separators (2026-10-17)
+- [x] `std:math`: Go's `math` on float64, int helpers, constants; transcendental functions from one shared implementation (`internal/fmath`), bit-identical on both targets (2026-10-17)
 
 ## v0.6: Aggregates
 
 - [x] `Array<T>`: literals, bounds-checked indexing, `length`, `push`, `pop`, reference semantics (2026-10-16, details provisional)
 - [ ] For-each loops, slicing, sorting; `main(Array<string> args)`
-- [ ] `struct`: value semantics, copy rules
+- [x] `struct`: value semantics (copy on assignment), named-field literals, nested field writes, `==` by field (2026-10-17)
+- [ ] Struct methods and constructors
 - [ ] `matrix` (design first)
 
 ## v0.7: Graphics package (native window, drawing, input, UI)

@@ -26,11 +26,13 @@ implicit default values in v0.1.
 | `int` | Signed whole numbers | −2147483648 … 2147483647 |
 | `sint` | **Exactly the same type as `int`.** Use it when you want to say "signed" explicitly. | same as `int` |
 | `uint` | Unsigned whole numbers | 0 … 4294967295 |
+| `int8` … `int64`, `uint8` … `uint64` | Whole numbers of an exact width ([chapter 18](18-numbers.md)) | e.g. `uint8` is 0 … 255 |
 | `float`, `float32`, `float64` | Floating-point numbers ([chapter 13](13-floats-and-conversions.md)) | |
 | `bool` | `true` or `false` | |
 | `string` | Text, e.g. `"hello\n"` | |
 | `char` | One character, e.g. `'a'` ([chapter 16](16-text-and-arrays.md)) | any Unicode code point |
 | `Array<T>` | A list of `T` values, e.g. `["a", "b"]` ([chapter 16](16-text-and-arrays.md)) | |
+| a `struct` | Named fields in one value, e.g. `Point{x: 1, y: 2}` ([chapter 19](19-structs.md)) | |
 | `Error` and its kinds | Errors ([chapter 14](14-errors.md)) | |
 | `void` | No value; used only as a function's return type | |
 
@@ -47,7 +49,8 @@ public void main() {
 }
 ```
 
-String escapes: `\n` (newline), `\t` (tab), `\r`, `\\`, and `\"`. Strings are
+String escapes: `\n` (newline), `\t` (tab), `\r`, `\0`, `\\`, `\"`, `\'`, and
+`\u{...}` for any Unicode character, e.g. `\u{E9}` (é) or `\u{1F600}`. Strings are
 joined with `+`, and `$"total: {n}"` builds one from values
 ([chapter 16](16-text-and-arrays.md)).
 

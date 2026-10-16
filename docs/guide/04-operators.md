@@ -88,10 +88,17 @@ From tightest to loosest binding:
 2. unary `-`, `!`, conversions `(T) x`
 3. `*`, `/`, `%`
 4. `+`, `-`
-5. `<`, `<=`, `>`, `>=`
-6. `==`, `!=`
-7. `&&`
-8. `||`
+5. `<<`, `>>`
+6. `<`, `<=`, `>`, `>=`
+7. `==`, `!=`
+8. `&`
+9. `^`
+10. `|`
+11. `&&`
+12. `||`
+
+Unary `~` sits with `-` and `!`. The bit operators are covered in
+[chapter 18](18-numbers.md).
 
 All binary operators are left-associative: `10 - 4 - 3` is `(10 - 4) - 3`.
 
@@ -101,6 +108,6 @@ two `char`s. Neither converts anything: `"n=" + 5` is an error
 
 ## Not available yet
 
-Bitwise operators, shifts, `?:`, `?.`, and `??`.
+`?:`, `?.`, and `??`.
 
 Next: [Control flow](05-control-flow.md)

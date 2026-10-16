@@ -21,10 +21,12 @@ complete program in these pages is compiled by the test suite
 15. [Web pages with `rune:dom`](15-web-pages.md): components, checked HTML and SVG templates, runes, events, `$if`, `renderApp`
 16. [Text and lists](16-text-and-arrays.md): joining strings with `+`, interpolated strings `$"…"`, `char`, and `Array<T>`
 17. [No `null`, no `any`, no generics](17-no-null-any-generics.md): why, and how to use `false` where other languages use `null`
+18. [Numbers in depth](18-numbers.md): `int8` … `uint64`, hex and binary literals, bit operations, `std:math`
+19. [Structs](19-structs.md): declaring, building, and copying value types
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).
 
-> **Not yet available:** classes and structs. Their keywords are reserved,
-> and using them gives a clear "not implemented yet" error. Objects,
-> arrays, and callbacks can't cross the JavaScript boundary yet either.
+> **Not yet available:** classes. Their keyword is reserved, and using it
+> gives a clear "not implemented yet" error. Objects, arrays, structs, and
+> callbacks can't cross the JavaScript boundary yet either.

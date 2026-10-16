@@ -183,8 +183,8 @@ public void main() {
 | the caller can ask first | a `bool` question, then the value |
 | something went wrong | `throw` an error |
 
-> **Coming with structs:** a `struct` can keep the flag and the value
-> together in one value, such as `{ bool present; int value; }`, so they
-> can't drift apart. Structs are being added now.
+A `struct` keeps the flag and the value together in one value, such as
+`{ bool present; int value; }`, so they can't drift apart: see
+[Using a struct for "no value"](19-structs.md) in chapter 19.
 
-Next: back to the [guide index](README.md)
+Next: [Numbers in depth](18-numbers.md)
