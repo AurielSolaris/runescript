@@ -960,7 +960,624 @@ const $rt = (() => {
     return sign ? -x : x;
   }
 
+  // ---- transcendental functions: a port of internal/fmath ----
+  //
+  // internal/fmath is Go's own pure-Go code for these functions (see its
+  // LICENSE-GO); this is a line-by-line port, so both targets compute the
+  // same bits. JavaScript never fuses multiply-adds, matching fmath's
+  // guarded products. Constants that Go folds exactly (4/Pi, 1/Ln10, ...)
+  // are written as Go's float64 values, not recomputed here.
+
+  const M64 = 0xFFFFFFFFFFFFFFFFn;
+  function bitsOf(x) {
+    F64[0] = x;
+    return (BigInt(U32[HI]) << 32n) | BigInt(U32[LO]);
+  }
+  function fromBits(b) {
+    b = BigInt.asUintN(64, b);
+    U32[HI] = Number(b >> 32n);
+    U32[LO] = Number(b & 0xFFFFFFFFn);
+    return F64[0];
+  }
+  const PI = 3.141592653589793, PI2 = 1.5707963267948966, PI4 = 0.7853981633974483;
+  const FOUR_OVER_PI = 1.2732395447351628, THREE_PI4 = 2.356194490192345;
+  const LN2 = 0.6931471805599453, INV_LN2 = 1.4426950408889634, INV_LN10 = 0.4342944819032518;
+  const SQRT2_2 = 0.7071067811865476, SMALLEST_NORMAL = 2.2250738585072014e-308;
+  const isInf = (x) => x === Infinity || x === -Infinity;
+  const copysign0 = (f, s) => (signbit(s) ? -Math.abs(f) : Math.abs(f));
+
+  function normalize(x) {
+    return Math.abs(x) < SMALLEST_NORMAL ? [x * 4503599627370496, -52] : [x, 0];
+  }
+  function frexp(f) {
+    if (f === 0 || isInf(f) || f !== f) return [f, 0];
+    let exp;
+    [f, exp] = normalize(f);
+    let x = bitsOf(f);
+    exp += Number((x >> 52n) & 0x7FFn) - 1023 + 1;
+    x &= ~(0x7FFn << 52n);
+    x |= 1022n << 52n;
+    return [fromBits(x), exp];
+  }
+  function ldexp(frac, exp) {
+    if (frac === 0 || isInf(frac) || frac !== frac) return frac;
+    let e;
+    [frac, e] = normalize(frac);
+    exp += e;
+    let x = bitsOf(frac);
+    exp += Number((x >> 52n) & 0x7FFn) - 1023;
+    if (exp < -1075) return copysign0(0, frac);
+    if (exp > 1023) return frac < 0 ? -Infinity : Infinity;
+    let m = 1;
+    if (exp < -1022) {
+      exp += 53;
+      m = 1.1102230246251565e-16; // 1 / (1 << 53)
+    }
+    x &= ~(0x7FFn << 52n);
+    x |= BigInt(exp + 1023) << 52n;
+    return m * fromBits(x);
+  }
+  function modf(f) {
+    if (f < 1) {
+      if (f < 0) {
+        const [i, fr] = modf(-f);
+        return [-i, -fr];
+      }
+      if (f === 0) return [f, f];
+      return [0, f];
+    }
+    let x = bitsOf(f);
+    const e = Number((x >> 52n) & 0x7FFn) - 1023;
+    if (e < 52) x &= ~((1n << BigInt(52 - e)) - 1n);
+    const i = fromBits(x);
+    return [i, f - i];
+  }
+
+  const MPI4 = [
+    0x0000000000000001n, 0x45f306dc9c882a53n, 0xf84eafa3ea69bb81n, 0xb6c52b3278872083n,
+    0xfca2c757bd778ac3n, 0x6e48dc74849ba5c0n, 0x0c925dd413a32439n, 0xfc3bd63962534e7dn,
+    0xd1046bea5d768909n, 0xd338e04d68befc82n, 0x7323ac7306a673e9n, 0x3908bf177bf25076n,
+    0x3ff12fffbc0b301fn, 0xde5e2316b414da3en, 0xda6cfd9e4f96136en, 0x9e8c7ecd3cbfd45an,
+    0xea4f758fd7cbe2f6n, 0x7a0e73ef14a525d4n, 0xd7f6bf623f1aba10n, 0xac06608df8f6d757n,
+  ];
+  const REDUCE_THRESHOLD = 536870912; // 1 << 29
+  // trigReduce is Payne-Hanek reduction of a large x to an octant j and
+  // z in [0, Pi/4), with 128-bit integer arithmetic as in Go.
+  function trigReduce(x) {
+    if (x < PI4) return [0, x];
+    let ix = bitsOf(x);
+    const exp = Number((ix >> 52n) & 0x7FFn) - 1023 - 52;
+    ix &= ~(0x7FFn << 52n);
+    ix |= 1n << 52n;
+    const digit = Math.floor((exp + 61) / 64), bs = BigInt((exp + 61) % 64);
+    const word = (d) => ((MPI4[d] << bs) & M64) | (MPI4[d + 1] >> (64n - bs));
+    const z0 = word(digit), z1 = word(digit + 1), z2 = word(digit + 2);
+    const z2hi = (z2 * ix) >> 64n;
+    const p1 = z1 * ix;
+    const z1hi = p1 >> 64n, z1lo = p1 & M64;
+    const z0lo = (z0 * ix) & M64;
+    const sum = z1lo + z2hi;
+    const lo = sum & M64, c = sum >> 64n;
+    let hi = (z0lo + z1hi + c) & M64;
+    let j = hi >> 61n;
+    hi = ((hi << 3n) & M64) | (lo >> 61n);
+    const lz = hi === 0n ? 64 : 64 - hi.toString(2).length;
+    const e = BigInt(1023 - (lz + 1));
+    hi = ((hi << BigInt(lz + 1)) & M64) | (lo >> BigInt(64 - (lz + 1)));
+    hi >>= 12n;
+    hi |= e << 52n;
+    let z = fromBits(hi);
+    if ((j & 1n) === 1n) {
+      j = (j + 1n) & 7n;
+      z--;
+    }
+    return [Number(j), z * PI4];
+  }
+
+  const SIN = [1.58962301576546568060e-10, -2.50507477628578072866e-8, 2.75573136213857245213e-6,
+    -1.98412698295895385996e-4, 8.33333333332211858878e-3, -1.66666666666666307295e-1];
+  const COS = [-1.13585365213876817300e-11, 2.08757008419747316778e-9, -2.75573141792967388112e-7,
+    2.48015872888517045348e-5, -1.38888888888730564116e-3, 4.16666666666665929218e-2];
+  const PI4A = 7.85398125648498535156e-1, PI4B = 3.77489470793079817668e-8, PI4C = 2.69515142907905952645e-15;
+  const sinPoly = (z, zz) => z + z * zz * ((((((SIN[0] * zz) + SIN[1]) * zz + SIN[2]) * zz + SIN[3]) * zz + SIN[4]) * zz + SIN[5]);
+  const cosPoly = (zz) => 1.0 - 0.5 * zz + zz * zz * ((((((COS[0] * zz) + COS[1]) * zz + COS[2]) * zz + COS[3]) * zz + COS[4]) * zz + COS[5]);
+  // octant reduces |x| below the threshold as Go does.
+  function octant(x) {
+    if (x >= REDUCE_THRESHOLD) return trigReduce(x);
+    let j = Math.trunc(x * FOUR_OVER_PI), y = j;
+    if (j & 1) {
+      j++;
+      y++;
+    }
+    j &= 7;
+    return [j, ((x - y * PI4A) - y * PI4B) - y * PI4C];
+  }
+  function cos(x) {
+    if (x !== x || isInf(x)) return NaN;
+    let sign = false;
+    x = Math.abs(x);
+    let [j, z] = octant(x);
+    if (j > 3) {
+      j -= 4;
+      sign = !sign;
+    }
+    if (j > 1) sign = !sign;
+    const zz = z * z;
+    const y = j === 1 || j === 2 ? sinPoly(z, zz) : cosPoly(zz);
+    return sign ? -y : y;
+  }
+  function sin(x) {
+    if (x === 0 || x !== x) return x;
+    if (isInf(x)) return NaN;
+    let sign = false;
+    if (x < 0) {
+      x = -x;
+      sign = true;
+    }
+    let [j, z] = octant(x);
+    if (j > 3) {
+      sign = !sign;
+      j -= 4;
+    }
+    const zz = z * z;
+    const y = j === 1 || j === 2 ? cosPoly(zz) : sinPoly(z, zz);
+    return sign ? -y : y;
+  }
+  const TANP = [-1.30936939181383777646e4, 1.15351664838587416140e6, -1.79565251976484877988e7];
+  const TANQ = [1.0, 1.36812963470692954678e4, -1.32089234440210967447e6, 2.50083801823357915839e7, -5.38695755929454629881e7];
+  function tan(x) {
+    if (x === 0 || x !== x) return x;
+    if (isInf(x)) return NaN;
+    let sign = false;
+    if (x < 0) {
+      x = -x;
+      sign = true;
+    }
+    let j, z;
+    if (x >= REDUCE_THRESHOLD) {
+      [j, z] = trigReduce(x);
+    } else {
+      j = Math.trunc(x * FOUR_OVER_PI);
+      let y = j;
+      if (j & 1) {
+        j++;
+        y++;
+      }
+      z = ((x - y * PI4A) - y * PI4B) - y * PI4C;
+    }
+    const zz = z * z;
+    let y;
+    if (zz > 1e-14) {
+      y = z + z * (zz * (((TANP[0] * zz) + TANP[1]) * zz + TANP[2]) / ((((zz + TANQ[1]) * zz + TANQ[2]) * zz + TANQ[3]) * zz + TANQ[4]));
+    } else {
+      y = z;
+    }
+    if (j & 2) y = -1 / y;
+    return sign ? -y : y;
+  }
+
+  function xatan(x) {
+    const P0 = -8.750608600031904122785e-01, P1 = -1.615753718733365076637e+01, P2 = -7.500855792314704667340e+01,
+      P3 = -1.228866684490136173410e+02, P4 = -6.485021904942025371773e+01, Q0 = +2.485846490142306297962e+01,
+      Q1 = +1.650270098316988542046e+02, Q2 = +4.328810604912902668951e+02, Q3 = +4.853903996359136964868e+02,
+      Q4 = +1.945506571482613964425e+02;
+    let z = x * x;
+    z = z * ((((P0 * z + P1) * z + P2) * z + P3) * z + P4) / (((((z + Q0) * z + Q1) * z + Q2) * z + Q3) * z + Q4);
+    return x * z + x;
+  }
+  function satan(x) {
+    const Morebits = 6.123233995736765886130e-17, Tan3pio8 = 2.41421356237309504880;
+    if (x <= 0.66) return xatan(x);
+    if (x > Tan3pio8) return PI2 - xatan(1 / x) + Morebits;
+    return PI4 + xatan((x - 1) / (x + 1)) + 0.5 * Morebits;
+  }
+  function atan(x) {
+    if (x === 0) return x;
+    return x > 0 ? satan(x) : -satan(-x);
+  }
+  function asin(x) {
+    if (x === 0) return x;
+    let sign = false;
+    if (x < 0) {
+      x = -x;
+      sign = true;
+    }
+    if (x > 1) return NaN;
+    let temp = Math.sqrt(1 - x * x);
+    temp = x > 0.7 ? PI2 - satan(temp / x) : satan(x / temp);
+    return sign ? -temp : temp;
+  }
+  const acos = (x) => PI2 - asin(x);
+  function atan2(y, x) {
+    if (y !== y || x !== x) return NaN;
+    if (y === 0) return x >= 0 && !signbit(x) ? copysign0(0, y) : copysign0(PI, y);
+    if (x === 0) return copysign0(PI2, y);
+    if (isInf(x)) {
+      if (x === Infinity) return isInf(y) ? copysign0(PI4, y) : copysign0(0, y);
+      return isInf(y) ? copysign0(THREE_PI4, y) : copysign0(PI, y);
+    }
+    if (isInf(y)) return copysign0(PI2, y);
+    const q = atan(y / x);
+    if (x < 0) return q <= 0 ? q + PI : q - PI;
+    return q;
+  }
+
+  function expmulti(hi, lo, k) {
+    const P1 = 1.66666666666666657415e-01, P2 = -2.77777777770155933842e-03, P3 = 6.61375632143793436117e-05,
+      P4 = -1.65339022054652515390e-06, P5 = 4.13813679705723846039e-08;
+    const r = hi - lo, t = r * r;
+    const c = r - t * (P1 + t * (P2 + t * (P3 + t * (P4 + t * P5))));
+    const y = 1 - ((lo - (r * c) / (2 - c)) - hi);
+    return ldexp(y, k);
+  }
+  const LN2HI = 6.93147180369123816490e-01, LN2LO = 1.90821492927058770002e-10;
+  function exp(x) {
+    const Log2e = 1.44269504088896338700e+00, Overflow = 7.09782712893383973096e+02,
+      Underflow = -7.45133219101941108420e+02, NearZero = 3.725290298461914e-09; // 1 / (1 << 28)
+    if (x !== x || x === Infinity) return x;
+    if (x === -Infinity) return 0;
+    if (x > Overflow) return Infinity;
+    if (x < Underflow) return 0;
+    if (-NearZero < x && x < NearZero) return 1 + x;
+    let k = 0;
+    if (x < 0) k = Math.trunc(Log2e * x - 0.5);
+    else if (x > 0) k = Math.trunc(Log2e * x + 0.5);
+    return expmulti(x - k * LN2HI, k * LN2LO, k);
+  }
+  function exp2(x) {
+    const Overflow = 1.0239999999999999e+03, Underflow = -1.0740e+03;
+    if (x !== x || x === Infinity) return x;
+    if (x === -Infinity) return 0;
+    if (x > Overflow) return Infinity;
+    if (x < Underflow) return 0;
+    let k = 0;
+    if (x > 0) k = Math.trunc(x + 0.5);
+    else if (x < 0) k = Math.trunc(x - 0.5);
+    const t = x - k;
+    return expmulti(t * LN2HI, -t * LN2LO, k);
+  }
+  function expm1(x) {
+    const Othreshold = 7.09782712893383973096e+02, Ln2X56 = 3.88162421113569373274e+01,
+      Ln2HalfX3 = 1.03972077083991796413e+00, Ln2Half = 3.46573590279972654709e-01,
+      InvLn2 = 1.44269504088896338700e+00, Tiny = 5.551115123125783e-17, // 1 / (1 << 54)
+      Q1 = -3.33333333333331316428e-02, Q2 = 1.58730158725481460165e-03, Q3 = -7.93650757867487942473e-05,
+      Q4 = 4.00821782732936239552e-06, Q5 = -2.01099218183624371326e-07;
+    if (x === Infinity || x !== x) return x;
+    if (x === -Infinity) return -1;
+    let absx = x, sign = false;
+    if (x < 0) {
+      absx = -absx;
+      sign = true;
+    }
+    if (absx >= Ln2X56) {
+      if (sign) return -1;
+      if (absx >= Othreshold) return Infinity;
+    }
+    let c = 0, k = 0;
+    if (absx > Ln2Half) {
+      let hi, lo;
+      if (absx < Ln2HalfX3) {
+        if (!sign) {
+          hi = x - LN2HI;
+          lo = LN2LO;
+          k = 1;
+        } else {
+          hi = x + LN2HI;
+          lo = -LN2LO;
+          k = -1;
+        }
+      } else {
+        k = !sign ? Math.trunc(InvLn2 * x + 0.5) : Math.trunc(InvLn2 * x - 0.5);
+        hi = x - k * LN2HI;
+        lo = k * LN2LO;
+      }
+      x = hi - lo;
+      c = (hi - x) - lo;
+    } else if (absx < Tiny) {
+      return x;
+    }
+    const hfx = 0.5 * x, hxs = x * hfx;
+    const r1 = 1 + hxs * (Q1 + hxs * (Q2 + hxs * (Q3 + hxs * (Q4 + hxs * Q5))));
+    let t = 3 - r1 * hfx;
+    let e = hxs * ((r1 - t) / (6.0 - x * t));
+    if (k === 0) return x - (x * e - hxs);
+    e = (x * (e - c) - c);
+    e -= hxs;
+    const addExp = (y) => fromBits(bitsOf(y) + (BigInt.asUintN(64, BigInt(k)) << 52n));
+    if (k === -1) return 0.5 * (x - e) - 0.5;
+    if (k === 1) return x < -0.25 ? -2 * (e - (x + 0.5)) : 1 + 2 * (x - e);
+    if (k <= -2 || k > 56) return addExp(1 - (e - x)) - 1;
+    if (k < 20) {
+      t = fromBits(0x3ff0000000000000n - (0x20000000000000n >> BigInt(k)));
+      return addExp(t - (e - x));
+    }
+    t = fromBits(BigInt(0x3ff - k) << 52n);
+    let y = x - (e + t);
+    y++;
+    return addExp(y);
+  }
+
+  function log(x) {
+    const L1 = 6.666666666666735130e-01, L2 = 3.999999999940941908e-01, L3 = 2.857142874366239149e-01,
+      L4 = 2.222219843214978396e-01, L5 = 1.818357216161805012e-01, L6 = 1.531383769920937332e-01,
+      L7 = 1.479819860511658591e-01;
+    if (x !== x || x === Infinity) return x;
+    if (x < 0) return NaN;
+    if (x === 0) return -Infinity;
+    let [f1, ki] = frexp(x);
+    if (f1 < SQRT2_2) {
+      f1 *= 2;
+      ki--;
+    }
+    const f = f1 - 1, k = ki;
+    const s = f / (2 + f), s2 = s * s, s4 = s2 * s2;
+    const t1 = s2 * (L1 + s4 * (L3 + s4 * (L5 + s4 * L7)));
+    const t2 = s4 * (L2 + s4 * (L4 + s4 * L6));
+    const R = t1 + t2, hfsq = 0.5 * f * f;
+    return k * LN2HI - ((hfsq - (s * (hfsq + R) + k * LN2LO)) - f);
+  }
+  const log10 = (x) => log(x) * INV_LN10;
+  function log2(x) {
+    const [frac, exp] = frexp(x);
+    if (frac === 0.5) return exp - 1;
+    return log(frac) * INV_LN2 + exp;
+  }
+  function log1p(x) {
+    const Sqrt2M1 = 4.142135623730950488017e-01, Sqrt2HalfM1 = -2.928932188134524755992e-01,
+      Small = 1.862645149230957e-09, Tiny = 5.551115123125783e-17, Two53 = 9007199254740992,
+      Lp1 = 6.666666666666735130e-01, Lp2 = 3.999999999940941908e-01, Lp3 = 2.857142874366239149e-01,
+      Lp4 = 2.222219843214978396e-01, Lp5 = 1.818357216161805012e-01, Lp6 = 1.531383769920937332e-01,
+      Lp7 = 1.479819860511658591e-01;
+    if (x < -1 || x !== x) return NaN;
+    if (x === -1) return -Infinity;
+    if (x === Infinity) return Infinity;
+    const absx = Math.abs(x);
+    let f = 0, iu = 0n, k = 1;
+    if (absx < Sqrt2M1) {
+      if (absx < Small) {
+        if (absx < Tiny) return x;
+        return x - x * x * 0.5;
+      }
+      if (x > Sqrt2HalfM1) {
+        k = 0;
+        f = x;
+        iu = 1n;
+      }
+    }
+    let c = 0;
+    if (k !== 0) {
+      let u;
+      if (absx < Two53) {
+        u = 1.0 + x;
+        iu = bitsOf(u);
+        k = Number(iu >> 52n) - 1023;
+        c = k > 0 ? 1.0 - (u - x) : x - (u - 1.0);
+        c /= u;
+      } else {
+        u = x;
+        iu = bitsOf(u);
+        k = Number(iu >> 52n) - 1023;
+        c = 0;
+      }
+      iu &= 0x000fffffffffffffn;
+      if (iu < 0x0006a09e667f3bcdn) {
+        u = fromBits(iu | 0x3ff0000000000000n);
+      } else {
+        k++;
+        u = fromBits(iu | 0x3fe0000000000000n);
+        iu = (0x0010000000000000n - iu) >> 2n;
+      }
+      f = u - 1.0;
+    }
+    const hfsq = 0.5 * f * f;
+    if (iu === 0n) {
+      if (f === 0) {
+        if (k === 0) return 0;
+        c += k * LN2LO;
+        return k * LN2HI + c;
+      }
+      const R = hfsq * (1.0 - 0.66666666666666666 * f);
+      if (k === 0) return f - R;
+      return k * LN2HI - ((R - (k * LN2LO + c)) - f);
+    }
+    const s = f / (2.0 + f), z = s * s;
+    const R = z * (Lp1 + z * (Lp2 + z * (Lp3 + z * (Lp4 + z * (Lp5 + z * (Lp6 + z * Lp7))))));
+    if (k === 0) return f - (hfsq - s * (hfsq + R));
+    return k * LN2HI - ((hfsq - (s * (hfsq + R) + (k * LN2LO + c))) - f);
+  }
+
+  function sinh(x) {
+    const P0 = -0.6307673640497716991184787251e+6, P1 = -0.8991272022039509355398013511e+5,
+      P2 = -0.2894211355989563807284660366e+4, P3 = -0.2630563213397497062819489e+2,
+      Q0 = -0.6307673640497716991212077277e+6, Q1 = 0.1521517378790019070696485176e+5,
+      Q2 = -0.173678953558233699533450911e+3;
+    let sign = false;
+    if (x < 0) {
+      x = -x;
+      sign = true;
+    }
+    let temp;
+    if (x > 21) {
+      temp = exp(x) * 0.5;
+    } else if (x > 0.5) {
+      const ex = exp(x);
+      temp = (ex - 1 / ex) * 0.5;
+    } else {
+      const sq = x * x;
+      temp = (((P3 * sq + P2) * sq + P1) * sq + P0) * x;
+      temp = temp / (((sq + Q2) * sq + Q1) * sq + Q0);
+    }
+    return sign ? -temp : temp;
+  }
+  function cosh(x) {
+    x = Math.abs(x);
+    if (x > 21) return exp(x) * 0.5;
+    const ex = exp(x);
+    return (ex + 1 / ex) * 0.5;
+  }
+  const TANHP = [-9.64399179425052238628e-1, -9.92877231001918586564e1, -1.61468768441708447952e3];
+  const TANHQ = [1.12811678491632931402e2, 2.23548839060100448583e3, 4.84406305325125486048e3];
+  function tanh(x) {
+    const MAXLOG = 8.8029691931113054295988e+01;
+    let z = Math.abs(x);
+    if (z > 0.5 * MAXLOG) return x < 0 ? -1 : 1;
+    if (z >= 0.625) {
+      const s = exp(2 * z);
+      z = 1 - 2 / (s + 1);
+      return x < 0 ? -z : z;
+    }
+    if (x === 0) return x;
+    const s = x * x;
+    return x + x * s * ((TANHP[0] * s + TANHP[1]) * s + TANHP[2]) / (((s + TANHQ[0]) * s + TANHQ[1]) * s + TANHQ[2]);
+  }
+  function asinh(x) {
+    const Ln2 = 6.93147180559945286227e-01, NearZero = 3.725290298461914e-09, Large = 268435456;
+    if (x !== x || isInf(x)) return x;
+    let sign = false;
+    if (x < 0) {
+      x = -x;
+      sign = true;
+    }
+    let temp;
+    if (x > Large) temp = log(x) + Ln2;
+    else if (x > 2) temp = log(2 * x + 1 / (Math.sqrt(x * x + 1) + x));
+    else if (x < NearZero) temp = x;
+    else temp = log1p(x + x * x / (1 + Math.sqrt(1 + x * x)));
+    return sign ? -temp : temp;
+  }
+  function acosh(x) {
+    const Large = 268435456;
+    if (x < 1 || x !== x) return NaN;
+    if (x === 1) return 0;
+    if (x >= Large) return log(x) + LN2;
+    if (x > 2) return log(2 * x - 1 / (x + Math.sqrt(x * x - 1)));
+    const t = x - 1;
+    return log1p(t + Math.sqrt(2 * t + t * t));
+  }
+  function atanh(x) {
+    const NearZero = 3.725290298461914e-09;
+    if (x < -1 || x > 1 || x !== x) return NaN;
+    if (x === 1) return Infinity;
+    if (x === -1) return -Infinity;
+    let sign = false;
+    if (x < 0) {
+      x = -x;
+      sign = true;
+    }
+    let temp;
+    if (x < NearZero) {
+      temp = x;
+    } else if (x < 0.5) {
+      temp = x + x;
+      temp = 0.5 * log1p(temp + temp * x / (1 - x));
+    } else {
+      temp = 0.5 * log1p((x + x) / (1 - x));
+    }
+    return sign ? -temp : temp;
+  }
+  function cbrt(x) {
+    const B1 = 715094163n, B2 = 696219795n, C = 5.42857142857142815906e-01, D = -7.05306122448979611050e-01,
+      E = 1.41428571428571436819e+00, F = 1.60714285714285720630e+00, G = 3.57142857142857150787e-01;
+    if (x === 0 || x !== x || isInf(x)) return x;
+    let sign = false;
+    if (x < 0) {
+      x = -x;
+      sign = true;
+    }
+    let t = fromBits(bitsOf(x) / 3n + (B1 << 32n));
+    if (x < SMALLEST_NORMAL) {
+      t = 18014398509481984; // 1 << 54
+      t *= x;
+      t = fromBits(bitsOf(t) / 3n + (B2 << 32n));
+    }
+    let r = t * t / x;
+    let s = C + r * t;
+    t *= G + F / (s + E + D / s);
+    t = fromBits((bitsOf(t) & (0xFFFFFFFFCn << 28n)) + (1n << 30n));
+    s = t * t;
+    r = x / s;
+    const w = t + t;
+    r = (r - t) / (w + r);
+    t = t + t * r;
+    return sign ? -t : t;
+  }
+  function isOddInt(x) {
+    if (Math.abs(x) >= 9007199254740992) return false;
+    const [xi, xf] = modf(x);
+    return xf === 0 && (BigInt(xi) & 1n) === 1n;
+  }
+  function pow(x, y) {
+    if (y === 0 || x === 1) return 1;
+    if (y === 1) return x;
+    if (x !== x || y !== y) return NaN;
+    if (x === 0) {
+      if (y < 0) return signbit(x) && isOddInt(y) ? -Infinity : Infinity;
+      if (y > 0) return signbit(x) && isOddInt(y) ? x : 0;
+    } else if (isInf(y)) {
+      if (x === -1) return 1;
+      if ((Math.abs(x) < 1) === (y === Infinity)) return 0;
+      return Infinity;
+    } else if (isInf(x)) {
+      if (x === -Infinity) return pow(1 / x, -y);
+      if (y < 0) return 0;
+      if (y > 0) return Infinity;
+    } else if (y === 0.5) {
+      return Math.sqrt(x);
+    } else if (y === -0.5) {
+      return 1 / Math.sqrt(x);
+    }
+    let [yi, yf] = modf(Math.abs(y));
+    if (yf !== 0 && x < 0) return NaN;
+    if (yi >= 9223372036854775808) {
+      if (x === -1) return 1;
+      if ((Math.abs(x) < 1) === (y > 0)) return 0;
+      return Infinity;
+    }
+    let a1 = 1.0, ae = 0;
+    if (yf !== 0) {
+      if (yf > 0.5) {
+        yf--;
+        yi++;
+      }
+      a1 = exp(yf * log(x));
+    }
+    let [x1, xe] = frexp(x);
+    for (let i = BigInt(yi); i !== 0n; i >>= 1n) {
+      if (xe < -4096 || 4096 < xe) {
+        ae += xe;
+        break;
+      }
+      if ((i & 1n) === 1n) {
+        a1 *= x1;
+        ae += xe;
+      }
+      x1 *= x1;
+      xe <<= 1;
+      if (x1 < 0.5) {
+        x1 += x1;
+        xe--;
+      }
+    }
+    if (y < 0) {
+      a1 = 1 / a1;
+      ae = -ae;
+    }
+    return ldexp(a1, ae);
+  }
+  function hypot(p, q) {
+    p = Math.abs(p);
+    q = Math.abs(q);
+    if (p === Infinity || q === Infinity) return Infinity;
+    if (p !== p || q !== q) return NaN;
+    if (p < q) [p, q] = [q, p];
+    if (p === 0) return 0;
+    q = q / p;
+    return p * Math.sqrt(1 + q * q);
+  }
+
   const math = {
+    sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh,
+    exp, exp2, expm1, log, log10, log2, log1p, cbrt, pow, hypot, ldexp,
     absInt: (x) => (x < 0 ? -x : x),
     minInt: (x, y) => Math.min(x, y),
     maxInt: (x, y) => Math.max(x, y),

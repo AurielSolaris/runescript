@@ -3,6 +3,7 @@ package stdlib
 import (
 	"math"
 
+	"github.com/AurielSolaris/runescript/internal/fmath"
 	"github.com/AurielSolaris/runescript/internal/types"
 )
 
@@ -12,10 +13,10 @@ import (
 //
 // Every function here must give bit-identical results on both targets, so
 // the JavaScript runtime implements each one exactly as Go does, never
-// with a host function that merely approximates the same value. The
-// functions whose results IEEE 754 defines exactly (sqrt, floor, round,
-// mod, ...) are here; the transcendental ones (sin, exp, log, pow, ...)
-// need one shared implementation for both targets and come next.
+// with a host function that merely approximates the same value. Functions
+// whose results IEEE 754 defines exactly (sqrt, floor, mod, ...) use Go's
+// math; the transcendental ones (sin, exp, log, pow, ...) use
+// internal/fmath, one shared algorithm for both targets.
 //
 // A NaN's sign is not portable across hosts, so it is not observable:
 // signbit(NaN) is false, and copysign treats a NaN sign as positive.
@@ -79,6 +80,17 @@ func init() {
 		fn("isInf", B, func(a []any) any { return math.IsInf(f(a[0]), int(n(a[1]))) }, F, I),
 		fn("inf", F, func(a []any) any { return math.Inf(int(n(a[0]))) }, I),
 		fn("nan", F, func(a []any) any { return math.NaN() }),
+		fn("ldexp", F, func(a []any) any { return math.Ldexp(f(a[0]), int(n(a[1]))) }, F, I),
+
+		// The transcendental functions run internal/fmath, Go's pure-Go
+		// code, which the JavaScript runtime ports line by line.
+		f1("sin", fmath.Sin), f1("cos", fmath.Cos), f1("tan", fmath.Tan),
+		f1("asin", fmath.Asin), f1("acos", fmath.Acos), f1("atan", fmath.Atan), f2("atan2", fmath.Atan2),
+		f1("sinh", fmath.Sinh), f1("cosh", fmath.Cosh), f1("tanh", fmath.Tanh),
+		f1("asinh", fmath.Asinh), f1("acosh", fmath.Acosh), f1("atanh", fmath.Atanh),
+		f1("exp", fmath.Exp), f1("exp2", fmath.Exp2), f1("expm1", fmath.Expm1),
+		f1("log", fmath.Log), f1("log10", fmath.Log10), f1("log2", fmath.Log2), f1("log1p", fmath.Log1p),
+		f1("cbrt", fmath.Cbrt), f2("pow", fmath.Pow), f2("hypot", fmath.Hypot),
 	)
 
 	flt := func(v float64) Const { return Const{Float: v} }

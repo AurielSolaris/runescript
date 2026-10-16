@@ -685,15 +685,18 @@ its exact type. So `math.max(3, 7)` is an `int`, `math.max(1.5, 2)` a
 `float64`, and `math.max(x, n)` with a `float64` and an `int` is
 `ASX-TYPE-001`. User functions cannot be overloaded.
 
-Library functions on floats give bit-identical results on both targets:
-the JavaScript runtime computes exactly what Go's `math` computes, never
-an approximation from the host. A NaN's sign is not observable:
+Library functions on floats give bit-identical results on both targets
+and on every processor: the JavaScript runtime computes exactly what Go
+computes, never an approximation from the host. The transcendental
+functions run one shared algorithm, Go's pure-Go code (`internal/fmath`),
+with every multiply-add kept unfused, and a line-by-line JavaScript port
+of it. A NaN's sign is not observable:
 `math.signbit(NaN)` is `false`.
 
 | Package | Contents |
 |---|---|
 | `std:string` | 43 functions: Go's `strings` functions expressible with `string`, `int`, `bool`, `char`, callbacks, and `Array<string>`, plus `len`, `runeCount`, and `slice` (see `docs/guide/10-std-string.md`) |
-| `std:math` | [2026-10-17, in progress] Go's `math` on `float64`: `abs ceil floor trunc round roundToEven sqrt min max mod remainder dim nextafter copysign signbit isInf inf nan`; the int helpers `abs min max clamp`; untyped constants `pi e phi sqrt2 sqrtE sqrtPi sqrtPhi ln2 log2E ln10 log10E maxFloat64 smallestNonzeroFloat64 maxFloat32 smallestNonzeroFloat32` and `minInt/maxInt` … `maxUint64` for every integer type. Transcendental functions (`sin exp log pow` …) are next. |
+| `std:math` | [2026-10-17] Go's `math` on `float64`: `abs ceil floor trunc round roundToEven sqrt min max mod remainder dim nextafter copysign signbit isInf inf nan ldexp`, and `sin cos tan asin acos atan atan2 sinh cosh tanh asinh acosh atanh exp exp2 expm1 log log10 log2 log1p cbrt pow hypot`; the int helpers `abs min max clamp`; untyped constants `pi e phi sqrt2 sqrtE sqrtPi sqrtPhi ln2 log2E ln10 log10E maxFloat64 smallestNonzeroFloat64 maxFloat32 smallestNonzeroFloat32` and `minInt/maxInt` … `maxUint64` for every integer type. |
 | `std:symrs` | [planned] Symbolic mathematics, a port of the owner's SympJS library; needs objects, floats, and arrays |
 
 ## 9. Diagnostics and runtime errors
