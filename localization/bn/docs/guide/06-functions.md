@@ -1,4 +1,4 @@
-<!-- source: docs/guide/06-functions.md @ 52427d9 -->
+<!-- source: docs/guide/06-functions.md @ 920cb24 -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/06-functions.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 
