@@ -44,3 +44,17 @@ func TestInterpreterRejectsExterns(t *testing.T) {
 		t.Errorf("build: diags=%v err=%v", diags, err)
 	}
 }
+
+// rune:dom programs need a browser: the interpreter refuses them.
+func TestInterpreterRejectsDOM(t *testing.T) {
+	src := []byte("package p;\nuse \"rune:dom\";\npublic Element App() { template { <p>x</p> } }\npublic void main() { dom.renderApp(App, \"#app\"); }\n")
+	if _, diags := Check(src); diags != nil {
+		t.Fatalf("check: %v", diags)
+	}
+	var out strings.Builder
+	_, diags, err := Run(src, &out)
+	if err != nil || len(diags) != 1 || diags[0].Code.String() != "ASX-TARGET-002" || diags[0].Span.Start.Line != 2 ||
+		!strings.Contains(diags[0].Help, "runescript dev") {
+		t.Errorf("diags=%v err=%v", diags, err)
+	}
+}

@@ -242,7 +242,7 @@ func TestJSLevelLint(t *testing.T) {
 // checks the modules, runtime included, against the allowed level.
 func TestGeneratedJSLanguageLevel(t *testing.T) {
 	var files []string
-	for _, glob := range []string{"../examples/*.rsc", "testdata/runtime/*.rsc", "testdata/js/*.rsc", "testdata/extern/*.rsc"} {
+	for _, glob := range []string{"../examples/*.rsc", "testdata/runtime/*.rsc", "testdata/js/*.rsc", "testdata/extern/*.rsc", "testdata/dom/*.rsc"} {
 		m, _ := filepath.Glob(glob)
 		files = append(files, m...)
 	}

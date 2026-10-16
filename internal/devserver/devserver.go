@@ -204,6 +204,14 @@ func (s *Server) Handler() http.Handler {
 			io.WriteString(w, clientJS)
 		case EventsPath:
 			s.events(w, r)
+		case "/favicon.ico":
+			// Browsers ask for it; without one, answer quietly instead of
+			// logging a 404 on every page load.
+			if _, err := os.Stat(filepath.Join(s.root, "favicon.ico")); err != nil {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			files.ServeHTTP(w, r)
 		default:
 			files.ServeHTTP(w, r)
 		}

@@ -296,7 +296,40 @@ func (p *parser) isTypeStart() bool {
 	t := p.tok()
 	return (t.Kind == lexer.Keyword && typeKeywords[t.Text] && p.peekTok(1).Kind != lexer.Dot) ||
 		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Ident) ||
-		(t.Kind == lexer.Ident && p.isNamedFuncType())
+		(t.Kind == lexer.Ident && p.isNamedFuncType()) ||
+		(t.Kind == lexer.Ident && p.genericEnd(1) > 0 && p.peekTok(p.genericEnd(1)).Kind == lexer.Ident)
+}
+
+// genericEnd returns the index, relative to the current token, of the
+// token after a type-argument list `<...>` starting at index i, or 0 if
+// there is none. `Signal<int> count` is a declaration; an expression
+// statement is always a call, so `a < b > c` cannot be confused with it.
+func (p *parser) genericEnd(i int) int {
+	if !p.isOp(i, "<") {
+		return 0
+	}
+	depth := 0
+	for ; ; i++ {
+		t := p.peekTok(i)
+		switch {
+		case p.isOp(i, "<"):
+			depth++
+		case p.isOp(i, ">"):
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		case t.Kind == lexer.Ident, t.Kind == lexer.Comma, t.Kind == lexer.LParen, t.Kind == lexer.RParen,
+			t.Kind == lexer.Keyword && typeKeywords[t.Text]:
+		default:
+			return 0
+		}
+	}
+}
+
+func (p *parser) isOp(i int, op string) bool {
+	t := p.peekTok(i)
+	return t.Kind == lexer.Op && t.Text == op
 }
 
 // isNamedFuncType reports whether the tokens ahead are a function type
@@ -344,6 +377,20 @@ func (p *parser) typeRef(what string) *ast.TypeRef {
 	}
 	p.next()
 	ref := &ast.TypeRef{Name: t.Text, Span: t.Span}
+	if t.Kind == lexer.Ident && p.is(lexer.Op, "<") {
+		p.next()
+		for {
+			ref.Args = append(ref.Args, p.typeRef("type argument"))
+			if !p.is(lexer.Comma, "") {
+				break
+			}
+			p.next()
+		}
+		if !p.is(lexer.Op, ">") {
+			p.unexpected("'>' to close the type arguments")
+		}
+		ref.Span = span(t.Span, p.next().Span)
+	}
 	for p.is(lexer.LParen, "") {
 		p.next()
 		fn := &ast.FuncTypeRef{Result: ref}
@@ -413,6 +460,8 @@ func (p *parser) stmt() ast.Stmt {
 		return &ast.ThrowStmt{Value: v, Span: span(t.Span, end.Span)}
 	case t.Kind == lexer.Keyword && t.Text == "try":
 		return p.tryStmt()
+	case t.Kind == lexer.Ident && t.Text == "template" && p.peekTok(1).Kind == lexer.LBrace:
+		return p.templateStmt()
 	case t.Kind == lexer.Keyword && t.Text == "extern":
 		p.failHelp(diagnostics.ParseUnexpected, t.Span,
 			"declare extern functions at the top level of the file, outside any function",
@@ -667,7 +716,7 @@ func (p *parser) isLambdaStart() bool {
 	case t1.Kind == lexer.Keyword && typeKeywords[t1.Text]:
 		return t2.Kind != lexer.Dot // `(string.trim(x))` is a parenthesized call
 	case t1.Kind == lexer.Ident:
-		return t2.Kind == lexer.Ident
+		return t2.Kind == lexer.Ident || p.genericEnd(2) > 0 && p.peekTok(p.genericEnd(2)).Kind == lexer.Ident
 	}
 	return false
 }

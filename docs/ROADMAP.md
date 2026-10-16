@@ -92,13 +92,17 @@ conditionals, loops, and basic functions.
 ### DOM interop (owner decisions, 2026-10-16; started)
 - [x] Internal list of HTML4 and HTML5 elements (`internal/dom`): void and obsolete elements with hints, typed attributes per element (string, url, bool, int, uint, float, keywords, id references, tokens, events), global attributes and event handlers, `data-*`/`aria-*`, and obsolete HTML4 presentational attributes; cross-checked against independent element lists
 - [x] SVG 1.1 and SVG 2 elements in their own namespace (case-sensitive names; SVG 1.1 elements SVG 2 removed are obsolete with hints), typed attributes including lengths, presentation attributes with CSS-wide keywords, `href` with obsolete `xlink:href`
-- [ ] Declarative, component-based UI like React's, but without JSX and without a virtual DOM: state changes update the affected DOM nodes directly
-- [ ] Templates in `.rsc` files, in the style of Vue/Svelte components and Laravel Blade: `$if` and `$foreach` directives, `{{ }}` interpolation that escapes HTML by default; `Element` is a type imported with `use "rune:dom";`
-- [ ] Reactivity through explicit SolidJS-style signals, called runes: `Signal<int> count = signal(0);`, read `count()`, written `count.set(n)`; setting one updates only the DOM nodes that read it
-- [ ] Elements: HTML4 (obsolete ones warn), HTML5, and SVG; attributes typed per element
-- [ ] Mounting without a router: `use "./App.rsc";` then `dom.renderApp(app.App, "#app");` renders one component into the element the selector names; any CSS selector works, with a warning unless it is an id selector
-- [ ] Templates switch to SVG inside `<svg>` (and back to HTML inside `foreignObject`)
-- [ ] Needs first: a signal type (generics or opaque types), arrays, and callbacks across the JavaScript boundary; classes are not required
+- [x] Declarative, component-based UI like React's, but without JSX and without a virtual DOM: state changes update the affected DOM nodes directly
+- [x] Templates in `.rsc` files, in the style of Vue/Svelte components and Laravel Blade: `$if`/`$elseif`/`$else`/`$endif`, `{{ }}` interpolation that escapes HTML by default; `Element` is a type imported with `use "rune:dom";` (2026-10-16)
+- [ ] `$foreach` (needs arrays)
+- [x] Reactivity through explicit SolidJS-style signals, called runes: `Signal<int> count = signal(0);`, read `count()` or `count.get()`, written `count.set(n)`; setting one updates only the DOM nodes that read it; nested functions and lambdas may use the runes around them
+- [x] Elements: HTML4 (obsolete ones warn), HTML5, and SVG; attributes typed per element, checked for static values and `{{ }}` types; bound keyword and URL values checked at run time
+- [x] Mounting without a router: `use "./App.rsc";` then `dom.renderApp(app.App, "#app");` renders one component into the element the selector names; any CSS selector works, with a warning unless it is an id selector
+- [x] Templates switch to SVG inside `<svg>` (and back to HTML inside `foreignObject`)
+- [x] Tests: lexer, parser, checker, and fake-DOM runs on Node.js of test programs and every web example; counter and SVG checked in Edge
+- [x] Docs: guide chapter 15 (and translations), diagnostics, spec section 13, web examples
+- [ ] Component tags with properties, event objects (input values), two-way binding
+- [x] A built-in `Signal<T>` for scalar `T` (general generics still open); callbacks stay inside RuneScript, so no JavaScript callbacks were needed
 
 ### Live reload (owner request, 2026-10-16)
 - [x] `runescript dev`: serves the entry file's folder on 127.0.0.1 (port 5173, or the next free one), compiles in memory, rebuilds when a program file changes, reloads the browser over Server-Sent Events, and shows compile errors in an overlay; the user's `index.html` or a generated page
@@ -128,7 +132,7 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
   packages, clashes, visibility, duplicates, bad names, a runtime error in
   a used file, running from a different working directory), all also run on
   Node.js
-- [ ] Qualified function values (`geom.area` without a call)
+- [x] Qualified function values (`geom.area` without a call), 2026-10-16
 
 ### Floats, conversions, and errors ✅ (requested by the owner during v0.3)
 - [x] `float` (float32 by default, widening exactly, per CLAUDE.md §4.4),

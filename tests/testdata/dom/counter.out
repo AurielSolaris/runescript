@@ -1,0 +1,4 @@
+render: <div id="app"><div class="counter"><p>Clicked 0 times</p><button id="inc">+1</button><button id="reset" disabled>Reset</button></div></div>
+click #inc: <div id="app"><div class="counter"><p>Clicked 1 times</p><button id="inc">+1</button><button id="reset">Reset</button></div></div>
+click #inc: <div id="app"><div class="counter"><p>Clicked 2 times</p><button id="inc">+1</button><button id="reset">Reset</button><p class="note">That's a lot of clicks.</p></div></div>
+click #reset: <div id="app"><div class="counter"><p>Clicked 0 times</p><button id="inc">+1</button><button id="reset" disabled>Reset</button></div></div>

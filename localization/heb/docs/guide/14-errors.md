@@ -162,6 +162,6 @@ main.rsc:4:5: error ASX-RUN-005: uncaught ArgumentError: missing input
 עדיין לא זמין: עקבות מחסנית (stack traces), מתודות של שגיאות כמו `toString()`,
 וטיפוסי שגיאה משלכם (הם דורשים מחלקות).
 
-הבא: חזרה ל[תוכן העניינים של המדריך](README.md)
+הבא: [דפי רשת עם `rune:dom`](15-web-pages.md)
 
 </div>

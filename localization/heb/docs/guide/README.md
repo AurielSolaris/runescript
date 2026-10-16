@@ -24,6 +24,7 @@
 12. [חבילות וקבצים](12-packages-and-files.md): `use`, תוכניות מרובות קבצים, נראות
 13. [מספרים עשרוניים והמרות](13-floats-and-conversions.md): `float`, `float32`, `float64`, `(int) x`
 14. [שגיאות](14-errors.md): `throw`, `try`, `catch`, `finally`, ותפיסת שגיאות זמן ריצה
+15. [דפי רשת עם `rune:dom`](15-web-pages.md): רכיבים, תבניות HTML ו-SVG בדוקות, runes, אירועים, `$if`, `renderApp`
 
 לכללים המדויקים, ראו את [מפרט השפה](../../../../docs/LANGUAGE_SPEC.md) (באנגלית).
 למה שמתוכנן בהמשך, ראו את [מפת הדרכים](../../../../docs/ROADMAP.md) (באנגלית).

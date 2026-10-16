@@ -62,7 +62,7 @@ const $rt = (() => {
     return e;
   };
   // FAULTS are the error types of runtime errors that can be caught.
-  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error", [CODES.externThrew]: "Error" };
+  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error", [CODES.externThrew]: "Error", [CODES.noMountTarget]: "Error" };
 
   // at returns the file, line, and column of a call site.
   const at = (site) => {
@@ -314,6 +314,176 @@ const $rt = (() => {
     return bad();
   }
 
+  // ---- runes and the DOM (rune:dom, OQ-DOM-01) ----
+  //
+  // A rune is a signal, as in SolidJS. A binding is a computation that
+  // updates one part of the DOM: reading a rune while a binding runs
+  // subscribes the binding to it, and setting the rune runs exactly the
+  // bindings that read it. There is no virtual DOM and no re-rendering.
+  //
+  // Bindings form an ownership tree: a binding created while another runs
+  // belongs to it, and is disposed when its owner runs again or is
+  // disposed, so an $if branch that is removed takes its bindings along.
+
+  let owner = null; // the binding or scope being built or run
+
+  function scope(parent) {
+    const s = { deps: new Set(), kids: [], dead: false };
+    if (parent) parent.kids.push(s);
+    return s;
+  }
+  function dispose(s) {
+    for (const subs of s.deps) subs.delete(s);
+    s.deps.clear();
+    for (const k of s.kids) {
+      k.dead = true;
+      dispose(k);
+    }
+    s.kids = [];
+  }
+  function within(s, fn) {
+    const prev = owner;
+    owner = s;
+    try {
+      return fn();
+    } finally {
+      owner = prev;
+    }
+  }
+  // bind runs fn now and again whenever a rune it read changes.
+  function bind(fn) {
+    const b = scope(owner);
+    b.run = () => {
+      if (b.dead) return;
+      dispose(b);
+      within(b, fn);
+    };
+    b.run();
+  }
+
+  function signal(value) {
+    const subs = new Set();
+    return {
+      get() {
+        if (owner && owner.run) {
+          subs.add(owner);
+          owner.deps.add(subs);
+        }
+        return value;
+      },
+      set(v) {
+        if (Object.is(v, value)) return;
+        value = v;
+        for (const b of Array.from(subs)) b.run();
+      },
+    };
+  }
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const el = (svg, tag) => (svg ? document.createElementNS(SVG_NS, tag) : document.createElement(tag));
+  const text = (parent, s) => parent.appendChild(document.createTextNode(s));
+
+  // display turns a value from {{ }} into text, as trace does.
+  const display = (v, kind) => (kind === "f32" ? f32str(v) : String(v));
+
+  // bindText keeps a text node equal to {{ fn() }}.
+  function bindText(parent, fn, kind) {
+    const t = text(parent, "");
+    bind(() => {
+      t.data = display(fn(), kind);
+    });
+  }
+
+  // bindNode keeps the element {{ fn() }} (a child component) in place.
+  function bindNode(parent, fn) {
+    const anchor = parent.appendChild(document.createComment(""));
+    let node = null;
+    bind(() => {
+      const n = fn();
+      if (node) node.remove();
+      node = n;
+      anchor.parentNode.insertBefore(n, anchor);
+    });
+  }
+
+  // safeURL rejects URLs that would run script, so that a {{ }} value
+  // can never inject code into a link, as text can never inject markup.
+  function safeURL(v, site, name) {
+    if (/^[\u0000- ]*(javascript|vbscript|data):/i.test(v.replace(/[\t\n\r]/g, ""))) {
+      fail(CODES.domValue, site, `${name}: refusing the URL ${JSON.stringify(v)}, which would run script`, "TypeError");
+    }
+    return v;
+  }
+
+  // attr sets a static attribute; bool attributes are present or absent.
+  const attr = (e, name, v) => (v === true ? e.setAttribute(name, "") : e.setAttribute(name, v));
+
+  // bindAttr keeps the attribute name equal to {{ fn() }}. kind is "bool",
+  // "url", "f32", or "" (any other value is shown as text); values, if
+  // not null, are the keywords the attribute allows.
+  function bindAttr(e, name, fn, kind, values, site) {
+    bind(() => {
+      const v = fn();
+      if (kind === "bool") {
+        if (v) e.setAttribute(name, "");
+        else e.removeAttribute(name);
+        return;
+      }
+      let s = display(v, kind);
+      if (values !== null && values.indexOf(s) < 0) {
+        fail(CODES.domValue, site, `${name}: ${JSON.stringify(s)} is not one of ${values.map((x) => JSON.stringify(x)).join(", ")}`, "TypeError");
+      }
+      if (kind === "url") s = safeURL(s, site, name);
+      e.setAttribute(name, s);
+    });
+  }
+
+  // on calls the RuneScript function handler for the event. An error that
+  // nothing caught is reported like run's: as a RuneScriptError.
+  function on(e, event, handler, site) {
+    e.addEventListener(event, () => {
+      try {
+        handler(site);
+      } catch (x) {
+        throw x instanceof RSError ? report(x) : x;
+      }
+    });
+  }
+
+  // when is $if: test() returns the index of the branch to show (-1 for
+  // none), and build(i) builds branch i's nodes. A branch is rebuilt only
+  // when the index changes.
+  function when(parent, test, build) {
+    const anchor = parent.appendChild(document.createComment(""));
+    const holder = owner;
+    let shown = -2, nodes = [], branch = null;
+    bind(() => {
+      const i = test();
+      if (i === shown) return;
+      shown = i;
+      if (branch) dispose(branch);
+      for (const n of nodes) n.remove();
+      branch = scope(holder);
+      const frag = document.createDocumentFragment();
+      if (i >= 0) within(branch, () => build(i, frag));
+      nodes = Array.from(frag.childNodes);
+      anchor.parentNode.insertBefore(frag, anchor);
+    });
+  }
+
+  // renderApp calls the component and puts its element into the first
+  // element selector matches, replacing what was there.
+  function renderApp(component, selector, site) {
+    const target = typeof document === "undefined" ? null : document.querySelector(selector);
+    if (target === null) {
+      fail(CODES.noMountTarget, site, `renderApp: no element matches ${JSON.stringify(selector)}`);
+    }
+    const root = scope(null);
+    const node = within(root, () => component(site));
+    while (target.firstChild) target.removeChild(target.firstChild);
+    target.appendChild(node);
+  }
+
   // ---- std:string ----
   //
   // Positions and lengths are UTF-8 byte offsets, as in Go (owner decision,
@@ -493,6 +663,7 @@ const $rt = (() => {
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
     enter, leave, unwind, trace, native, ext, RSError, run, std: { string },
+    signal, el, text, attr, bindText, bindNode, bindAttr, on, when, renderApp,
   };
 })();
 // ---- end of RuneScript runtime --------------------------------------------

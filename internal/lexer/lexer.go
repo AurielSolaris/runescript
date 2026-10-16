@@ -166,44 +166,56 @@ var operators = []string{
 func (l *lexer) run() {
 	for {
 		l.skipSpaceAndComments()
-		start := l.pos()
 		if l.off >= len(l.src) {
-			l.emit(EOF, "", start)
+			l.emit(EOF, "", l.pos())
 			return
 		}
-		c := l.src[l.off]
-		switch {
-		case isIdentStart(c):
-			l.ident(start)
-		case isDigit(c):
-			l.number(start)
-		case c == '"':
-			l.string(start)
-		case c == '\'':
+		l.token()
+		if l.atTemplate() {
+			l.skipSpaceAndComments()
+			start := l.pos()
 			l.advance()
-			l.errorf(diagnostics.LexUnsupportedLiteral, start, "character literals are not supported yet").
-				WithHelp("the 'char' type and its literal syntax are not yet specified")
-		default:
-			if k, ok := punct[c]; ok {
-				l.advance()
-				l.emit(k, string(c), start)
-				continue
-			}
-			if op := l.matchOperator(); op != "" {
-				for range op {
-					l.advance()
-				}
-				kind := Op
-				if op == "=" {
-					kind = Assign
-				}
-				l.emit(kind, op, start)
-				continue
-			}
-			r, _ := utf8.DecodeRune(l.src[l.off:])
-			l.advance()
-			l.errorf(diagnostics.LexUnexpectedChar, start, "unexpected character %q", r)
+			l.emit(LBrace, "{", start)
+			l.markup()
 		}
+	}
+}
+
+// token lexes one token; the input is not at a space or a comment.
+func (l *lexer) token() {
+	start := l.pos()
+	c := l.src[l.off]
+	switch {
+	case isIdentStart(c):
+		l.ident(start)
+	case isDigit(c):
+		l.number(start)
+	case c == '"':
+		l.string(start)
+	case c == '\'':
+		l.advance()
+		l.errorf(diagnostics.LexUnsupportedLiteral, start, "character literals are not supported yet").
+			WithHelp("the 'char' type and its literal syntax are not yet specified")
+	default:
+		if k, ok := punct[c]; ok {
+			l.advance()
+			l.emit(k, string(c), start)
+			return
+		}
+		if op := l.matchOperator(); op != "" {
+			for range op {
+				l.advance()
+			}
+			kind := Op
+			if op == "=" {
+				kind = Assign
+			}
+			l.emit(kind, op, start)
+			return
+		}
+		r, _ := utf8.DecodeRune(l.src[l.off:])
+		l.advance()
+		l.errorf(diagnostics.LexUnexpectedChar, start, "unexpected character %q", r)
 	}
 }
 

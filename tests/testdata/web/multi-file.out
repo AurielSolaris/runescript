@@ -1,0 +1,2 @@
+render: <div id="app"><main><header><h1>Shopping list</h1></header><p>1 item(s) planned.</p><button id="add" type="button">Add one</button></main></div>
+click #add: <div id="app"><main><header><h1>Shopping list</h1></header><p>2 item(s) planned.</p><button id="add" type="button">Add one</button></main></div>

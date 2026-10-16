@@ -1,0 +1,3 @@
+render: <div id="app"><div class="details"><button id="details" type="button" aria-expanded="false" aria-controls="panel"> Show details </button><p><em>Details are hidden.</em></p></div></div>
+click #details: <div id="app"><div class="details"><button id="details" type="button" aria-expanded="true" aria-controls="panel"> Hide details </button><div id="panel" role="region"><p>RuneScript checks every element and attribute against the HTML element list.</p></div></div></div>
+click #details: <div id="app"><div class="details"><button id="details" type="button" aria-expanded="false" aria-controls="panel"> Show details </button><p><em>Details are hidden.</em></p></div></div>

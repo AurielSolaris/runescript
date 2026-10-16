@@ -22,7 +22,10 @@ var verbs = map[string]string{"assign": "assign", "pass": "pass", "return": "ret
 // verb is "assign", "pass", or "return" and only affects wording.
 func (c *checker) assign(dst *types.Type, e ast.Expr, verb string) {
 	var src operand
-	if lam, ok := unparen(e).(*ast.LambdaExpr); ok && dst.Kind == types.Func {
+	if call, ok := unparen(e).(*ast.CallExpr); ok && dst.Kind == types.Signal && c.isSignalBuiltin(call) {
+		src = operand{typ: c.signalNew(call, dst.Elem)}
+		c.info.Types[e] = src.typ
+	} else if lam, ok := unparen(e).(*ast.LambdaExpr); ok && dst.Kind == types.Func {
 		// A lambda takes its result type from the function type it is
 		// assigned, passed, or returned to.
 		src = operand{typ: c.lambda(lam, dst)}
@@ -265,7 +268,7 @@ func (c *checker) ident(e *ast.Ident) *types.Type {
 		return sym.fn.Type
 	case sym.ext != nil:
 		c.externValueError(e)
-	case crossed:
+	case crossed && !isRune(sym):
 		c.boundaryError(e)
 	default:
 		sym.read = true
@@ -491,6 +494,9 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	switch {
 	case sym == nil && (name == "isNaN" || name == "isFinite"):
 		return c.floatTest(e)
+	case sym == nil && c.isSignalBuiltin(e):
+		c.domUsed[c.file] = true
+		return c.signalNew(e, nil)
 	case sym == nil:
 		if !c.privateError(c.file.Package, name, e.Fn.Span) {
 			c.errorf(diagnostics.NameUndefined, e.Fn.Span, "undefined function '%s'", name)
@@ -501,8 +507,11 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	case sym.ext != nil:
 		c.info.Externs[e] = sym.ext
 		return c.checkArgs(sym.ext.Type, e, "extern function '"+name+"'")
-	case crossed:
+	case crossed && !isRune(sym):
 		c.boundaryError(e.Fn)
+	case isRune(sym):
+		sym.read = true
+		return c.signalCall(e, sym.typ)
 	case sym.typ.Kind == types.Func:
 		sym.read = true
 		c.info.Types[e.Fn] = sym.typ
@@ -583,6 +592,9 @@ func (c *checker) qualifiedCall(e *ast.CallExpr) *types.Type {
 	switch {
 	case b == nil && c.isVariable(e.Pkg.Name):
 		t := c.ident(e.Pkg)
+		if t.Kind == types.Signal {
+			return c.signalMethod(e, t)
+		}
 		c.errorf(diagnostics.TypeNoField, e.Fn.Span, "values of type '%s' have no methods", t).
 			WithHelp(fieldHelp(t))
 	case b == nil:
@@ -592,6 +604,8 @@ func (c *checker) qualifiedCall(e *ast.CallExpr) *types.Type {
 				d.WithHelp(fmt.Sprintf(`add use "std:%s"; after the package declaration`, p.Path))
 			}
 		}
+	case b.rune != "":
+		return c.domCall(e)
 	case b.std != nil:
 		return c.nativeCall(e, b.std)
 	case b.pkg != nil:
@@ -770,9 +784,7 @@ func fieldHelp(t *types.Type) string {
 func (c *checker) selector(e *ast.SelectorExpr) *types.Type {
 	if id, ok := e.X.(*ast.Ident); ok && !c.isVariable(id.Name) && c.quals[id.Name] != nil {
 		c.quals[id.Name].used = true
-		c.errorf(diagnostics.NameNotAValue, e.Span, "'%s.%s' can only be called; package functions cannot be used as values yet", id.Name, e.Name.Name).
-			WithHelp(fmt.Sprintf("wrap it in a lambda, e.g. (int x) => %s.%s(x)", id.Name, e.Name.Name))
-		return types.InvalidT
+		return c.packageFuncValue(e, c.quals[id.Name])
 	}
 	t := c.defaulted(e.X).typ
 	switch {
@@ -826,6 +838,7 @@ func (c *checker) lambda(e *ast.LambdaExpr, expected *types.Type) *types.Type {
 			c.assign(result, e.Expr, "return")
 		}
 	} else {
+		c.lastTemplate = templateFor(e.Body.Stmts)
 		c.stmts(e.Body.Stmts)
 		if c.result == nil {
 			c.result = types.VoidT

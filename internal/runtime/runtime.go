@@ -419,6 +419,9 @@ func (in *interp) expr(f *frame, e ast.Expr) Value {
 		}
 		return Value{Kind: types.Error, Err: err}
 	case *ast.SelectorExpr:
+		if fn, ok := in.info.QualRefs[e]; ok { // pkg.name used as a value
+			return Value{Kind: types.Func, Fn: fn.Def}
+		}
 		err := in.expr(f, e.X).Err
 		switch e.Name.Name {
 		case "message":

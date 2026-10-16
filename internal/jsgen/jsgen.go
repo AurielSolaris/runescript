@@ -33,6 +33,7 @@ import (
 
 	"github.com/AurielSolaris/runescript/internal/conv"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/dom"
 	"github.com/AurielSolaris/runescript/internal/ir"
 	"github.com/AurielSolaris/runescript/internal/jshost"
 	"github.com/AurielSolaris/runescript/internal/runtime"
@@ -89,6 +90,7 @@ type gen struct {
 	fnames  map[*ir.Func]string         // JavaScript names of top-level functions
 	helpers map[string]bool             // runtime members used, e.g. "addI"
 	tables  map[string]bool             // Unicode tables used, e.g. "upper"
+	tmps    int                         // template node variables so far
 	diags   []*diagnostics.Diagnostic
 
 	// imports are the JavaScript modules the program imports, in order,
@@ -254,14 +256,16 @@ if (import.meta.main) {
 
 func fillRuntime(tables map[string]bool) string {
 	codes, _ := json.Marshal(map[string]string{
-		"callDepth":    diagnostics.RunCallDepth.String(),
-		"overflow":     diagnostics.RunOverflow.String(),
-		"divideByZero": diagnostics.RunDivideByZero.String(),
-		"nativeFailed": diagnostics.RunNativeFailed.String(),
-		"uncaught":     diagnostics.RunUncaught.String(),
-		"conversion":   diagnostics.RunConversion.String(),
-		"externResult": diagnostics.RunExternResult.String(),
-		"externThrew":  diagnostics.RunExternThrew.String(),
+		"callDepth":     diagnostics.RunCallDepth.String(),
+		"overflow":      diagnostics.RunOverflow.String(),
+		"divideByZero":  diagnostics.RunDivideByZero.String(),
+		"nativeFailed":  diagnostics.RunNativeFailed.String(),
+		"uncaught":      diagnostics.RunUncaught.String(),
+		"conversion":    diagnostics.RunConversion.String(),
+		"externResult":  diagnostics.RunExternResult.String(),
+		"externThrew":   diagnostics.RunExternThrew.String(),
+		"noMountTarget": diagnostics.RunNoMountTarget.String(),
+		"domValue":      diagnostics.RunDOMValue.String(),
 	})
 	table := func(name string, runs func() []int64) string {
 		if !tables[name] {
@@ -609,6 +613,17 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 			parts = append(parts, g.expr(a, precAssign))
 		}
 		return g.use("ext") + "(" + strings.Join(parts, ", ") + ")", precCall
+	case *ir.Template:
+		return g.template(e), precCall
+	case *ir.NewSignal:
+		return g.use("signal") + "(" + g.expr(e.Init, precAssign) + ")", precCall
+	case *ir.SignalGet:
+		return g.expr(e.X, precCall) + ".get()", precCall
+	case *ir.SignalSet:
+		return g.expr(e.X, precCall) + ".set(" + g.expr(e.Value, precAssign) + ")", precCall
+	case *ir.RenderApp:
+		return g.use("renderApp") + "(" + g.expr(e.Component, precAssign) + ", " + g.expr(e.Selector, precAssign) + ", " +
+			strconv.Itoa(g.site(e.Site)) + ")", precCall
 	case *ir.Trace:
 		parts := make([]string, len(e.Args))
 		for i, a := range e.Args {
@@ -773,5 +788,112 @@ func (g *gen) externNames(externs []*ir.Extern) {
 		}
 		a.funcs = append(a.funcs, x.Host)
 		g.externs[x] = a.name + "." + x.Host.Name
+	}
+}
+
+// ---- templates (rune:dom) ----
+
+// template emits an expression that builds a template's element. Static
+// parts are created once; every {{ }}, bound attribute, and $if becomes a
+// binding (see the runtime) that updates only its own part of the DOM.
+func (g *gen) template(t *ir.Template) string {
+	var b strings.Builder
+	pad := strings.Repeat("  ", g.indent)
+	b.WriteString("(() => {\n")
+	root := g.telement(&b, t.Root, "", pad+"  ")
+	fmt.Fprintf(&b, "%s  return %s;\n%s})()", pad, root, pad)
+	return b.String()
+}
+
+func (g *gen) tmp() string {
+	g.tmps++
+	return "$n" + strconv.Itoa(g.tmps)
+}
+
+// telement emits the creation of element e, appended to parent unless
+// parent is "", and returns the variable holding it.
+func (g *gen) telement(b *strings.Builder, e *ir.TElement, parent, pad string) string {
+	v := g.tmp()
+	fmt.Fprintf(b, "%sconst %s = %s(%t, %s);\n", pad, v, g.use("el"), e.SVG, quote(e.Tag))
+	for _, a := range e.Attrs {
+		site := strconv.Itoa(g.site(a.Site))
+		switch {
+		case a.Kind == dom.Event:
+			fmt.Fprintf(b, "%s%s(%s, %s, %s, %s);\n", pad, g.use("on"), v, quote(strings.TrimPrefix(a.Name, "on")), g.expr(a.Value, precAssign), site)
+		case a.Value != nil:
+			values := "null"
+			if a.Values != nil {
+				q := make([]string, len(a.Values))
+				for i, s := range a.Values {
+					q[i] = quote(s)
+				}
+				values = "[" + strings.Join(q, ", ") + "]"
+			}
+			fmt.Fprintf(b, "%s%s(%s, %s, () => %s, %s, %s, %s);\n", pad, g.use("bindAttr"), v, quote(a.Name),
+				g.expr(a.Value, precAssign), quote(attrKind(a)), values, site)
+		case a.Present:
+			fmt.Fprintf(b, "%s%s(%s, %s, true);\n", pad, g.use("attr"), v, quote(a.Name))
+		default:
+			fmt.Fprintf(b, "%s%s(%s, %s, %s);\n", pad, g.use("attr"), v, quote(a.Name), quote(a.Static))
+		}
+	}
+	g.tnodes(b, e.Children, v, pad)
+	if parent != "" {
+		fmt.Fprintf(b, "%s%s.appendChild(%s);\n", pad, parent, v)
+	}
+	return v
+}
+
+// attrKind tells the runtime how to show a bound attribute's value.
+func attrKind(a *ir.TAttr) string {
+	switch {
+	case a.Kind == dom.Bool:
+		return "bool"
+	case a.Kind == dom.URL:
+		return "url"
+	case a.Value.Type().Kind == types.Float && a.Value.Type().Bits == 32:
+		return "f32"
+	}
+	return ""
+}
+
+func (g *gen) tnodes(b *strings.Builder, nodes []ir.TNode, parent, pad string) {
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *ir.TElement:
+			g.telement(b, n, parent, pad)
+		case *ir.TText:
+			fmt.Fprintf(b, "%s%s(%s, %s);\n", pad, g.use("text"), parent, quote(n.Text))
+		case *ir.TInterp:
+			x := g.expr(n.X, precAssign)
+			switch t := n.X.Type(); {
+			case t.Kind == types.Element:
+				fmt.Fprintf(b, "%s%s(%s, () => %s);\n", pad, g.use("bindNode"), parent, x)
+			case t.Kind == types.Float && t.Bits == 32:
+				fmt.Fprintf(b, "%s%s(%s, () => %s, \"f32\");\n", pad, g.use("bindText"), parent, x)
+			default:
+				fmt.Fprintf(b, "%s%s(%s, () => %s, \"\");\n", pad, g.use("bindText"), parent, x)
+			}
+		case *ir.TIf:
+			// test returns the index of the branch to show, or -1.
+			test := "-1"
+			if n.Else != nil {
+				test = strconv.Itoa(len(n.Conds))
+			}
+			for i := len(n.Conds) - 1; i >= 0; i-- {
+				test = g.expr(n.Conds[i], precOr) + " ? " + strconv.Itoa(i) + " : " + test
+			}
+			fmt.Fprintf(b, "%s%s(%s, () => (%s), (i, $p) => {\n", pad, g.use("when"), parent, test)
+			branches := append(append([][]ir.TNode{}, n.Branches...), n.Else)
+			for i, br := range branches {
+				if len(br) == 0 {
+					continue
+				}
+				fmt.Fprintf(b, "%s  if (i === %d) {\n", pad, i)
+				g.tnodes(b, br, "$p", pad+"    ")
+				fmt.Fprintf(b, "%s  }\n", pad)
+			}
+			fmt.Fprintf(b, "%s});\n", pad)
+		}
 	}
 }

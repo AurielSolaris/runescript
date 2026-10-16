@@ -62,6 +62,9 @@ extern                                [2026-10-16]
 
 `as` is a keyword only after a `use` path (§4.2). `Error`, `RangeError`,
 `TypeError`, and `ArgumentError` are predeclared type names, not keywords.
+**[2026-10-16]** `template` is a keyword only when `{` follows it (§13), and
+`Element`, `Signal`, and `signal` are names that `use "rune:dom";` makes
+available.
 
 Reserved for planned features **[v0.1, provisional]**. They are rejected
 with `ASX-PARSE-002`:
@@ -113,7 +116,8 @@ Visibility   = "public" | "protected" | "private" ;
 Params       = Param { "," Param } ;
 Param        = Type [ Ident ] ;          (* names are optional only in prototypes *)
 Type         = BaseType { "(" [ Type { "," Type } ] ")" } ;   (* function types *)
-BaseType     = "int" | "sint" | "uint" | "bool" | "string" | "void" | Ident ;
+BaseType     = "int" | "sint" | "uint" | "bool" | "string" | "void"
+             | Ident [ "<" Type { "," Type } ">" ] ;           (* Signal<int>, §13 *)
 
 Block        = "{" { Stmt } "}" ;
 Stmt         = FuncDecl                 (* nested function or prototype *)
@@ -121,7 +125,8 @@ Stmt         = FuncDecl                 (* nested function or prototype *)
              | "return" [ Expr ] ";"
              | "break" ";" | "continue" ";"
              | "throw" Expr ";"
-             | IfStmt | WhileStmt | ForStmt | TryStmt ;
+             | IfStmt | WhileStmt | ForStmt | TryStmt
+             | TemplateStmt ;                               (* §13 *)
 SimpleStmt   = VarDecl | Assignment | IncDec | Call ;
 VarDecl      = Type Ident "=" Expr ;
 Assignment   = Ident ( "=" | "+=" | "-=" | "*=" | "/=" | "%=" ) Expr ;
@@ -234,9 +239,11 @@ use "go:<package>";           // Go package                 [planned]
 - **Cycles (decided).** Packages may not use each other in a cycle, directly
   or indirectly (`ASX-USE-005`, reported at the `use` that closes it, with
   the cycle spelled out). Files of one package don't depend on each other.
-- **[v0.3, provisional]** Qualified names can only be called
-  (`geom.area(1, 2)`); a qualified function can't yet be used as a value
-  (`geom.area` alone is `ASX-PARSE-001`). Wrap it in a lambda.
+- **[2026-10-16]** A qualified function of a RuneScript package is also a
+  value of its function type: `geom.area` alone, e.g. passed to a function
+  or to `dom.renderApp(app.App, "#app")`. Visibility applies as for calls.
+  Standard library functions can still only be called (`ASX-NAME-004`);
+  wrap them in a lambda.
 
 ### 4.3 Functions
 - **[v0.2, decided]** Every function declaration, nested ones included,
@@ -272,6 +279,10 @@ use "go:<package>";           // Go package                 [planned]
   where it is declared. It cannot use the variables or parameters of
   enclosing functions (`ASX-NAME-009`). Names of enclosing variables may be
   reused inside the boundary. `break`/`continue` don't cross boundaries.
+  **[2026-10-16, decided]** One exception: runes (`Signal<T>` variables and
+  parameters, §13) of enclosing functions are visible, so event handlers can
+  change a component's state. They cannot be assigned across the boundary
+  (only `set`), and their names cannot be reused inside it.
 - **[v0.2] Function values.** A function name used without a call is a value
   of its function type (§5.6). Function values are called with ordinary call
   syntax, including chained calls `f(1)(2)`. The callee is evaluated before
@@ -609,7 +620,7 @@ purpose:
 | Function | `function add(a:int, b:int):int { }` | `public int add(int a, int b) { }` (access modifier required) |
 | Function values | `var f:Function = add;` (untyped) | `int(int, int) f = add;` (typed) |
 | Anonymous functions | `function(a:int):int { … }`, Royale `=>` | `(int a) => a * 2` |
-| Closures | Capture enclosing variables | No capture: nested functions and lambdas see only their own variables and other functions |
+| Closures | Capture enclosing variables | No capture: nested functions and lambdas see only their own variables, other functions, and (rune:dom) the runes of enclosing functions |
 | Variable | `var n:int = 0;` | `int n = 0;` |
 | Semicolons | Optional | Required |
 | Untyped values | `*` and missing annotations allowed | No `any`; every declaration is explicitly typed |
@@ -726,3 +737,73 @@ a JavaScript module. Rules:
   `ASX-TARGET-002`, while `check` and `build` accept the program. A bundled
   JavaScript runtime is planned (Node.js, ES2022, stays the reference).
 - **[planned]** Source maps.
+
+## 13. Web pages: `rune:dom` **[decided 2026-10-16]**
+
+`use "rune:dom";` provides components, templates, and runes (owner
+decisions; see the guide, chapter 15). Programs that use it run only on the
+JavaScript target (`ASX-TARGET-002` in the interpreter).
+
+### 13.1 Templates
+
+```ebnf
+TemplateStmt = "template" "{" Content "}" ;      (* exactly one root Element *)
+Content      = { Element | Text | "{{" Expr "}}" | If } ;
+Element      = "<" Name { Attribute } ( "/>" | ">" Content "</" Name ">" ) ;
+Attribute    = Name [ "=" ( Quoted | "{{" Expr "}}" ) ] ;
+If           = "$if" "(" Expr ")" Content { "$elseif" "(" Expr ")" Content }
+               [ "$else" Content ] "$endif" ;
+```
+
+- A component is a function returning `Element` whose last statement is
+  its one `TemplateStmt` (`ASX-TMPL-001`); the element is its result.
+- HTML void elements need no closing tag. Inside `<svg>`, names are SVG's
+  (case-sensitive) and every element may be self-closed; inside
+  `<foreignObject>`, they are HTML again.
+- Text: character references are decoded; white space containing a line
+  break is removed at the ends of a text and collapsed to one space inside
+  it; `{` and `}` are reserved (a literal brace is `{{ "{" }}`).
+  `<!-- comments -->` are dropped. White space around the root is ignored.
+- Every element and attribute must be in the internal HTML4/HTML5/SVG list
+  (`ASX-TMPL-002`, `ASX-TMPL-003`); obsolete ones warn (`ASX-WARN-007`).
+  Static values must suit the attribute's kind (`ASX-TMPL-004`); `{{ }}`
+  values must have the kind's type: `bool`, `int`, `uint`, a float type, a
+  number or string for SVG lengths, `void()` for event handlers, and
+  `string` otherwise (`ASX-TMPL-005`). Repeated attributes are
+  `ASX-TMPL-006`.
+- `{{ e }}` in content shows a string, number, or `bool` as text (always
+  escaped), or inserts an `Element` (a child component).
+- Every `{{ }}`, bound attribute, and `$if` condition is a binding: it is
+  computed again when a rune it read changes, and only its own part of the
+  DOM is updated. `$if` rebuilds a branch only when the chosen branch
+  changes; a removed branch's bindings are disposed.
+- At run time, a bound keyword attribute with a value outside its list, and
+  a bound URL that would run script (`javascript:`, `vbscript:`, `data:`),
+  throw a `TypeError` (`ASX-RUN-010`). Static URLs of that kind are
+  `ASX-TMPL-004`.
+
+### 13.2 Runes
+
+- `Signal<T>` is a built-in type for a number, `bool`, or `string` `T`
+  (`ASX-TYPE-025` otherwise); general generics are open (OQ-TYPE-01).
+- `signal(v)` creates one; with a declared `Signal<T>`, `v` must be
+  assignable to `T`, otherwise `T` is `v`'s type.
+- `r()` and `r.get()` read a rune; `r.set(v)` stores `v`, which must be
+  assignable to `T`, and runs the bindings that read it. Setting the same
+  value does nothing.
+- Nested functions and lambdas may use the runes of enclosing functions
+  (§4.3).
+
+### 13.3 Mounting
+
+`dom.renderApp(component, selector)` takes an `Element()` function and a CSS
+selector. It calls the component and replaces the content of the first
+element the selector matches with the result. A literal selector that is
+not a single id selector gives `ASX-WARN-008`; no match at run time throws
+an `Error` (`ASX-RUN-009`). There is no router.
+
+### 13.4 Not yet specified
+
+`$foreach` (needs arrays), component tags with properties, event objects
+and two-way binding, raw HTML, MathML, custom elements, server-side
+rendering, and hot module replacement.

@@ -202,7 +202,9 @@ Every function body, including nested functions and lambdas, is a
   declared (including itself).
 
 It **cannot** use the local variables or parameters of the function it's
-nested in. RuneScript functions don't capture variables (`ASX-NAME-009`):
+nested in. RuneScript functions don't capture variables (`ASX-NAME-009`).
+The one exception is runes in web components, which nested functions and
+lambdas may use ([chapter 15](15-web-pages.md#events)):
 
 ```actionscript
 package main;

@@ -34,6 +34,30 @@ diagnostics:
 | [`signedness_error.rsc`](signedness_error.rsc) | `ASX-TYPE-004`: a signed value can't go into a `uint` |
 | [`boundary_error.rsc`](boundary_error.rsc) | `ASX-NAME-009`: nested functions don't capture outer variables |
 
+## Web pages
+
+[`web/`](web/) has `rune:dom` programs ([guide chapter 15](../docs/guide/15-web-pages.md)).
+They need a browser, so run them with `runescript dev`, which reloads the
+page on every save:
+
+```sh
+go run ./cmd/runescript dev examples/web/counter/app.rsc
+```
+
+| Example | Shows |
+|---|---|
+| [`web/hello`](web/hello/app.rsc) | A static page: checked elements and attributes, escaped text, character references |
+| [`web/counter`](web/counter/app.rsc) | A rune, events, a bound `disabled`, and `$if` |
+| [`web/toggle`](web/toggle/app.rsc) | `$if` / `$else`, `aria-expanded` bound to a `bool` rune |
+| [`web/dial`](web/dial/app.rsc) | SVG: a circle whose radius is a rune |
+| [`web/multi-file`](web/multi-file/) | `dom.renderApp(app.App, "#app")`, components in other files, and an `index.html` for `runescript build`. Run it from its folder: `cd examples/web/multi-file && runescript dev main.rsc` |
+
+`tests/dom_test.go` runs every web example on a small fake DOM under
+Node.js, clicks what its `// click:` comments name, and compares the HTML
+with `tests/testdata/web/<name>.out`.
+
+## Tests
+
 Every example is tested by `tests/golden_test.go`. Programs are run and
 their output compared with `tests/testdata/examples/<name>.out`. Programs
 ending in `_error` must produce exactly the diagnostics in their

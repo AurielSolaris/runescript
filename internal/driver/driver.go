@@ -147,6 +147,17 @@ func RunInput(in Input, out io.Writer) (int, []*diagnostics.Diagnostic, error) {
 // run on the JavaScript target (OQ-JS-02). It returns nil for any other
 // program.
 func needsJS(info *checker.Info) []*diagnostics.Diagnostic {
+	if info.DOM {
+		d := info.DOMUses[0]
+		for _, u := range info.DOMUses[1:] {
+			if u.Span.Start.Before(d.Span.Start) {
+				d = u
+			}
+		}
+		return []*diagnostics.Diagnostic{diagnostics.New(diagnostics.TargetNeedsJS, d.Span,
+			"this program uses rune:dom, which needs a browser: the interpreter cannot run it").
+			WithHelp("serve it with `runescript dev`, or compile it with `runescript build`")}
+	}
 	if len(info.ExternDecls) == 0 {
 		return nil
 	}

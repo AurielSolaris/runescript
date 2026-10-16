@@ -23,6 +23,7 @@ same.
 | `ASX-LEX-005` | An invalid number: leading zero (`007`), letters attached (`12abc`), too many dots (`1.2.3`), or too large or too small (`1e999`, `1e-999`) |
 | `ASX-LEX-006` | A literal kind that isn't supported yet: chars (`'a'`) |
 | `ASX-LEX-007` | The file isn't valid UTF-8 (e.g. it was saved as Windows-1252). UTF-16 and UTF-32 files are converted instead |
+| `ASX-LEX-008` | A template, tag, interpolation, or `$if` condition that is never closed |
 
 ## Syntax errors
 
@@ -45,7 +46,7 @@ The parser stops at the first syntax error.
 | `ASX-NAME-006` | Assigning to a parameter or a function |
 | `ASX-NAME-007` | Package qualifier not in scope, e.g. `string.toUpper` without `use "std:string";` |
 | `ASX-NAME-008` | The package has no function with that name (the help text suggests the camelCase spelling if you used Go's) |
-| `ASX-NAME-009` | Using an enclosing function's variable inside a nested function or lambda (functions don't capture) |
+| `ASX-NAME-009` | Using an enclosing function's variable inside a nested function or lambda (functions don't capture, except runes) |
 | `ASX-NAME-010` | A prototype whose function is never defined |
 | `ASX-NAME-011` | A function used where its access modifier forbids it: another file's `private` function, or another package's `protected` one |
 
@@ -91,6 +92,21 @@ The parser stops at the first syntax error.
 | `ASX-TYPE-022` | A catch clause that can never run, because an earlier clause already catches its type |
 | `ASX-TYPE-023` | An extern function's parameter or result has a type that can't cross the JavaScript boundary, e.g. a function type |
 | `ASX-TYPE-024` | An extern declaration of a `rune:` function doesn't match that function's type |
+| `ASX-TYPE-025` | Wrong type arguments: `Signal` takes one number, `bool`, or `string` type (`Signal<int>`); other types take none |
+
+## Template errors
+
+Templates belong to `rune:dom` ([chapter 15](15-web-pages.md)).
+
+| Code | Meaning |
+|---|---|
+| `ASX-TMPL-001` | A `template` block that isn't the last statement of a function returning `Element` |
+| `ASX-TMPL-002` | An element that isn't in the HTML4, HTML5, or SVG list (the help says when it's in the other namespace or differs in case) |
+| `ASX-TMPL-003` | An attribute the element doesn't have |
+| `ASX-TMPL-004` | A static attribute value the attribute can't take: a value on a boolean attribute, a keyword not in its list, a bad number or length, a URL that would run script, or text for an event handler |
+| `ASX-TMPL-005` | A `{{ }}` value of the wrong type, such as a rune that isn't read (`{{ count }}`), or an `int` for a text attribute |
+| `ASX-TMPL-006` | The same attribute twice on one element |
+| `ASX-TMPL-007` | A template in a file without `use "rune:dom";` |
 
 ## Other compile-time errors
 
@@ -100,7 +116,7 @@ The parser stops at the first syntax error.
 | `ASX-ENTRY-001` | No `main` function |
 | `ASX-ENTRY-002` | `main` has parameters, or returns something other than `int`/`void` |
 | `ASX-ENTRY-003` | More than one file defines `main`; a program has exactly one |
-| `ASX-TARGET-002` | `runescript run` was given a program with extern functions, which only the JavaScript target can run |
+| `ASX-TARGET-002` | `runescript run` was given a program that only the JavaScript target can run: it has extern functions, or uses `rune:dom` |
 
 ## Warnings
 
@@ -132,6 +148,8 @@ cause follow-on warnings that disappear once the errors are fixed.
 | `ASX-WARN-004` | Statements that can never run, because they come after a `return`, `throw`, `break`, or `continue` (or an `if`/`try` whose every path ends in one). Loops are not followed, so code after `while (true) { }` isn't reported |
 | `ASX-WARN-005` | A call used as a statement whose result isn't `void` is thrown away |
 | `ASX-WARN-006` | An extern names one host's own module, e.g. `"node:fs"`; prefer a host-neutral `rune:` module |
+| `ASX-WARN-007` | An element or attribute that HTML5 or SVG 2 made obsolete, e.g. `<center>`, `bgcolor`, `xlink:href`; the help names the replacement |
+| `ASX-WARN-008` | `dom.renderApp` with a selector that isn't a single id, e.g. `".app"`: it may match several elements, or none |
 
 ## Runtime errors
 
@@ -149,6 +167,8 @@ error has already been printed.
 | `ASX-RUN-006` | A conversion failed, e.g. `(int) "12x"` or `(uint) -1` at run time | `TypeError` or `RangeError` |
 | `ASX-RUN-007` | A JavaScript function returned a value that doesn't match its extern declaration, e.g. `1.5` for an `int` | `TypeError` |
 | `ASX-RUN-008` | A JavaScript function threw an exception, or its module has no such function | `Error` |
+| `ASX-RUN-009` | `dom.renderApp` found no element matching its selector | `Error` |
+| `ASX-RUN-010` | A bound attribute got a value it can't take: a keyword not in its list, or a URL that would run script | `TypeError` |
 
 On the JavaScript target, `ASX-RUN-001` is also reported when the host's own
 stack runs out before 10,000 calls (see [chapter 11](11-javascript.md)).

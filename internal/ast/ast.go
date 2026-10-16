@@ -87,6 +87,8 @@ type Param struct {
 type TypeRef struct {
 	Name string
 	Func *FuncTypeRef
+	// Args are the type arguments of a named type, e.g. int in Signal<int>.
+	Args []*TypeRef
 	Span Span
 }
 
@@ -99,7 +101,17 @@ type FuncTypeRef struct {
 // String renders the type as written, e.g. "int(int, int)".
 func (t *TypeRef) String() string {
 	if t.Func == nil {
-		return t.Name
+		if len(t.Args) == 0 {
+			return t.Name
+		}
+		s := t.Name + "<"
+		for i, a := range t.Args {
+			if i > 0 {
+				s += ", "
+			}
+			s += a.String()
+		}
+		return s + ">"
 	}
 	s := t.Func.Result.String() + "("
 	for i, p := range t.Func.Params {
@@ -372,3 +384,74 @@ func (*CastExpr) expr()     {}
 func (*NewExpr) expr()      {}
 func (*SelectorExpr) expr() {}
 func (*LambdaExpr) expr()   {}
+
+// ---- templates (rune:dom) ----
+
+// TemplateStmt is `template { markup }`, the last statement of a function
+// returning Element: the element the markup describes is the result.
+// Root is the template's one root element.
+type TemplateStmt struct {
+	Root *MElement
+	Span Span
+}
+
+func (s *TemplateStmt) NodeSpan() Span { return s.Span }
+func (*TemplateStmt) stmt()            {}
+
+// Markup is a node of a template.
+type Markup interface {
+	Node
+	markup()
+}
+
+// MElement is an element: `<name attrs>children</name>` or `<name attrs/>`.
+type MElement struct {
+	Name     string
+	NameSpan Span
+	Attrs    []*MAttr
+	Children []Markup
+	Span     Span
+}
+
+// MAttr is an attribute: `name`, `name="value"`, or `name={{ expr }}`.
+// Value is nil for a bare name and for an interpolation (Expr).
+type MAttr struct {
+	Name      string
+	NameSpan  Span
+	Value     *string
+	ValueSpan Span
+	Expr      Expr
+	Span      Span
+}
+
+// MText is text, with character references decoded and white space
+// containing a line break removed at its ends and collapsed inside it.
+type MText struct {
+	Text string
+	Span Span
+}
+
+// MInterp is `{{ expr }}` in content.
+type MInterp struct {
+	X    Expr
+	Span Span
+}
+
+// MIf is `$if (c) … $elseif (c) … $else … $endif`. Conds[i] guards
+// Branches[i]; Else is nil without $else.
+type MIf struct {
+	Conds    []Expr
+	Branches [][]Markup
+	Else     []Markup
+	HasElse  bool
+	Span     Span
+}
+
+func (n *MElement) NodeSpan() Span { return n.Span }
+func (n *MText) NodeSpan() Span    { return n.Span }
+func (n *MInterp) NodeSpan() Span  { return n.Span }
+func (n *MIf) NodeSpan() Span      { return n.Span }
+func (*MElement) markup()          {}
+func (*MText) markup()             {}
+func (*MInterp) markup()           {}
+func (*MIf) markup()               {}

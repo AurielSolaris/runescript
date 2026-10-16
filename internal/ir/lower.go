@@ -5,6 +5,7 @@ import (
 
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/checker"
+	"github.com/AurielSolaris/runescript/internal/dom"
 	"github.com/AurielSolaris/runescript/internal/types"
 )
 
@@ -37,8 +38,11 @@ type lowerer struct {
 	funcs map[*ast.FuncDecl]*Func
 	syms  map[*checker.FuncSym]*Func
 	// scopes is the variable scope chain of the function being lowered.
-	// A function boundary starts a fresh chain: functions do not capture.
+	// A function boundary starts a fresh chain: functions do not capture,
+	// except the runes of the functions around them (OQ-DOM-01), which are
+	// found in outer, the chains of the enclosing functions.
 	scopes []map[string]*Var
+	outer  [][]map[string]*Var
 }
 
 func (l *lowerer) ice(format string, args ...any) {
@@ -114,6 +118,12 @@ func (l *lowerer) typeOf(ref *ast.TypeRef) *types.Type {
 		}
 		return types.NewFunc(params, l.typeOf(ref.Func.Result))
 	}
+	switch ref.Name {
+	case "Element":
+		return types.ElementT
+	case "Signal":
+		return types.NewSignal(l.typeOf(ref.Args[0]))
+	}
 	t := types.Lookup(ref.Name)
 	if t == nil {
 		l.ice("unknown type %q", ref.Name)
@@ -123,8 +133,12 @@ func (l *lowerer) typeOf(ref *ast.TypeRef) *types.Type {
 
 func (l *lowerer) boundary() (restore func()) {
 	saved := l.scopes
+	l.outer = append(l.outer, saved)
 	l.scopes = []map[string]*Var{{}}
-	return func() { l.scopes = saved }
+	return func() {
+		l.scopes = saved
+		l.outer = l.outer[:len(l.outer)-1]
+	}
 }
 
 func (l *lowerer) declare(name string, t *types.Type, param bool) *Var {
@@ -137,6 +151,14 @@ func (l *lowerer) lookup(name string) *Var {
 	for i := len(l.scopes) - 1; i >= 0; i-- {
 		if v, ok := l.scopes[i][name]; ok {
 			return v
+		}
+	}
+	for j := len(l.outer) - 1; j >= 0; j-- {
+		chain := l.outer[j]
+		for i := len(chain) - 1; i >= 0; i-- {
+			if v, ok := chain[i][name]; ok && v.Type.Kind == types.Signal {
+				return v // a captured rune
+			}
 		}
 	}
 	l.ice("unresolved variable %q", name)
@@ -211,6 +233,8 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 		return &Continue{}
 	case *ast.ThrowStmt:
 		return &Throw{X: l.expr(s.Value), Site: s.Span}
+	case *ast.TemplateStmt:
+		return &Return{Value: &Template{Root: l.telement(s.Root)}}
 	case *ast.TryStmt:
 		t := &Try{Body: l.block(s.Body)}
 		for _, cl := range s.Catches {
@@ -273,6 +297,9 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		}
 		return n
 	case *ast.SelectorExpr:
+		if sym, ok := l.info.QualRefs[e]; ok {
+			return &FuncRef{Func: l.fn(sym)}
+		}
 		return &Field{X: l.expr(e.X), Name: e.Name.Name, T: l.concrete(e, l.info.Types[e])}
 	case *ast.ParenExpr:
 		return l.expr(e.X)
@@ -327,6 +354,19 @@ func (l *lowerer) call(e *ast.CallExpr) Expr {
 	if nf, ok := l.info.Natives[e]; ok {
 		return &CallNative{Pkg: e.Pkg.Name, Func: nf, Args: args, Site: e.Span}
 	}
+	if op, ok := l.info.Signals[e]; ok {
+		switch op.Op {
+		case "new":
+			return &NewSignal{T: op.T, Init: args[0]}
+		case "get":
+			return &SignalGet{X: l.runeOf(e)}
+		default:
+			return &SignalSet{X: l.runeOf(e), Value: args[0]}
+		}
+	}
+	if l.info.DOMCalls[e] == "renderApp" {
+		return &RenderApp{Component: args[0], Selector: args[1], Site: e.Span}
+	}
 	if x, ok := l.info.Externs[e]; ok {
 		return &CallExtern{Extern: l.extern(x), Args: args, Site: e.Span}
 	}
@@ -356,4 +396,67 @@ func (l *lowerer) extern(x *checker.ExternSym) *Extern {
 	l.externs[x] = e
 	l.prog.Externs = append(l.prog.Externs, e)
 	return e
+}
+
+// runeOf is the rune a get or set call acts on: count in count() and in
+// count.set(1).
+func (l *lowerer) runeOf(e *ast.CallExpr) Expr {
+	if e.Pkg != nil {
+		return &Load{Var: l.lookup(e.Pkg.Name)}
+	}
+	return &Load{Var: l.lookup(e.Fn.Name)}
+}
+
+// ---- templates ----
+
+func (l *lowerer) telement(e *ast.MElement) *TElement {
+	el := l.info.TemplateElems[e]
+	if el == nil {
+		l.ice("element <%s> was not resolved", e.Name)
+	}
+	t := &TElement{Tag: e.Name, SVG: el.Namespace == dom.SVG}
+	for _, a := range e.Attrs {
+		at := l.info.TemplateAttrs[a]
+		if at == nil {
+			l.ice("attribute %s of <%s> was not resolved", a.Name, e.Name)
+		}
+		ta := &TAttr{Name: a.Name, Kind: at.Kind, Site: a.Span}
+		switch {
+		case a.Expr != nil:
+			ta.Value = l.expr(a.Expr)
+			if at.Kind == dom.Enum {
+				ta.Values = at.Values
+			}
+		case a.Value == nil, at.Kind == dom.Bool:
+			ta.Present = true
+		default:
+			ta.Static = *a.Value
+		}
+		t.Attrs = append(t.Attrs, ta)
+	}
+	t.Children = l.tnodes(e.Children)
+	return t
+}
+
+func (l *lowerer) tnodes(nodes []ast.Markup) []TNode {
+	var out []TNode
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *ast.MElement:
+			out = append(out, l.telement(n))
+		case *ast.MText:
+			out = append(out, &TText{Text: n.Text})
+		case *ast.MInterp:
+			out = append(out, &TInterp{X: l.expr(n.X)})
+		case *ast.MIf:
+			t := &TIf{}
+			for i, c := range n.Conds {
+				t.Conds = append(t.Conds, l.expr(c))
+				t.Branches = append(t.Branches, l.tnodes(n.Branches[i]))
+			}
+			t.Else = l.tnodes(n.Else)
+			out = append(out, t)
+		}
+	}
+	return out
 }

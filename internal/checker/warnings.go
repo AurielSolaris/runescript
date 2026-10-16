@@ -45,7 +45,7 @@ func (c *checker) reportUnused(s *scope) {
 // qualifier is never referenced.
 func (c *checker) reportUnusedUses() {
 	for q, b := range c.quals {
-		if b.used || (b.std == nil && b.pkg == nil) {
+		if b.used || (b.std == nil && b.pkg == nil && b.rune == "") || b.rune == "dom" && c.domUsed[c.file] {
 			continue
 		}
 		c.warnf(diagnostics.WarnUnusedUse, b.decl.Span, "%q is used but '%s' is never referenced", b.decl.Path, q).

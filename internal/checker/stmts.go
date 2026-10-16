@@ -84,6 +84,8 @@ func (c *checker) stmt(s ast.Stmt) {
 		}
 	case *ast.TryStmt:
 		c.tryStmt(s)
+	case *ast.TemplateStmt:
+		c.templateStmt(s)
 	}
 }
 

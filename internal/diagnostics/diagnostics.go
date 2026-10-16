@@ -21,13 +21,14 @@ func (c Code) String() string { return Prefix + "-" + string(c) }
 
 // Diagnostic codes. Codes are stable identifiers; messages may change.
 const (
-	LexUnexpectedChar     Code = "LEX-001"
-	LexUnterminatedString Code = "LEX-002"
-	LexInvalidEscape      Code = "LEX-003"
-	LexUnterminatedBlock  Code = "LEX-004"
-	LexInvalidNumber      Code = "LEX-005"
-	LexUnsupportedLiteral Code = "LEX-006"
-	LexInvalidUTF8        Code = "LEX-007"
+	LexUnexpectedChar       Code = "LEX-001"
+	LexUnterminatedString   Code = "LEX-002"
+	LexInvalidEscape        Code = "LEX-003"
+	LexUnterminatedBlock    Code = "LEX-004"
+	LexInvalidNumber        Code = "LEX-005"
+	LexUnsupportedLiteral   Code = "LEX-006"
+	LexInvalidUTF8          Code = "LEX-007"
+	LexUnterminatedTemplate Code = "LEX-008"
 
 	ParseUnexpected     Code = "PARSE-001"
 	ParseNotImplemented Code = "PARSE-002"
@@ -100,6 +101,18 @@ const (
 	UseExternUnknown   Code = "USE-009"  // an unknown rune: module or function
 	TargetNeedsJS      Code = "TARGET-002"
 
+	// Templates (rune:dom).
+	TmplPlacement      Code = "TMPL-001" // a template that does not end a function returning Element
+	TmplUnknownElement Code = "TMPL-002"
+	TmplUnknownAttr    Code = "TMPL-003"
+	TmplBadValue       Code = "TMPL-004" // a static attribute value the attribute cannot take
+	TmplBadInterp      Code = "TMPL-005" // a {{ }} value of the wrong type
+	TmplDuplicateAttr  Code = "TMPL-006"
+	TmplNeedsDOM       Code = "TMPL-007" // a template without use "rune:dom"
+	TypeArgs           Code = "TYPE-025" // wrong type arguments, e.g. Signal<Error>
+	RunNoMountTarget   Code = "RUN-009"  // dom.renderApp found no element
+	RunDOMValue        Code = "RUN-010"  // a {{ }} value an attribute cannot take
+
 	// Warnings. A warning does not stop a program from running unless
 	// warnings are treated as errors (-Werror).
 	WarnUnusedVar     Code = "WARN-001" // a local variable that is never read
@@ -108,6 +121,8 @@ const (
 	WarnUnreachable   Code = "WARN-004" // a statement that can never run
 	WarnDiscardResult Code = "WARN-005" // a call whose non-void result is ignored
 	WarnHostModule    Code = "WARN-006" // an extern from one host's module, e.g. node:fs
+	WarnObsolete      Code = "WARN-007" // an obsolete HTML4 or SVG 1.1 element or attribute
+	WarnMountSelector Code = "WARN-008" // dom.renderApp with a selector that is not an id
 )
 
 // Severity says whether a diagnostic is an error or a warning.

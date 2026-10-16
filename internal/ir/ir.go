@@ -13,6 +13,7 @@ package ir
 
 import (
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/dom"
 	"github.com/AurielSolaris/runescript/internal/jshost"
 	"github.com/AurielSolaris/runescript/internal/types"
 	"github.com/AurielSolaris/runescript/stdlib"
@@ -260,6 +261,24 @@ type (
 	}
 	// Trace is the built-in trace(...).
 	Trace struct{ Args []Expr }
+	// NewSignal creates a rune of type T (a Signal) holding Init.
+	NewSignal struct {
+		T    *types.Type
+		Init Expr
+	}
+	// SignalGet reads the rune X. Inside a template binding, reading a
+	// rune subscribes the binding to it.
+	SignalGet struct{ X Expr }
+	// SignalSet stores Value in the rune X, updating everything that
+	// read it.
+	SignalSet struct{ X, Value Expr }
+	// RenderApp is rune:dom's renderApp: it calls Component and puts the
+	// element it returns into the first element Selector matches. No match
+	// is a runtime error reported at Site.
+	RenderApp struct {
+		Component, Selector Expr
+		Site                Span
+	}
 )
 
 func (e *IntConst) Type() *types.Type    { return e.T }
@@ -277,9 +296,66 @@ func (e *CallValue) Type() *types.Type   { return e.Callee.Type().Result }
 func (e *CallNative) Type() *types.Type  { return e.Func.Result }
 func (e *Trace) Type() *types.Type       { return types.VoidT }
 func (e *CallExtern) Type() *types.Type  { return e.Extern.Type.Result }
+func (e *NewSignal) Type() *types.Type   { return e.T }
+func (e *SignalGet) Type() *types.Type   { return e.X.Type().Elem }
+func (e *SignalSet) Type() *types.Type   { return types.VoidT }
+func (e *RenderApp) Type() *types.Type   { return types.VoidT }
 func (e *FloatConst) Type() *types.Type  { return e.T }
 func (e *Neg) Type() *types.Type         { return e.X.Type() }
 func (e *Convert) Type() *types.Type     { return e.To }
 func (e *NewError) Type() *types.Type    { return e.T }
 func (e *Field) Type() *types.Type       { return e.T }
 func (e *FloatTest) Type() *types.Type   { return types.BoolT }
+
+// ---- templates (rune:dom) ----
+
+// Template builds the element a template describes; a component returns
+// it. Dynamic parts are bindings: they update when a rune they read
+// changes.
+type Template struct{ Root *TElement }
+
+func (e *Template) Type() *types.Type { return types.ElementT }
+
+// TNode is a node of a template.
+type TNode interface{ tnode() }
+
+type (
+	// TElement is an element. SVG elements are created in the SVG
+	// namespace.
+	TElement struct {
+		Tag      string
+		SVG      bool
+		Attrs    []*TAttr
+		Children []TNode
+	}
+	// TAttr is an attribute: static (Value nil) or a binding to Value.
+	// For an event, Value is the handler, a void() function value.
+	TAttr struct {
+		Name string
+		Kind dom.Kind
+		// Static is the value of a static attribute; Present marks a
+		// static boolean attribute.
+		Static  string
+		Present bool
+		Value   Expr
+		// Values are the keywords an Enum attribute allows, checked when
+		// a binding sets it.
+		Values []string
+		Site   Span
+	}
+	// TText is static text.
+	TText struct{ Text string }
+	// TInterp is {{ X }} in content: text, or a child element.
+	TInterp struct{ X Expr }
+	// TIf shows the first branch whose condition holds, else Else.
+	TIf struct {
+		Conds    []Expr
+		Branches [][]TNode
+		Else     []TNode
+	}
+)
+
+func (*TElement) tnode() {}
+func (*TText) tnode()    {}
+func (*TInterp) tnode()  {}
+func (*TIf) tnode()      {}

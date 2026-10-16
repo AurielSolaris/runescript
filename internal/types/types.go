@@ -2,7 +2,8 @@
 //
 // The types are int/sint (one signed type, two spellings), uint, the
 // floating-point types float, float32, and float64, bool, string, void,
-// function types, and the built-in error types (Error and its subtypes).
+// function types, the built-in error types (Error and its subtypes), and
+// rune:dom's Element and Signal<T>.
 // Integer ranges are the provisional default representations (int32 /
 // uint32); integer widening is not implemented (OQ-NUM-01, OQ-NUM-02).
 package types
@@ -31,6 +32,12 @@ const (
 	UntypedFloat
 	// Error is a built-in error type: Error or one of its subtypes.
 	Error
+	// Element is a DOM element built by a template (rune:dom).
+	Element
+	// Signal is a rune: a reactive cell holding a value of type Elem
+	// (rune:dom). Signal<T> is a built-in; general generics are open
+	// (OQ-TYPE-01).
+	Signal
 )
 
 // Type is a semantic type. Name preserves the spelling used in source so
@@ -46,6 +53,26 @@ type Type struct {
 	Bits int
 	// Super is the supertype of an error type other than Error.
 	Super *Type
+	// Elem is the value type of a Signal.
+	Elem *Type
+}
+
+// NewSignal returns the type Signal<elem>.
+func NewSignal(elem *Type) *Type {
+	return &Type{Kind: Signal, Name: "Signal<" + elem.Name + ">", Elem: elem}
+}
+
+// ElementT is the type of DOM elements built by templates.
+var ElementT = &Type{Kind: Element, Name: "Element"}
+
+// IsScalar reports whether t is a number, bool, or string type: the types
+// a Signal can hold.
+func IsScalar(t *Type) bool {
+	switch t.Kind {
+	case Signed, Unsigned, Float, Bool, String:
+		return true
+	}
+	return false
 }
 
 // NewFunc returns the function type result(params...).
@@ -147,6 +174,8 @@ func Identical(a, b *Type) bool {
 		return a.Bits == b.Bits
 	case Error:
 		return a == b
+	case Signal:
+		return Identical(a.Elem, b.Elem)
 	case Func:
 	default:
 		return true

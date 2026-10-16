@@ -115,8 +115,11 @@ A qualifier belongs to the file it's declared in. Every file that calls
 If two uses in one file would have the same qualifier, that's `ASX-USE-008`.
 Rename one of them with `as`.
 
-Only calls can be qualified so far: `geom.area(1, 2)`. To pass `geom.area`
-as a value, wrap it in a lambda, e.g. `(int w, int h) => geom.area(w, h)`.
+A qualified function is also a value: `int(int, int) f = geom.area;`
+passes `geom.area` without calling it, as `dom.renderApp(app.App, "#app")`
+does with a component ([chapter 15](15-web-pages.md)). Standard library
+functions can only be called so far: wrap them in a lambda, e.g.
+`(string s) => string.toUpper(s)`.
 
 ## Visibility
 

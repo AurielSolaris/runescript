@@ -146,4 +146,4 @@ main.rsc:4:5: error ASX-RUN-005: uncaught ArgumentError: missing input
 এখনো নেই: স্ট্যাক ট্রেস, `toString()`-এর মতো এরর মেথড, এবং আপনার নিজের এরর টাইপ
 (এগুলোর জন্য ক্লাস লাগে)।
 
-পরবর্তী: [গাইডের সূচিপত্রে](README.md) ফিরে যান
+পরবর্তী: [`rune:dom` দিয়ে ওয়েব পেজ](15-web-pages.md)

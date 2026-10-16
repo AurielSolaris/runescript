@@ -1,0 +1,2 @@
+render: <div id="app"><div><input type="text"><button id="go">go</button></div></div>
+error: ASX-RUN-010: type: "textarea" is not one of "button", "checkbox", "color", "date", "datetime-local", "email", "file", "hidden", "image", "month", "number", "password", "radio", "range", "reset", "search", "submit", "tel", "text", "time", "url", "week"

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/AurielSolaris/runescript/internal/dom"
 	"github.com/AurielSolaris/runescript/internal/types"
 )
 
@@ -73,7 +74,8 @@ func (v *verifier) fn(f *Func) {
 // storable rejects types no value can have.
 func (v *verifier) storable(t *types.Type, what string) {
 	switch t.Kind {
-	case types.Signed, types.Unsigned, types.Bool, types.String, types.Func, types.Float, types.Error:
+	case types.Signed, types.Unsigned, types.Bool, types.String, types.Func, types.Float, types.Error,
+		types.Element, types.Signal:
 		return
 	}
 	v.fail("%s has type %s, which cannot hold a value", what, t)
@@ -258,6 +260,26 @@ func (v *verifier) expr(e Expr) *types.Type {
 		}
 		v.boundary(e.Extern.Type.Result, true, e.Extern.Name)
 		v.args(e.Extern.Type, e.Args, "call of extern "+e.Extern.Name)
+	case *NewSignal:
+		if e.T.Kind != types.Signal || !types.IsScalar(e.T.Elem) {
+			v.fail("rune of type %s", e.T)
+		}
+		v.same(e.T.Elem, e.Init, "initial value of a rune")
+	case *SignalGet:
+		if t := v.expr(e.X); t.Kind != types.Signal {
+			v.fail("reading a %s as a rune", t)
+		}
+	case *SignalSet:
+		t := v.expr(e.X)
+		if t.Kind != types.Signal {
+			v.fail("setting a %s as a rune", t)
+		}
+		v.same(t.Elem, e.Value, "value of a rune")
+	case *Template:
+		v.telement(e.Root)
+	case *RenderApp:
+		v.same(types.NewFunc(nil, types.ElementT), e.Component, "component passed to renderApp")
+		v.same(types.StringT, e.Selector, "selector passed to renderApp")
 	case *Trace:
 		for _, a := range e.Args {
 			switch t := v.expr(a); t.Kind {
@@ -310,5 +332,54 @@ func (v *verifier) boundary(t *types.Type, result bool, name string) {
 		}
 	default:
 		v.fail("extern %s has type %s at the JavaScript boundary", name, t)
+	}
+}
+
+func (v *verifier) telement(e *TElement) {
+	for _, a := range e.Attrs {
+		if a.Value == nil {
+			continue
+		}
+		t := v.expr(a.Value)
+		ok := false
+		switch a.Kind {
+		case dom.Event:
+			ok = types.Identical(t, types.NewFunc(nil, types.VoidT))
+		case dom.Bool:
+			ok = t.Kind == types.Bool
+		case dom.Int:
+			ok = t.Kind == types.Signed
+		case dom.UInt:
+			ok = t.Kind == types.Unsigned
+		case dom.Float:
+			ok = t.Kind == types.Float
+		case dom.Length:
+			ok = types.IsNumeric(t) || t.Kind == types.String
+		default:
+			ok = t.Kind == types.String
+		}
+		if !ok {
+			v.fail("attribute %s of <%s> bound to a %s", a.Name, e.Tag, t)
+		}
+	}
+	v.tnodes(e.Children)
+}
+
+func (v *verifier) tnodes(nodes []TNode) {
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *TElement:
+			v.telement(n)
+		case *TInterp:
+			if t := v.expr(n.X); !types.IsScalar(t) && t.Kind != types.Element {
+				v.fail("{{ }} of a %s", t)
+			}
+		case *TIf:
+			for i, c := range n.Conds {
+				v.same(types.BoolT, c, "$if condition")
+				v.tnodes(n.Branches[i])
+			}
+			v.tnodes(n.Else)
+		}
 	}
 }

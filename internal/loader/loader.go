@@ -4,6 +4,8 @@
 // A use names one of three things (owner decisions, v0.3):
 //
 //   - "std:name": a standard library package, resolved by the checker.
+//   - "rune:name": a RuneScript module of the JavaScript target, such as
+//     rune:dom, resolved by the checker.
 //   - a path, written with at least one '/' ("./geom.rsc", "lib/x.txt"):
 //     that one file, whatever its extension.
 //   - a package name ("geom", "org.x.geom"): every .rsm file directly in
@@ -41,6 +43,7 @@ const (
 	UsePackage                 // "a.b"
 	UseFile                    // a path containing '/'
 	UseUnsupported             // another "scheme:" form, e.g. "go:strings"
+	UseRune                    // "rune:name"
 )
 
 // Program is every file of a program, in load order.
@@ -239,6 +242,9 @@ func Classify(path string) (Kind, string) {
 	if name, ok := strings.CutPrefix(path, "std:"); ok {
 		return UseStd, name
 	}
+	if name, ok := strings.CutPrefix(path, "rune:"); ok {
+		return UseRune, name
+	}
 	if strings.Contains(path, "/") {
 		return UseFile, ""
 	}
@@ -280,7 +286,7 @@ func (l *loader) uses(f *File) {
 			u.Qualifier = d.Alias.Name
 		case u.Target != nil:
 			u.Qualifier = lastSegment(u.Target.Name)
-		case u.Kind == UsePackage:
+		case u.Kind == UsePackage, u.Kind == UseRune:
 			u.Qualifier = lastSegment(u.Name)
 		}
 	}

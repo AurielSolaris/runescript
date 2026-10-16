@@ -1,0 +1,5 @@
+render: <div id="app"><section class="counter"><h2>Clicked 0 times</h2><button id="increment" type="button">+1</button><button id="reset" type="button" disabled>Reset</button></section></div>
+click #increment: <div id="app"><section class="counter"><h2>Clicked 1 times</h2><button id="increment" type="button">+1</button><button id="reset" type="button">Reset</button></section></div>
+click #increment: <div id="app"><section class="counter"><h2>Clicked 2 times</h2><button id="increment" type="button">+1</button><button id="reset" type="button">Reset</button></section></div>
+click #increment: <div id="app"><section class="counter"><h2>Clicked 3 times</h2><button id="increment" type="button">+1</button><button id="reset" type="button">Reset</button><p class="hint">Three or more: the reset button is waiting.</p></section></div>
+click #reset: <div id="app"><section class="counter"><h2>Clicked 0 times</h2><button id="increment" type="button">+1</button><button id="reset" type="button" disabled>Reset</button></section></div>

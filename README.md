@@ -66,6 +66,11 @@ protected int main() {
 - Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
   in browsers and Node.js and behaves exactly like the interpreter for every
   program the interpreter can run ([guide](docs/guide/11-javascript.md))
+- Web pages with `rune:dom`: components with HTML and SVG templates whose
+  every element and attribute is checked at compile time, escaped `{{ }}`
+  text, `$if`/`$elseif`/`$else`, events, and runes (signals) that update
+  exactly what read them, with no virtual DOM
+  ([guide](docs/guide/15-web-pages.md), [examples](examples/web/))
 - Calling JavaScript through `extern` declarations, including the
   host-neutral `rune:fs`. Every value that comes back from JavaScript is
   checked against its declared type
@@ -83,9 +88,9 @@ implicit conversions, and no unchecked casts.
 
 **Not yet implemented:** classes, structs, arrays, `char`, string
 concatenation, `go:` packages, `std:math`, `std:symrs`, objects, arrays, and
-callbacks across the JavaScript boundary, `rune:process`, DOM templates
-(`rune:dom`, being designed; the HTML4, HTML5, and SVG element list exists),
-and the planned native graphics package. See the [roadmap](docs/ROADMAP.md).
+callbacks across the JavaScript boundary, `rune:process`, `$foreach` and
+component tags in templates, and the planned native graphics package. See
+the [roadmap](docs/ROADMAP.md).
 
 ## Install
 
@@ -149,9 +154,11 @@ The suite includes:
 ## Examples
 
 [`examples/`](examples/README.md) has programs for every feature: the
-basics, `std:string`, callbacks and lambdas, a prime counter, and two
-programs the compiler rejects on purpose. Every example's output is
-checked by the test suite.
+basics, `std:string`, callbacks and lambdas, a prime counter, two
+programs the compiler rejects on purpose, and web pages in
+[`examples/web/`](examples/web/) (a static page, a counter, a toggle, an
+SVG dial, and a multi-file app). Every example's output is checked by the
+test suite; the web examples run on a fake DOM under Node.js.
 
 ## Documentation
 
@@ -159,6 +166,7 @@ checked by the test suite.
 - [Language specification](docs/LANGUAGE_SPEC.md): grammar and rules, with each rule's implementation status
 - [Standard library: std:string](docs/guide/10-std-string.md)
 - [Compiling to JavaScript](docs/guide/11-javascript.md)
+- [Web pages with rune:dom](docs/guide/15-web-pages.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)
 - [Coming from ActionScript 3](docs/guide/09-coming-from-actionscript.md)
 - [Roadmap](docs/ROADMAP.md)

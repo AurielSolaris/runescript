@@ -17,6 +17,7 @@ import (
 
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/dom"
 	"github.com/AurielSolaris/runescript/internal/loader"
 	"github.com/AurielSolaris/runescript/internal/types"
 	"github.com/AurielSolaris/runescript/stdlib"
@@ -53,6 +54,19 @@ type Info struct {
 	// called; ExternDecls lists every extern function declared.
 	Externs     map[*ast.CallExpr]*ExternSym
 	ExternDecls []*ExternSym
+	// DOM reports whether the program uses rune:dom; DOMUses are those
+	// use declarations. Signals maps calls that create, read, or set a
+	// rune; DOMCalls maps calls of rune:dom functions to their name.
+	DOM      bool
+	DOMUses  []*ast.UseDecl
+	Signals  map[*ast.CallExpr]SignalOp
+	DOMCalls map[*ast.CallExpr]string
+	// QualRefs maps pkg.name used as a value to the function it names.
+	QualRefs map[*ast.SelectorExpr]*FuncSym
+	// TemplateElems and TemplateAttrs map the elements and attributes of
+	// templates to their entries in the element list.
+	TemplateElems map[*ast.MElement]*dom.Element
+	TemplateAttrs map[*ast.MAttr]*dom.Attr
 	// Entry is the program entry point; EntryVoid reports whether it
 	// returns void.
 	Entry     *ast.FuncDecl
@@ -108,16 +122,21 @@ type checker struct {
 	scopes []*scope
 	pkgs   map[*loader.Package]*scope // public and protected top-level functions
 	files  map[*loader.File]*scope    // private top-level functions of each file
+	// domUsed holds the files that use rune:dom's types or signal(), so
+	// their use "rune:dom" is not reported as unused.
+	domUsed map[*loader.File]bool
 
 	// state of the file being checked
 	file   *loader.File
 	quals  map[string]*binding // use qualifiers
 	broken bool                // a use with an unknown qualifier could not be loaded
+	dom    bool                // the file uses rune:dom
 
 	// state of the function or lambda being checked
-	fnName    string
-	result    *types.Type // nil while inferring a lambda's result type
-	loopDepth int
+	fnName       string
+	result       *types.Type // nil while inferring a lambda's result type
+	loopDepth    int
+	lastTemplate *ast.TemplateStmt // the template that may end this function's body
 }
 
 // operand is the checked form of an expression.
@@ -135,7 +154,8 @@ type binding struct {
 	std  *stdlib.Package
 	pkg  *loader.Package
 	decl *ast.UseDecl
-	used bool // the qualifier is referenced
+	used bool   // the qualifier is referenced
+	rune string // a rune: module, e.g. "dom"
 }
 
 // Check type-checks a loaded program. Every file must have parsed. It
@@ -154,9 +174,16 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 			CatchTypes:  map[*ast.CatchClause]*types.Type{},
 			Builtins:    map[*ast.CallExpr]string{},
 			Externs:     map[*ast.CallExpr]*ExternSym{},
+			Signals:     map[*ast.CallExpr]SignalOp{},
+			DOMCalls:    map[*ast.CallExpr]string{},
+			QualRefs:    map[*ast.SelectorExpr]*FuncSym{},
+
+			TemplateElems: map[*ast.MElement]*dom.Element{},
+			TemplateAttrs: map[*ast.MAttr]*dom.Attr{},
 		},
-		pkgs:  map[*loader.Package]*scope{},
-		files: map[*loader.File]*scope{},
+		pkgs:    map[*loader.Package]*scope{},
+		files:   map[*loader.File]*scope{},
+		domUsed: map[*loader.File]bool{},
 	}
 	for _, p := range prog.Packages {
 		c.pkgs[p] = &scope{syms: map[string]*symbol{}}
@@ -205,6 +232,12 @@ func (c *checker) enterFile(f *loader.File) {
 	c.scopes = []*scope{c.pkgs[f.Package], c.files[f]}
 	c.quals = map[string]*binding{}
 	c.broken = false
+	c.dom = false
+	for _, u := range f.Uses {
+		if u.Kind == loader.UseRune && u.Name == "dom" {
+			c.dom = true
+		}
+	}
 }
 
 func (c *checker) errorf(code diagnostics.Code, span diagnostics.Span, format string, args ...any) *diagnostics.Diagnostic {
@@ -235,6 +268,14 @@ func (c *checker) useDecls(f *loader.File) {
 				q = pkg.Qualifier
 			}
 			c.bind(q, &binding{std: pkg, decl: u.Decl})
+		case loader.UseRune:
+			if !runeModules[u.Name] {
+				c.runeModuleError(u.Name, u.Decl)
+				continue
+			}
+			c.info.DOM = true
+			c.info.DOMUses = append(c.info.DOMUses, u.Decl)
+			c.bind(u.Qualifier, &binding{rune: u.Name, decl: u.Decl})
 		case loader.UsePackage, loader.UseFile:
 			switch {
 			case u.Self(f):
@@ -258,7 +299,7 @@ func (c *checker) bind(q string, b *binding) {
 	switch {
 	case prev == nil:
 		c.quals[q] = b
-	case prev.std != nil && prev.std == b.std, prev.pkg != nil && prev.pkg == b.pkg:
+	case prev.std != nil && prev.std == b.std, prev.pkg != nil && prev.pkg == b.pkg, prev.rune != "" && prev.rune == b.rune:
 		c.errorf(diagnostics.UseDuplicate, b.decl.Span, "%q is already used at %s", b.decl.Path, prev.decl.Span.Start)
 	default:
 		span := b.decl.PathSpan
@@ -316,7 +357,7 @@ func (c *checker) conflict(id *ast.Ident) bool {
 	}
 	prev, crossed := c.lookup(id.Name)
 	switch {
-	case prev == nil, crossed && prev.fn == nil && prev.ext == nil:
+	case prev == nil, crossed && prev.fn == nil && prev.ext == nil && !isRune(prev):
 		return false
 	case prev.ext != nil:
 		c.errorf(diagnostics.NameRedeclared, id.Span, "'%s' is already declared as an extern function", id.Name).
@@ -359,6 +400,13 @@ func (c *checker) resolveType(ref *ast.TypeRef) *types.Type {
 			}
 		}
 		return types.NewFunc(params, c.resolveType(ref.Func.Result))
+	}
+	if ref.Name == "Element" || ref.Name == "Signal" {
+		return c.domType(ref)
+	}
+	if len(ref.Args) > 0 {
+		c.errorf(diagnostics.TypeArgs, ref.Span, "type '%s' takes no type arguments", ref.Name)
+		return types.InvalidT
 	}
 	t := types.Lookup(ref.Name)
 	if t == nil {
@@ -487,6 +535,7 @@ func (c *checker) funcBody(fn *ast.FuncDecl, t *types.Type) {
 	for i, p := range fn.Params {
 		c.declareVar(p.Name, t.Params[i], true)
 	}
+	c.lastTemplate = templateFor(fn.Body.Stmts)
 	c.stmts(fn.Body.Stmts)
 	c.pop()
 	c.checkReturns(fn.Body)
@@ -495,9 +544,9 @@ func (c *checker) funcBody(fn *ast.FuncDecl, t *types.Type) {
 // saveFuncState saves the per-function state and returns a function that
 // restores it, for checking nested functions and lambdas.
 func (c *checker) saveFuncState() func() {
-	name, result, loops := c.fnName, c.result, c.loopDepth
-	c.loopDepth = 0
-	return func() { c.fnName, c.result, c.loopDepth = name, result, loops }
+	name, result, loops, tmpl := c.fnName, c.result, c.loopDepth, c.lastTemplate
+	c.loopDepth, c.lastTemplate = 0, nil
+	return func() { c.fnName, c.result, c.loopDepth, c.lastTemplate = name, result, loops, tmpl }
 }
 
 // checkReturns reports a non-void body that can finish without returning.
@@ -521,7 +570,7 @@ func terminates(stmts []ast.Stmt) bool {
 		return false
 	}
 	switch s := stmts[len(stmts)-1].(type) {
-	case *ast.ReturnStmt, *ast.ThrowStmt:
+	case *ast.ReturnStmt, *ast.ThrowStmt, *ast.TemplateStmt:
 		return true
 	case *ast.IfStmt:
 		return ifTerminates(s)
