@@ -113,6 +113,7 @@ const (
 	RunNoMountTarget   Code = "RUN-009"  // dom.renderApp found no element
 	RunDOMValue        Code = "RUN-010"  // a {{ }} value an attribute cannot take
 	RunIndex           Code = "RUN-011"  // an array index out of range, or pop of an empty array
+	RunShift           Code = "RUN-012"  // a shift count outside 0 to the width minus 1
 
 	// Warnings. A warning does not stop a program from running unless
 	// warnings are treated as errors (-Werror).

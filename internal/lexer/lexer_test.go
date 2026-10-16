@@ -86,7 +86,7 @@ func TestLexErrors(t *testing.T) {
 		{"'a", diagnostics.LexUnterminatedString, "1:1"},
 		{`x = '\q'`, diagnostics.LexInvalidEscape, "1:6"},
 		{"x # y", diagnostics.LexUnexpectedChar, "1:3"},
-		{"a & b", diagnostics.LexUnexpectedChar, "1:3"},
+		{"a @ b", diagnostics.LexUnexpectedChar, "1:3"},
 	}
 	for _, c := range cases {
 		_, diags := Lex([]byte(c.src))

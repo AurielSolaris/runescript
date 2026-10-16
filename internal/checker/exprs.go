@@ -307,6 +307,10 @@ func (c *checker) unary(e *ast.UnaryExpr) operand {
 		return invalid
 	case e.Op == "!" && x.typ.Kind == types.Bool:
 		return x
+	case e.Op == "~" && x.typ.Kind == types.UntypedInt:
+		return operand{typ: types.UntypedConst, konst: new(big.Int).Not(x.konst)}
+	case e.Op == "~" && (x.typ.Kind == types.Signed || x.typ.Kind == types.Unsigned):
+		return x
 	}
 	c.errorf(diagnostics.TypeBadOperand, e.Span, "operator '%s' is not defined on '%s'", e.Op, x.typ)
 	return invalid
@@ -319,6 +323,23 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 		return invalid
 	}
 	switch op {
+	case "<<", ">>":
+		return c.shift(op, x, y, xe, ye, opSpan)
+	case "&", "|", "^":
+		if !types.IsInteger(x.typ) || !types.IsInteger(y.typ) {
+			d := c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' is not defined on '%s' and '%s'", op, x.typ, y.typ)
+			switch {
+			case x.typ.Kind == types.Bool || y.typ.Kind == types.Bool:
+				if op == "^" {
+					d.WithHelp("bitwise operators work on integers; for bools, a ^ b is a != b")
+				} else {
+					d.WithHelp(fmt.Sprintf("bitwise operators work on integers; for bools use %s%s, or parenthesize, e.g. (x %s mask) == 0", op, op, op))
+				}
+			default:
+				d.WithHelp("bitwise operators work on integers only")
+			}
+			return invalid
+		}
 	case "&&", "||":
 		if x.typ.Kind != types.Bool || y.typ.Kind != types.Bool {
 			c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' requires 'bool' operands, found '%s' and '%s'", op, x.typ, y.typ)
@@ -503,8 +524,64 @@ func fold(op string, x, y *big.Int) *big.Int {
 		return r.Quo(x, y)
 	case "%":
 		return r.Rem(x, y)
+	case "&":
+		return r.And(x, y)
+	case "|":
+		return r.Or(x, y)
+	case "^":
+		return r.Xor(x, y)
 	}
 	panic("unknown operator " + op)
+}
+
+// maxConstShift bounds the shift count of a constant expression, which is
+// computed exactly; no integer type is wider than 64 bits.
+const maxConstShift = 64
+
+// shift checks x << n and x >> n (OQ-OP-02). x is an integer, and its type
+// is the result's; n is any integer, and must be from 0 to x's width minus
+// 1. A constant count outside that range is a compile-time error; at run
+// time it throws a RangeError. << is checked like multiplication: losing
+// bits is an overflow error, never a silent wrap.
+func (c *checker) shift(op string, x, y operand, xe, ye ast.Expr, opSpan diagnostics.Span) operand {
+	if !types.IsInteger(x.typ) || !types.IsInteger(y.typ) {
+		c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' is not defined on '%s' and '%s'", op, x.typ, y.typ).
+			WithHelp("shifts take an integer and an integer count, e.g. x << 3")
+		return invalid
+	}
+	if y.typ.Kind == types.UntypedInt {
+		switch {
+		case y.konst.Sign() < 0:
+			c.errorf(diagnostics.TypeConstOutOfRange, ye.NodeSpan(), "shift count %s is negative", y.konst)
+			return invalid
+		case x.typ.Kind == types.UntypedInt:
+			if y.konst.Cmp(big.NewInt(maxConstShift)) > 0 {
+				c.errorf(diagnostics.TypeConstOutOfRange, ye.NodeSpan(), "shift count %s is too large", y.konst).
+					WithHelp("no integer type is wider than 64 bits")
+				return invalid
+			}
+			n := uint(y.konst.Uint64())
+			if op == "<<" {
+				return operand{typ: types.UntypedConst, konst: new(big.Int).Lsh(x.konst, n)}
+			}
+			return operand{typ: types.UntypedConst, konst: new(big.Int).Rsh(x.konst, n)}
+		case y.konst.Cmp(big.NewInt(int64(types.IntBits(x.typ)))) >= 0:
+			c.errorf(diagnostics.TypeConstOutOfRange, ye.NodeSpan(), "shift count %s is out of range for '%s'", y.konst, x.typ).
+				WithHelp(fmt.Sprintf("a '%s' can be shifted by 0 to %d bits", x.typ, types.IntBits(x.typ)-1))
+			return invalid
+		}
+		if !c.convertConst(ye, y.konst, types.Int) {
+			return invalid
+		}
+	}
+	if x.typ.Kind == types.UntypedInt {
+		// A constant shifted by a variable count is an int.
+		if !c.convertConst(xe, x.konst, types.Int) {
+			return invalid
+		}
+		return operand{typ: types.Int}
+	}
+	return operand{typ: x.typ}
 }
 
 // ---- calls ----

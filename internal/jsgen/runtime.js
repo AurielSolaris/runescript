@@ -67,7 +67,7 @@ const $rt = (() => {
     return e;
   };
   // FAULTS are the error types of runtime errors that can be caught.
-  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error", [CODES.externThrew]: "Error", [CODES.noMountTarget]: "Error", [CODES.index]: "RangeError" };
+  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error", [CODES.externThrew]: "Error", [CODES.noMountTarget]: "Error", [CODES.index]: "RangeError", [CODES.shift]: "RangeError" };
 
   // at returns the file, line, and column of a call site.
   const at = (site) => {
@@ -149,6 +149,24 @@ const $rt = (() => {
       default: divisor(y, site); r = x % y;
     }
     return r >= lo && r <= hi ? r + 0 : overflow(x, op, y, name, site); // + 0 turns -0 into 0
+  }
+  // The width and range of each integer kind, for shifts.
+  const INTS = {
+    i: [32, INT_MIN, INT_MAX, "int"], u: [32, 0, UINT_MAX, "uint"],
+    i8: [8, -128, 127, "int8"], i16: [16, -32768, 32767, "int16"], i32: [32, INT_MIN, INT_MAX, "int32"],
+    u8: [8, 0, 255, "uint8"], u16: [16, 0, 65535, "uint16"], u32: [32, 0, UINT_MAX, "uint32"],
+    i64: [64, -9223372036854775808n, 9223372036854775807n, "int64"],
+    u64: [64, 0n, 18446744073709551615n, "uint64"],
+  };
+  // shift is x << n or x >> n (OQ-OP-02): the count must be from 0 to the
+  // width minus 1, and << traps when it would lose bits. It is computed
+  // with BigInt, so it is exact for every width.
+  function shift(op, x, n, k, site) {
+    const [bits, lo, hi, name] = INTS[k];
+    if (n < 0 || n >= bits) fail(CODES.shift, site, `shift count ${n} is out of range for '${name}' (0 to ${bits - 1})`);
+    const r = op === "<<" ? BigInt(x) << BigInt(n) : BigInt(x) >> BigInt(n); // >> on a BigInt is arithmetic
+    if (r < lo || r > hi) fail(CODES.overflow, site, `integer overflow: ${x} << ${n} = ${r} does not fit in '${name}'`);
+    return bits === 64 ? r : Number(r);
   }
   function arW(op, x, y, k, site) {
     const [lo, hi, name] = WIDE[k];
@@ -892,7 +910,7 @@ const $rt = (() => {
   }
 
   return {
-    addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU, arN, arW,
+    addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU, arN, arW, shift,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
     enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop,

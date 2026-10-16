@@ -180,6 +180,7 @@ prog.rsc:3:9: warning ASX-WARN-001: variable 'unused' is never used
 | `ASX-RUN-009` | `dom.renderApp` לא מצאה אלמנט שמתאים לבורר שלה | `Error` |
 | `ASX-RUN-010` | מאפיין קשור קיבל ערך שהוא לא יכול לקבל: מילת מפתח שאינה ברשימה, או כתובת URL שתריץ סקריפט | `TypeError` |
 | `ASX-RUN-011` | אינדקס מערך מחוץ לטווח (`a[i]` כאשר `i < 0` או `i >= a.length`), או `pop()` על מערך ריק | `RangeError` |
+| `ASX-RUN-012` | מספר הזזות מחוץ לטווח 0 עד הרוחב פחות 1, למשל `x << 40` כאשר `x` הוא `int` | `RangeError` |
 
 ביעד JavaScript, `ASX-RUN-001` מדווחת גם כשהמחסנית של סביבת ההרצה עצמה נגמרת לפני
 10,000 קריאות (ראו [פרק 11](11-javascript.md)).

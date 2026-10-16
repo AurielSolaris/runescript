@@ -115,8 +115,8 @@ redeclared.
 ### 2.5 Operators and punctuation **[v0.1]**
 ```
 ( ) { } , ; .
-=  +=  -=  *=  /=  %=  ++  --
-+  -  *  /  %
+=  +=  -=  *=  /=  %=  &=  |=  ^=  <<=  >>=  ++  --
++  -  *  /  %  &  |  ^  ~  <<  >>
 == != <  <= >  >=
 && || !
 ```
@@ -149,7 +149,8 @@ Stmt         = FuncDecl                 (* nested function or prototype *)
              | TemplateStmt ;                               (* §13 *)
 SimpleStmt   = VarDecl | Assignment | IncDec | Call ;
 VarDecl      = Type Ident "=" Expr ;
-Assignment   = ( Ident | Postfix "[" Expr "]" ) ( "=" | "+=" | "-=" | "*=" | "/=" | "%=" ) Expr ;
+Assignment   = ( Ident | Postfix "[" Expr "]" ) AssignOp Expr ;
+AssignOp     = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
 IncDec       = Ident ( "++" | "--" ) ;
 
 IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
@@ -161,12 +162,16 @@ TryStmt      = "try" Block { "catch" "(" Type Ident ")" Block } [ "finally" Bloc
 
 Expr         = OrExpr ;
 OrExpr       = AndExpr { "||" AndExpr } ;
-AndExpr      = EqExpr  { "&&" EqExpr } ;
+AndExpr      = BitOr   { "&&" BitOr } ;
+BitOr        = BitXor  { "|" BitXor } ;
+BitXor       = BitAnd  { "^" BitAnd } ;
+BitAnd       = EqExpr  { "&" EqExpr } ;
 EqExpr       = RelExpr { ( "==" | "!=" ) RelExpr } ;
-RelExpr      = AddExpr { ( "<" | "<=" | ">" | ">=" ) AddExpr } ;
+RelExpr      = Shift   { ( "<" | "<=" | ">" | ">=" ) Shift } ;
+Shift        = AddExpr { ( "<<" | ">>" ) AddExpr } ;
 AddExpr      = MulExpr { ( "+" | "-" ) MulExpr } ;
 MulExpr      = Unary   { ( "*" | "/" | "%" ) Unary } ;
-Unary        = ( "-" | "!" ) Unary | Cast | Postfix ;
+Unary        = ( "-" | "!" | "~" ) Unary | Cast | Postfix ;
 Cast         = "(" CastType ")" Unary ;
 CastType     = "int" | "sint" | "uint" | "int8" | "int16" | "int32" | "int64"
              | "uint8" | "uint16" | "uint32" | "uint64"
@@ -530,6 +535,9 @@ compile-time error: `(uint) -2.5` is `ASX-TYPE-007`, `(int) 3e10` is
 | `+ - * / %` | two integers of the same signedness | the same integer type |
 | `+ - * /` [v0.3] | two floats of the same type | that type (§5.1b) |
 | `+` [2026-10-16] | two `string`s | `string`: the two joined |
+| `& \| ^` [2026-10-17] | two integers of the same type | that type: bitwise and, or, xor |
+| `~` [2026-10-17] | an integer | that type: the bitwise complement in the type's width |
+| `<< >>` [2026-10-17] | an integer and an integer count of any type | the left operand's type |
 | unary `-` | a signed integer or a float | the same type (`uint` is rejected) |
 | `< <= > >=` | two integers of the same signedness, two floats of the same type, or two `char`s | `bool` |
 | `== !=` | two numbers as above, two `bool`s, two `char`s, or two `string`s | `bool` |
@@ -543,7 +551,19 @@ compile-time error: `(uint) -2.5` is `ASX-TYPE-007`, `(int) 3e10` is
 - **[decided 2026-10-16]** `+` joins two strings and converts nothing:
   `"n=" + 5` is `ASX-TYPE-012`; write `"n=" + (string) 5` or `$"n={5}"`.
   `s += t` works on a `string` variable.
-- **[undecided]** Bitwise operators, shifts, `?:`, `?.`, `??`.
+- **[decided 2026-10-17, details provisional]** Shifts: the count must be
+  from 0 to the left operand's width minus 1 (`ASX-TYPE-006` for a
+  constant, otherwise a `RangeError`, `ASX-RUN-012`). `>>` is arithmetic on
+  signed types and logical on unsigned ones. **[provisional]** `<<` is
+  checked like `*`: a result that doesn't fit the type is an overflow
+  (`ASX-RUN-002`), never silently truncated; mask first to drop bits on
+  purpose. A constant shifted by a variable count is an `int`. Constants
+  are folded exactly: `(int64) (1 << 40)`.
+- **[provisional]** Precedence follows C and ActionScript 3 (below). Since
+  `x & mask == 0` is then `x & (mask == 0)`, it is a type error, with a
+  hint to write `(x & mask) == 0`.
+- `&= |= ^= <<= >>=` work like the other compound assignments.
+- **[undecided]** `?:`, `?.`, `??`.
 - Operands are evaluated left to right.
 
 ### 6.2 Calls **[v0.1]**

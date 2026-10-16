@@ -170,6 +170,7 @@ error has already been printed.
 | `ASX-RUN-009` | `dom.renderApp` found no element matching its selector | `Error` |
 | `ASX-RUN-010` | A bound attribute got a value it can't take: a keyword not in its list, or a URL that would run script | `TypeError` |
 | `ASX-RUN-011` | An array index out of range (`a[i]` with `i < 0` or `i >= a.length`), or `pop()` on an empty array | `RangeError` |
+| `ASX-RUN-012` | A shift count outside 0 to the width minus 1, e.g. `x << 40` with `x` an `int` | `RangeError` |
 
 On the JavaScript target, `ASX-RUN-001` is also reported when the host's own
 stack runs out before 10,000 calls (see [chapter 11](11-javascript.md)).

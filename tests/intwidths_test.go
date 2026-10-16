@@ -49,6 +49,12 @@ func TestIntegerWidthsMatch(t *testing.T) {
 			decl := fmt.Sprintf("%s x = (%s) %q; %s y = (%s) %q;", ty, ty, x, ty, ty, y)
 			op := []string{"+", "-", "*", "/", "%"}[r.Intn(5)]
 			step(fmt.Sprintf("%s trace(%d, x %s y, x < y, x == y);", decl, n+1, op))
+			bop := []string{"&", "|", "^"}[r.Intn(3)]
+			step(fmt.Sprintf("%s trace(%d, x %s y, ~x, ~y);", decl, n+1, bop))
+			// Counts from -1 to the width, so out-of-range ones are covered.
+			count := r.Intn(types.IntBits(ty)+2) - 1
+			sop := []string{"<<", ">>"}[r.Intn(2)]
+			step(fmt.Sprintf("%s int k = (int) %q; trace(%d, x %s k, y >> (uint8) 1);", decl, fmt.Sprint(count), n+1, sop))
 			to := ints[r.Intn(len(ints))]
 			step(fmt.Sprintf("%s trace(%d, (%s) x, (float64) x, (float32) y, (string) x);", decl, n+1, to))
 		}

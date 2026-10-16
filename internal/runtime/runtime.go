@@ -115,6 +115,7 @@ var faultTypes = map[diagnostics.Code]*types.Type{
 	diagnostics.RunDivideByZero: types.RangeErrorT,
 	diagnostics.RunNativeFailed: types.ErrorT,
 	diagnostics.RunIndex:        types.RangeErrorT,
+	diagnostics.RunShift:        types.RangeErrorT,
 }
 
 // ErrorID is the errorID of a runtime error: its code's number, e.g. 2 for
@@ -428,6 +429,30 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 			return floatArith(e.Op, x, y, e.T)
 		}
 		return in.arith(e.Op, e.T, x, y, e.Site)
+	case *ir.Bits:
+		x, y := in.expr(f, e.X), in.expr(f, e.Y)
+		// On two's-complement int64 values (uint64 bit patterns included),
+		// & | ^ give an in-range result of the same type.
+		var r int64
+		switch e.Op {
+		case "&":
+			r = x.Int & y.Int
+		case "|":
+			r = x.Int | y.Int
+		default:
+			r = x.Int ^ y.Int
+		}
+		return Value{Kind: e.T.Kind, Int: r, Bits: e.T.Bits}
+	case *ir.Complement:
+		x := in.expr(f, e.X)
+		r := ^x.Int
+		if bits := types.IntBits(e.X.Type()); x.Kind == types.Unsigned && bits < 64 {
+			r &= 1<<bits - 1
+		}
+		x.Int = r
+		return x
+	case *ir.Shift:
+		return in.shift(e, in.expr(f, e.X), in.expr(f, e.Count))
 	case *ir.Concat:
 		var b strings.Builder
 		for _, p := range e.Parts {
@@ -630,6 +655,31 @@ func (in *interp) wideArith(op string, t *types.Type, x, y Value, span diagnosti
 		in.fail(diagnostics.RunOverflow, span, "integer overflow: %s %s %s = %s does not fit in '%s'", a, op, b, r, typeName(t))
 	}
 	return Value{Kind: t.Kind, Int: types.FromBig(t, r), Bits: t.Bits}
+}
+
+// shift runs x << n or x >> n (ir.Shift).
+func (in *interp) shift(e *ir.Shift, x, n Value) Value {
+	t := e.X.Type()
+	bits := types.IntBits(t)
+	count := n.big()
+	if count.Sign() < 0 || count.Cmp(big.NewInt(int64(bits))) >= 0 {
+		in.fail(diagnostics.RunShift, e.Site, "shift count %s is out of range for '%s' (0 to %d)", count, typeName(t), bits-1)
+	}
+	c := uint(count.Uint64())
+	if e.Op == ">>" {
+		if t.Kind == types.Unsigned {
+			x.Int = int64(uint64(x.Int) >> c)
+		} else {
+			x.Int >>= c // arithmetic: rounds toward negative infinity
+		}
+		return x
+	}
+	r := new(big.Int).Lsh(x.big(), c)
+	if !types.Fits(t, r) {
+		in.fail(diagnostics.RunOverflow, e.Site, "integer overflow: %s << %d = %s does not fit in '%s'", x.big(), c, r, typeName(t))
+	}
+	x.Int = types.FromBig(t, r)
+	return x
 }
 
 // typeName names an integer type in a message: the generic types by

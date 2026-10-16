@@ -1,6 +1,8 @@
 package checker
 
 import (
+	"strings"
+
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/types"
@@ -104,7 +106,7 @@ func (c *checker) indexAssign(s *ast.IndexAssignStmt) {
 		c.assign(elem, s.Value, "assign")
 		return
 	}
-	op := s.Op[:1]
+	op := strings.TrimSuffix(s.Op, "=")
 	y := c.expr(s.Value)
 	t := c.binaryType(op, operand{typ: elem}, y, s.Target, s.Value, s.Span)
 	if t.typ.Kind != types.Invalid && !types.Identical(t.typ, elem) {

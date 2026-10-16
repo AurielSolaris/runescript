@@ -1,6 +1,8 @@
 package ir
 
 import (
+	"strings"
+
 	"fmt"
 
 	"github.com/AurielSolaris/runescript/internal/ast"
@@ -200,7 +202,7 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 			return &Assign{Var: v, Value: concat(&Load{Var: v}, value)}
 		}
 		if s.Op != "=" {
-			value = &Arith{Op: s.Op[:1], T: v.Type, X: &Load{Var: v}, Y: value, Site: s.Span}
+			value = binary(strings.TrimSuffix(s.Op, "="), v.Type, &Load{Var: v}, value, s.Span)
 		}
 		return &Assign{Var: v, Value: value}
 	case *ast.IndexAssignStmt:
@@ -209,11 +211,7 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 		if s.Op != "=" {
 			elem := l.concrete(s.Target, l.info.Types[s.Target])
 			old := &IndexOld{T: elem}
-			if elem.Kind == types.String {
-				value = concat(old, value)
-			} else {
-				value = &Arith{Op: s.Op[:1], T: elem, X: old, Y: value, Site: s.Span}
-			}
+			value = binary(strings.TrimSuffix(s.Op, "="), elem, old, value, s.Span)
 			set.Compound = true
 		}
 		set.Value = value
@@ -375,6 +373,9 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		if e.Op == "!" {
 			return &Not{X: x}
 		}
+		if e.Op == "~" {
+			return &Complement{X: x}
+		}
 		t := x.Type()
 		if t.Kind == types.Float {
 			return &Neg{X: x}
@@ -387,15 +388,27 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 			return &Logic{Op: e.Op, X: x, Y: y}
 		case "==", "!=", "<", "<=", ">", ">=":
 			return &Compare{Op: e.Op, X: x, Y: y}
-		case "+":
-			if x.Type().Kind == types.String {
-				return concat(x, y)
-			}
 		}
-		return &Arith{Op: e.Op, T: l.concrete(e, l.info.Types[e]), X: x, Y: y, Site: e.OpPos}
+		return binary(e.Op, l.concrete(e, l.info.Types[e]), x, y, e.OpPos)
 	}
 	l.ice("unexpected expression %T", e)
 	return nil
+}
+
+// binary is x op y for an arithmetic, bitwise, or shift operator, or + on
+// strings, with result type t.
+func binary(op string, t *types.Type, x, y Expr, site Span) Expr {
+	switch op {
+	case "&", "|", "^":
+		return &Bits{Op: op, T: t, X: x, Y: y}
+	case "<<", ">>":
+		return &Shift{Op: op, X: x, Count: y, Site: site}
+	case "+":
+		if t.Kind == types.String {
+			return concat(x, y)
+		}
+	}
+	return &Arith{Op: op, T: t, X: x, Y: y, Site: site}
 }
 
 // concat joins string expressions, flattening nested joins.

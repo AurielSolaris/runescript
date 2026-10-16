@@ -252,6 +252,21 @@ func (v *verifier) expr(e Expr) *types.Type {
 		}
 		v.same(e.T, e.X, "left operand of "+e.Op)
 		v.same(e.T, e.Y, "right operand of "+e.Op)
+	case *Bits:
+		if e.T.Kind != types.Signed && e.T.Kind != types.Unsigned {
+			v.fail("bitwise %s on %s", e.Op, e.T)
+		}
+		v.same(e.T, e.X, "left operand of "+e.Op)
+		v.same(e.T, e.Y, "right operand of "+e.Op)
+	case *Complement:
+		if t := v.expr(e.X); t.Kind != types.Signed && t.Kind != types.Unsigned {
+			v.fail("~ on %s", t)
+		}
+	case *Shift:
+		if t := v.expr(e.X); t.Kind != types.Signed && t.Kind != types.Unsigned {
+			v.fail("shift of %s", t)
+		}
+		v.index(e.Count) // an integer
 	case *Concat:
 		if len(e.Parts) == 0 {
 			v.fail("empty string join")

@@ -318,10 +318,13 @@ func (p *parser) genericEnd(i int) int {
 		switch {
 		case p.isOp(i, "<"):
 			depth++
-		case p.isOp(i, ">"):
-			depth--
+		case p.isOp(i, ">"), p.isOp(i, ">>"):
+			depth -= len(t.Text) // `>>` closes two lists: Array<Array<int>>
 			if depth == 0 {
 				return i + 1
+			}
+			if depth < 0 {
+				return 0
 			}
 		case t.Kind == lexer.Ident, t.Kind == lexer.Comma, t.Kind == lexer.LParen, t.Kind == lexer.RParen,
 			t.Kind == lexer.Keyword && typeKeywords[t.Text]:
@@ -390,6 +393,7 @@ func (p *parser) typeRef(what string) *ast.TypeRef {
 			}
 			p.next()
 		}
+		p.splitShift()
 		if !p.is(lexer.Op, ">") {
 			p.unexpected("'>' to close the type arguments")
 		}
@@ -411,6 +415,21 @@ func (p *parser) typeRef(what string) *ast.TypeRef {
 		ref = &ast.TypeRef{Func: fn, Span: span(t.Span, end.Span)}
 	}
 	return ref
+}
+
+// splitShift turns a `>>` token into two `>` tokens, so that the first
+// can close a type-argument list: Array<Array<int>>.
+func (p *parser) splitShift() {
+	t := p.tok()
+	if t.Kind != lexer.Op || t.Text != ">>" {
+		return
+	}
+	mid := t.Span.Start
+	mid.Offset++
+	mid.Col++
+	first := lexer.Token{Kind: lexer.Op, Text: ">", Span: diagnostics.Span{Start: t.Span.Start, End: mid}}
+	second := lexer.Token{Kind: lexer.Op, Text: ">", Span: diagnostics.Span{Start: mid, End: t.Span.End}}
+	p.toks = append(p.toks[:p.pos], append([]lexer.Token{first, second}, p.toks[p.pos+1:]...)...)
 }
 
 func (p *parser) ident(what string) *ast.Ident {
@@ -503,7 +522,8 @@ func setEnd(s ast.Stmt, end diagnostics.Span) {
 	}
 }
 
-var assignOps = map[string]bool{"+=": true, "-=": true, "*=": true, "/=": true, "%=": true}
+var assignOps = map[string]bool{"+=": true, "-=": true, "*=": true, "/=": true, "%=": true,
+	"&=": true, "|=": true, "^=": true, "<<=": true, ">>=": true}
 
 // simpleStmt parses a declaration, assignment, increment, or call without
 // its terminating ';'. Declarations are allowed only when allowDecl is set.
@@ -659,10 +679,14 @@ func (p *parser) forStmt() *ast.ForStmt {
 var precedence = map[string]int{
 	"||": 1,
 	"&&": 2,
-	"==": 3, "!=": 3,
-	"<": 4, "<=": 4, ">": 4, ">=": 4,
-	"+": 5, "-": 5,
-	"*": 6, "/": 6, "%": 6,
+	"|":  3,
+	"^":  4,
+	"&":  5,
+	"==": 6, "!=": 6,
+	"<": 7, "<=": 7, ">": 7, ">=": 7,
+	"<<": 8, ">>": 8,
+	"+": 9, "-": 9,
+	"*": 10, "/": 10, "%": 10,
 }
 
 func (p *parser) expr() ast.Expr { return p.binary(1) }
@@ -683,7 +707,7 @@ func (p *parser) binary(minPrec int) ast.Expr {
 
 func (p *parser) unary() ast.Expr {
 	t := p.tok()
-	if t.Kind == lexer.Op && (t.Text == "-" || t.Text == "!") {
+	if t.Kind == lexer.Op && (t.Text == "-" || t.Text == "!" || t.Text == "~") {
 		p.next()
 		x := p.unary()
 		return &ast.UnaryExpr{Op: t.Text, X: x, Span: span(t.Span, x.NodeSpan())}

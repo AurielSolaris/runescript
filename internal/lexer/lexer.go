@@ -168,8 +168,9 @@ var punct = map[byte]Kind{
 
 // operators, longest first so that maximal munch picks "<=" over "<".
 var operators = []string{
-	"=>", "++", "--", "+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
-	"+", "-", "*", "/", "%", "<", ">", "!", "=",
+	"<<=", ">>=",
+	"=>", "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "==", "!=", "<=", ">=", "&&", "||", "<<", ">>",
+	"+", "-", "*", "/", "%", "&", "|", "^", "~", "<", ">", "!", "=",
 }
 
 func (l *lexer) run() {
@@ -688,7 +689,7 @@ func (l *lexer) hole(start diagnostics.Pos) bool {
 func (l *lexer) matchOperator() string {
 	rest := l.src[l.off:]
 	for _, op := range operators {
-		if strings.HasPrefix(string(rest[:min(len(rest), 2)]), op) {
+		if strings.HasPrefix(string(rest[:min(len(rest), 3)]), op) {
 			return op
 		}
 	}

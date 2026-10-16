@@ -315,6 +315,7 @@ func fillRuntime(tables, keep map[string]bool) string {
 		"noMountTarget": diagnostics.RunNoMountTarget.String(),
 		"domValue":      diagnostics.RunDOMValue.String(),
 		"index":         diagnostics.RunIndex.String(),
+		"shift":         diagnostics.RunShift.String(),
 	})
 	table := func(name string, runs func() []int64) string {
 		if !tables[name] {
@@ -655,6 +656,31 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		}
 		h := g.use(arithHelpers[e.Op] + suffix)
 		return fmt.Sprintf("%s(%s, %s, %d)", h, g.expr(e.X, precAssign), g.expr(e.Y, precAssign), g.site(e.Site)), precCall
+	case *ir.Bits:
+		// & | ^ on numbers work on 32-bit two's complement, which keeps
+		// signed values of every width in range; unsigned 32-bit results
+		// need >>> 0. BigInts (64-bit) are exact.
+		s := g.expr(e.X, precUnary) + " " + e.Op + " " + g.expr(e.Y, precUnary)
+		if e.T.Kind == types.Unsigned && types.IntBits(e.T) == 32 {
+			return "((" + s + ") >>> 0)", precCall
+		}
+		return "(" + s + ")", precCall
+	case *ir.Complement:
+		t := e.X.Type()
+		x := "~" + g.expr(e.X, precUnary)
+		switch bits := types.IntBits(t); {
+		case t.Kind == types.Signed:
+			return x, precUnary
+		case bits == 64:
+			return "(" + x + " & 0xFFFFFFFFFFFFFFFFn)", precCall
+		case bits == 32:
+			return "(" + x + " >>> 0)", precCall
+		default:
+			return fmt.Sprintf("(%s & 0x%X)", x, 1<<bits-1), precCall
+		}
+	case *ir.Shift:
+		return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use("shift"), quote(e.Op), g.expr(e.X, precAssign), g.expr(e.Count, precAssign),
+			quote(kindCode(e.X.Type())), g.site(e.Site)), precCall
 	case *ir.Concat:
 		// Every part is a string, so JavaScript's + concatenates.
 		parts := make([]string, len(e.Parts))

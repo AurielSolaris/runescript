@@ -260,6 +260,25 @@ type (
 		X, Y Expr
 		Site Span
 	}
+	// Bits is the bitwise & | or ^ of X and Y, integers of type T. It
+	// cannot overflow.
+	Bits struct {
+		Op   string
+		T    *types.Type
+		X, Y Expr
+	}
+	// Complement is ~X, the bitwise complement of an integer in its type's
+	// width.
+	Complement struct{ X Expr }
+	// Shift is X << Count or X >> Count. X has the result's integer type;
+	// Count is any integer. A count outside 0 to the width minus 1 throws a
+	// RangeError, and so does a << that loses bits (an overflow), both
+	// reported at Site. >> is arithmetic for signed types.
+	Shift struct {
+		Op       string
+		X, Count Expr
+		Site     Span
+	}
 	// Concat joins strings: string + string, += on a string, and
 	// interpolated strings (whose holes are lowered to conversions).
 	Concat struct{ Parts []Expr }
@@ -340,6 +359,9 @@ func (e *Lambda) Type() *types.Type      { return e.Func.Type }
 func (e *Arith) Type() *types.Type       { return e.T }
 func (e *Compare) Type() *types.Type     { return types.BoolT }
 func (e *Concat) Type() *types.Type      { return types.StringT }
+func (e *Bits) Type() *types.Type        { return e.T }
+func (e *Complement) Type() *types.Type  { return e.X.Type() }
+func (e *Shift) Type() *types.Type       { return e.X.Type() }
 func (e *Logic) Type() *types.Type       { return types.BoolT }
 func (e *Not) Type() *types.Type         { return types.BoolT }
 func (e *CallFunc) Type() *types.Type    { return e.Func.Type.Result }
