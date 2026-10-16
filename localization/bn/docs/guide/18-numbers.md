@@ -1,4 +1,4 @@
-<!-- source: docs/guide/18-numbers.md @ 7cbbc5a -->
+<!-- source: docs/guide/18-numbers.md @ 6704ceb -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/18-numbers.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 

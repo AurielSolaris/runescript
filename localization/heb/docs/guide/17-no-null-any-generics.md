@@ -1,4 +1,4 @@
-<!-- source: docs/guide/17-no-null-any-generics.md @ 3cd2c1f -->
+<!-- source: docs/guide/17-no-null-any-generics.md @ 6704ceb -->
 
 <div dir="rtl">
 

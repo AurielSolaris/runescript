@@ -1,4 +1,4 @@
-<!-- source: docs/guide/04-operators.md @ 34d09ef -->
+<!-- source: docs/guide/04-operators.md @ 6704ceb -->
 
 <div dir="rtl">
 

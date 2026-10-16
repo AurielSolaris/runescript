@@ -1,4 +1,4 @@
-<!-- source: docs/guide/02-program-structure.md @ 52427d9 -->
+<!-- source: docs/guide/02-program-structure.md @ 6704ceb -->
 
 <div dir="rtl">
 
