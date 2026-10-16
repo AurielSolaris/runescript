@@ -126,6 +126,7 @@ func TestParseErrors(t *testing.T) {
 		{"use without string", "package p;\nuse std;", diagnostics.ParseUnexpected, "2:5"},
 		{"catch without name", "package p;\npublic void f() {\n    try { } catch (Error) { }\n}", diagnostics.ParseUnexpected, "3:25"},
 		{"try alone", "package p;\npublic void f() {\n    try { }\n}", diagnostics.ParseUnexpected, "4:1"},
+		{"generic function", "package p;\npublic T first<T>(int n) {\n    return n;\n}", diagnostics.ParseUnexpected, "2:15"},
 		{"unclosed index", "package p;\npublic void f() {\n    trace(a[1);\n}", diagnostics.ParseUnexpected, "3:14"},
 		{"unclosed array", "package p;\npublic void f() {\n    trace([1, 2);\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"index increment", "package p;\npublic void f() {\n    a[0]++;\n}", diagnostics.ParseUnexpected, "3:5"},

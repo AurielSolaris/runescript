@@ -321,7 +321,8 @@ use "go:<package>";           // Go package                 [planned]
   argument, return) and the parameter types match, the lambda takes that
   type's result type. Otherwise its result type is the expression's type, or
   that of the first `return` (or `void`). Lambdas take no access modifier.
-- **[undecided]** Default arguments, variadic parameters, generic functions,
+- **[decided 2026-10-17]** No generic functions (see §5.1).
+- **[undecided]** Default arguments, variadic parameters,
   overloading, capturing closures.
 
 ### 4.4 Entry point **[v0.1, provisional]**
@@ -362,7 +363,12 @@ three is accepted.
 | `Error`, `RangeError`, `TypeError`, `ArgumentError` | [v0.3] | Error values (§7.6). The last three are subtypes of `Error`. |
 | `void` | [v0.1] | Means "no value". Valid only as a return type; you can't store it, pass it, or trace it. |
 
-There is no `any` type and never will be (CLAUDE.md §4).
+There is no `any` type and never will be (CLAUDE.md §4). **[decided
+2026-10-17]** There is no `null` either: every value is a real value of its
+type, and absence is expressed with a `bool` (guide, chapter 17). And there
+are no user-defined generics: functions and types cannot take type
+parameters (`ASX-PARSE-001`); `Array<T>` and `Signal<T>` are built-in
+type constructors, not a generics feature.
 
 ### 5.1a Function types **[v0.2]**
 `R(P1, P2, …)` is the type of functions taking `P1, P2, …` and returning
@@ -452,7 +458,7 @@ another array (not `Element` or `Signal`).
   `extern` boundary yet (`ASX-TYPE-023`).
 
 ### 5.2 Planned types **[planned/undecided]**
-`matrix`, `struct`, `class`, and generic type parameters.
+`matrix`, `struct`, and `class`.
 None of these are implemented. Their names are reserved.
 
 ### 5.3 Integer constants **[v0.1, provisional]**
@@ -895,7 +901,7 @@ If           = "$if" "(" Expr ")" Content { "$elseif" "(" Expr ")" Content }
 ### 13.2 Runes
 
 - `Signal<T>` is a built-in type for a number, `bool`, or `string` `T`
-  (`ASX-TYPE-025` otherwise); general generics are open (OQ-TYPE-01).
+  (`ASX-TYPE-025` otherwise). There are no user generics (§5.1).
 - `signal(v)` creates one; with a declared `Signal<T>`, `v` must be
   assignable to `T`, otherwise `T` is `v`'s type.
 - `r()` and `r.get()` read a rune; `r.set(v)` stores `v`, which must be

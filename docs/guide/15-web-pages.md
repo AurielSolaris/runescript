@@ -144,8 +144,8 @@ public void main() {
 - Reading a rune inside a `{{ }}`, a bound attribute, or a `$if`
   condition ties that piece of the page to the rune. Reading it anywhere
   else, such as in an event handler, doesn't.
-- Runes of other types, such as errors or functions, need generics, which
-  are not designed yet (`ASX-TYPE-025`).
+- Runes of other types, such as errors or functions, aren't supported
+  (`ASX-TYPE-025`).
 
 ## Events
 

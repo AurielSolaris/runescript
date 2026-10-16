@@ -25,6 +25,9 @@ func (c *checker) assign(dst *types.Type, e ast.Expr, verb string) {
 	if call, ok := unparen(e).(*ast.CallExpr); ok && dst.Kind == types.Signal && c.isSignalBuiltin(call) {
 		src = operand{typ: c.signalNew(call, dst.Elem)}
 		c.info.Types[e] = src.typ
+	} else if lit, ok := unparen(e).(*ast.ArrayLit); ok && dst.Kind == types.Invalid {
+		c.exprs(lit.Elems) // the destination's type was already reported
+		return
 	} else if lit, ok := unparen(e).(*ast.ArrayLit); ok && dst.Kind == types.Array {
 		src = operand{typ: c.arrayLit(lit, dst)}
 		c.info.Types[e] = src.typ
@@ -277,7 +280,11 @@ func (c *checker) ident(e *ast.Ident) *types.Type {
 			WithHelp("wrap it in a lambda, e.g. (string s) => trace(s)")
 	case sym == nil:
 		if !c.privateError(c.file.Package, e.Name, e.Span) {
-			c.errorf(diagnostics.NameUndefined, e.Span, "undefined name '%s'", e.Name)
+			d := c.errorf(diagnostics.NameUndefined, e.Span, "undefined name '%s'", e.Name)
+			switch e.Name {
+			case "null", "undefined", "nil", "NULL":
+				d.WithHelp("RuneScript has no null: every value is a real value of its type. To say \"no value\", keep a bool that is false until there is one (guide, chapter 17)")
+			}
 		}
 	case sym.fn != nil:
 		c.info.FuncRefs[e] = sym.fn

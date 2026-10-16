@@ -186,6 +186,7 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [מפרט השפה](../../docs/LANGUAGE_SPEC.md) (באנגלית): הדקדוק והכללים, ומצב המימוש של כל כלל
 - [הספרייה הסטנדרטית: std:string](docs/guide/10-std-string.md)
 - [טקסט ורשימות: +, $"…", char, Array<T>](docs/guide/16-text-and-arrays.md)
+- [בלי null, בלי any, בלי גנריות](docs/guide/17-no-null-any-generics.md)
 - [הידור ל-JavaScript](docs/guide/11-javascript.md)
 - [מדריך הודעות האבחון](docs/guide/08-diagnostics.md)
 - [למי שמגיע מ-ActionScript 3](docs/guide/09-coming-from-actionscript.md)

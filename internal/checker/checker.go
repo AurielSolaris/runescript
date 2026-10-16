@@ -418,7 +418,13 @@ func (c *checker) resolveType(ref *ast.TypeRef) *types.Type {
 	}
 	t := types.Lookup(ref.Name)
 	if t == nil {
-		c.errorf(diagnostics.TypeUnknown, ref.Span, "unknown type '%s'", ref.Name)
+		d := c.errorf(diagnostics.TypeUnknown, ref.Span, "unknown type '%s'", ref.Name)
+		switch ref.Name {
+		case "any", "Object", "object", "dynamic", "var", "auto", "unknown", "Any":
+			d.WithHelp("RuneScript has no catch-all type: every variable, parameter, and result has one exact type (guide, chapter 17)")
+		case "T", "U", "K", "V":
+			d.WithHelp("RuneScript has no user-defined generics: write the function for each concrete type (guide, chapter 17)")
+		}
 		return types.InvalidT
 	}
 	return t

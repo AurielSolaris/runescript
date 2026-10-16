@@ -171,6 +171,7 @@ test suite; the web examples run on a fake DOM under Node.js.
 - [Language specification](docs/LANGUAGE_SPEC.md): grammar and rules, with each rule's implementation status
 - [Standard library: std:string](docs/guide/10-std-string.md)
 - [Text and lists: +, $"…", char, Array<T>](docs/guide/16-text-and-arrays.md)
+- [No null, no any, no generics](docs/guide/17-no-null-any-generics.md)
 - [Compiling to JavaScript](docs/guide/11-javascript.md)
 - [Web pages with rune:dom](docs/guide/15-web-pages.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)

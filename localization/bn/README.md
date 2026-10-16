@@ -169,6 +169,7 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [ভাষার স্পেসিফিকেশন](../../docs/LANGUAGE_SPEC.md) (ইংরেজিতে): ব্যাকরণ ও নিয়ম, প্রতিটি নিয়ম কতটা বাস্তবায়িত তা সহ
 - [স্ট্যান্ডার্ড লাইব্রেরি: std:string](docs/guide/10-std-string.md)
 - [লেখা ও তালিকা: +, $"…", char, Array<T>](docs/guide/16-text-and-arrays.md)
+- [null নেই, any নেই, জেনেরিক নেই](docs/guide/17-no-null-any-generics.md)
 - [JavaScript-এ কম্পাইল](docs/guide/11-javascript.md)
 - [ডায়াগনস্টিক তালিকা](docs/guide/08-diagnostics.md)
 - [ActionScript 3 থেকে আসছেন?](docs/guide/09-coming-from-actionscript.md)

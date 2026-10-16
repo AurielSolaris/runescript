@@ -20,6 +20,7 @@ complete program in these pages is compiled by the test suite
 14. [Errors](14-errors.md): `throw`, `try`, `catch`, `finally`, and catching runtime errors
 15. [Web pages with `rune:dom`](15-web-pages.md): components, checked HTML and SVG templates, runes, events, `$if`, `renderApp`
 16. [Text and lists](16-text-and-arrays.md): joining strings with `+`, interpolated strings `$"…"`, `char`, and `Array<T>`
+17. [No `null`, no `any`, no generics](17-no-null-any-generics.md): why, and how to use `false` where other languages use `null`
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).

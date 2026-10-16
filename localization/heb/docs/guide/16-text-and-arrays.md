@@ -257,6 +257,6 @@ public void main() {
 > מערכים לפונקציות `extern` של JavaScript. `main` עדיין לא יכולה לקבל ארגומנטים משורת
 > הפקודה.
 
-הבא: חזרה ל[תוכן העניינים של המדריך](README.md)
+הבא: [בלי `null`, בלי `any`, בלי גנריות](17-no-null-any-generics.md)
 
 </div>

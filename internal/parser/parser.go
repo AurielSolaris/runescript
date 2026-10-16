@@ -153,6 +153,7 @@ func (p *parser) externDecl() *ast.ExternDecl {
 	}
 	d.Result = p.typeRef("return type")
 	d.Name = p.ident("function name")
+	p.noTypeParams()
 	p.expect(lexer.LParen, "'(' after function name")
 	if !p.is(lexer.RParen, "") {
 		for {
@@ -246,6 +247,7 @@ func (p *parser) funcDecl() *ast.FuncDecl {
 	}
 	fn.Result = p.typeRef("return type")
 	fn.Name = p.ident("function name")
+	p.noTypeParams()
 	p.expect(lexer.LParen, "'(' after function name")
 	if !p.is(lexer.RParen, "") {
 		for {
@@ -415,6 +417,15 @@ func (p *parser) typeRef(what string) *ast.TypeRef {
 		ref = &ast.TypeRef{Func: fn, Span: span(t.Span, end.Span)}
 	}
 	return ref
+}
+
+// noTypeParams explains `T first<T>(...)`: functions cannot be generic.
+func (p *parser) noTypeParams() {
+	if t := p.tok(); t.Kind == lexer.Op && t.Text == "<" {
+		p.failHelp(diagnostics.ParseUnexpected, t.Span,
+			"RuneScript has no user-defined generics: write the function for each concrete type; Array<T> is built in (guide, chapter 17)",
+			"functions cannot have type parameters")
+	}
 }
 
 // splitShift turns a `>>` token into two `>` tokens, so that the first

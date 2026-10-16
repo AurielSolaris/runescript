@@ -45,6 +45,7 @@ public void main() {
 | `*` / missing types allowed | Every variable, parameter, and function is explicitly typed; there is no `any` |
 | `Array`, `Vector.<String>` | `Array<string>`: every element has the declared type |
 | `"n=" + 5` | `"n=" + (string) 5` or `$"n={5}"`: `+` never converts numbers |
+| `null`, `*` | Neither exists: no value is ever missing or untyped ([chapter 17](17-no-null-any-generics.md)) |
 
 ## Stricter integers
 
@@ -96,7 +97,7 @@ top-level `main()` function, and no class is needed.
 
 ## Not yet available
 
-Classes, interfaces, `static`, `null`, array methods beyond `push` and
+Classes, interfaces, `static`, array methods beyond `push` and
 `pop`, metadata, E4X XML, and graphics (a native graphics package is
 planned). See the [roadmap](../ROADMAP.md).
 

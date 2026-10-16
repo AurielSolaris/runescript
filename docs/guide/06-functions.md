@@ -343,7 +343,7 @@ value is evaluated first, then the arguments.
 ## Not yet available
 
 Overloading (two functions with the same name), default arguments,
-variadic parameters, generic functions, and closures that capture
-variables.
+variadic parameters, and closures that capture variables. Generic
+functions are left out on purpose ([chapter 17](17-no-null-any-generics.md)).
 
 Next: [Output with `trace`](07-trace.md)

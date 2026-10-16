@@ -56,7 +56,7 @@ func (c *checker) domType(ref *ast.TypeRef) *types.Type {
 	elem := c.resolveType(ref.Args[0])
 	if elem.Kind != types.Invalid && !types.IsScalar(elem) {
 		c.errorf(diagnostics.TypeArgs, ref.Args[0].Span, "a rune holds a number, bool, or string, not '%s'", elem).
-			WithHelp("runes of other types need generics, which are not designed yet")
+			WithHelp("a rune holds one number, bool, or string type")
 		return types.InvalidT
 	}
 	if elem.Kind == types.Invalid {
