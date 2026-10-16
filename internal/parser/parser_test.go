@@ -293,3 +293,36 @@ public void f() {
 		t.Errorf("string cast = %+v", args[1])
 	}
 }
+
+func TestParseExterns(t *testing.T) {
+	f := mustParse(t, "package p;\nextern \"rune:fs\" string readFile(string path);\npublic void main() { }\nextern \"./x.mjs\" int f(int, float32 y);\n")
+	if len(f.Externs) != 2 || len(f.Funcs) != 1 {
+		t.Fatalf("got %d externs, %d funcs", len(f.Externs), len(f.Funcs))
+	}
+	x := f.Externs[0]
+	if x.Module != "rune:fs" || x.Result.Name != "string" || x.Name.Name != "readFile" || len(x.Params) != 1 || x.Params[0].Name.Name != "path" {
+		t.Errorf("unexpected extern: %+v", x)
+	}
+	if y := f.Externs[1]; y.Params[0].Name != nil || y.Params[1].Type.Name != "float32" || y.Span.Start.Line != 4 {
+		t.Errorf("unexpected extern: %+v", y)
+	}
+}
+
+func TestParseExternErrors(t *testing.T) {
+	cases := []struct{ name, src, pos string }{
+		{"no module", "package p;\nextern int f();", "2:8"},
+		{"modifier", "package p;\nextern \"m\" public int f();", "2:12"},
+		{"body", "package p;\nextern \"m\" int f() { return 1; }", "2:20"},
+		{"no semicolon", "package p;\nextern \"m\" int f()\npublic void main() { }", "3:1"},
+		{"inside a function", "package p;\npublic void main() {\n    extern \"m\" int f();\n}", "3:5"},
+		{"before use", "package p;\nextern \"m\" int f();\nuse \"std:string\";", "3:1"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, diags := Parse([]byte(c.src))
+			if len(diags) != 1 || diags[0].Code != diagnostics.ParseUnexpected || diags[0].Span.Start.String() != c.pos {
+				t.Errorf("got %v, want ASX-PARSE-001 at %s", diags, c.pos)
+			}
+		})
+	}
+}

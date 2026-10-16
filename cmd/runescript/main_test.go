@@ -21,6 +21,7 @@ func TestCLI(t *testing.T) {
 	bad := write(t, "package main;\npublic int main() {\n    sint s = -10;\n    uint u = s;\n    return 0;\n}\n")
 	v02 := write(t, "package main;\nuse \"std:string\";\npublic int main() {\n    string(string) shout = (string s) => string.toUpper(s);\n    trace(shout(\"rune\"));\n    private int seven() { return 7; }\n    return seven();\n}\n")
 	crash := write(t, "package main;\npublic int main() {\n    int z = 0;\n    return 1 / z;\n}\n")
+	warn := write(t, "package main;\npublic int main() {\n    int unused = 1;\n    trace(\"ran\");\n    return 0;\n}\n")
 
 	cases := []struct {
 		name           string
@@ -41,6 +42,14 @@ func TestCLI(t *testing.T) {
 		{"build unknown target", []string{"build", "--target", "wasm", ok}, exitUsage, "", "unknown target"},
 		{"build no file", []string{"build"}, exitUsage, "", "usage:"},
 		{"version", []string{"version"}, 0, "runescript " + Version, ""},
+		{"warning runs", []string{"run", warn}, 0, "ran\n", "prog.rsc:3:9: warning ASX-WARN-001: variable 'unused' is never used"},
+		{"warning check", []string{"check", warn}, 0, "", "warning ASX-WARN-001"},
+		{"Werror run", []string{"run", "-Werror", warn}, exitCompileError, "", "error ASX-WARN-001: variable 'unused' is never used [-Werror]"},
+		{"Werror build", []string{"build", "-Werror", "-o", filepath.Join(t.TempDir(), "w.js"), warn}, exitCompileError, "", "[-Werror]"},
+		{"allow", []string{"run", "-Werror", "--allow", "ASX-WARN-001", warn}, 0, "ran\n", ""},
+		{"allow list without prefix", []string{"check", "-Werror", "--allow=warn-002,WARN-001", warn}, 0, "", ""},
+		{"allow bad code", []string{"check", "--allow", "ASX-TYPE-004", warn}, exitUsage, "", "--allow takes warning codes"},
+		{"run too many files", []string{"run", ok, ok}, exitUsage, "", "usage:"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

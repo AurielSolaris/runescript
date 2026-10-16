@@ -209,7 +209,7 @@ const Float32JS = `function f32str(y) {
   for (let p = 1; p <= 9; p++) {
     const [mant, ex] = y.toExponential(p - 1).split("e");
     const m = BigInt(mant.replace(".", "")), e10 = Number(ex) - (p - 1);
-    const pow = 10n ** BigInt(Math.abs(e10));
+    const pow = BigInt("1" + "0".repeat(Math.abs(e10)));
     let best = null, bestDist = null;
     for (const k of [m - 1n, m, m + 1n]) {
       if (k <= 0n || Math.fround(Number(k + "e" + e10)) !== y) continue;

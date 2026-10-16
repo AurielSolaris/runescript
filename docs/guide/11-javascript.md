@@ -16,9 +16,22 @@ node examples/fizzbuzz.js                         # runs it; main's result is th
 several files (see [Packages and files](12-packages-and-files.md)) becomes
 one module, and runtime errors name the file they happened in.
 
+**What is promised, and what isn't.** RuneScript does **not** yet promise
+full JavaScript compatibility. The module needs an engine with ES2015,
+`BigInt`, `??`, and ES modules. It exchanges only numbers, `bool`,
+`string`, and errors with JavaScript, through
+[extern functions](#calling-javascript-extern-functions). And `rune:fs` is
+the only host-neutral API so far. What it **does** promise is strict code:
+nothing gets into a RuneScript program without being checked. TypeScript
+trusts its declarations and erases them, so a `.d.ts` that says `number`
+can hand you a string at run time. RuneScript checks every value that comes
+back from JavaScript against its declared type, and stops with a
+`TypeError` when it doesn't match. There is no `any`, no implicit
+conversion, and no unchecked cast.
+
 ## Using the module in a web page
 
-The output is one self-contained ES2022 module with no dependencies. It
+The output is one self-contained ES2015 module (plus BigInt and `??`) with no dependencies. It
 exports `run`, which calls `main` and returns its exit code, and
 `RuneScriptError`, which `run` throws when the program stops with a
 runtime error.
@@ -40,6 +53,10 @@ runtime error.
 `options.trace` receives each line of `trace` output. Without it, lines go
 to `console.log`. A `RuneScriptError` also has `code`, `file`, `line`,
 `col`, and `detail` (the message without the location).
+
+A program with extern functions imports their modules, so it runs only
+where those modules exist: a module using `rune:fs` runs in Node.js, not in
+a browser.
 
 ## How strict typing survives the translation
 
@@ -81,6 +98,121 @@ interpreter and Node.js and requires identical output, exit codes, and
 errors. It also compares every `std:string` function against Go's on
 random non-ASCII text.
 
+## Calling JavaScript: extern functions
+
+An `extern` declaration names a function that a JavaScript module
+implements:
+
+```actionscript
+package notes;
+
+extern "rune:fs" void writeFile(string path, string data);
+extern "rune:fs" string readFile(string path);
+extern "./clock.mjs" float64 now();
+
+public int main() {
+    writeFile("notes.txt", "ᚱᚢᚾᛖ");
+    trace(readFile("notes.txt"), now() > 0);
+    return 0;
+}
+```
+
+```js
+// clock.mjs, next to the compiled module
+export const now = () => Date.now();
+```
+
+- An extern declaration goes at the top level of a file. It has no access
+  modifier and is visible only in that file. Parameter names are
+  optional.
+- An extern function can only be called. To pass it around, wrap it in a
+  lambda: `(string p) => readFile(p)`.
+- The module string is either a **host-neutral module** (`rune:…`, below),
+  or anything JavaScript's `import` accepts: a file such as
+  `"./clock.mjs"` (relative to the compiled module), a package name, or a
+  host's own module such as `"node:fs"`. A host's own module works, but it
+  ties the program to that host, so it's reported as warning
+  `ASX-WARN-006`.
+- Only the JavaScript target runs extern functions. `runescript check`
+  accepts the program, but `runescript run` reports `ASX-TARGET-002`. A
+  JavaScript runtime bundled with RuneScript is planned, so that such
+  programs will run without Node.js.
+
+### Host-neutral modules
+
+A `rune:` module is part of RuneScript, not of one host. Its functions
+are fixed, and a declaration must match one exactly (`ASX-TYPE-024`
+otherwise). The compiler maps each function to the host's own API; today
+that host is Node.js.
+
+| `rune:fs` function | Does |
+|---|---|
+| `string readFile(string path)` | Returns the contents of a file, read as UTF-8 (invalid bytes become U+FFFD) |
+| `void writeFile(string path, string data)` | Creates or replaces a file |
+| `void appendFile(string path, string data)` | Adds to the end of a file, creating it if needed |
+| `bool exists(string path)` | Whether a file or directory exists |
+| `void remove(string path)` | Deletes a file |
+
+A failing function, e.g. `readFile` on a missing file, throws an `Error`
+(`ASX-RUN-008`). `rune:process` is next.
+
+### What crosses the boundary
+
+Arguments go to JavaScript as they are: numbers, booleans, strings, and
+errors as `RSError` objects (below). Results are **checked** on the way
+back:
+
+| Declared result | JavaScript must return |
+|---|---|
+| `int`, `uint` | An integral number in the type's range (`-0` becomes `0`) |
+| `float`, `float64` | Any number, including `NaN` and `Infinity` |
+| `float32` | Any number. It is rounded to float32 with `Math.fround` |
+| `bool` | `true` or `false` |
+| `string` | A string without unpaired surrogates, so that it is valid UTF-8 |
+| `void` | `undefined` |
+| `Error`, `RangeError`, `TypeError`, `ArgumentError` | An `RSError` of that type (or a subtype), or a JavaScript `Error`, which is converted: `RangeError` and `TypeError` keep their names, any other becomes `Error`, and the `errorID` is `0` |
+
+Anything else throws a `TypeError` with code `ASX-RUN-007` at the call:
+
+```actionscript
+package demo;
+
+extern "./lib.mjs" int half(int n);
+
+public int main() {
+    try {
+        trace(half(3)); // JavaScript returns 1.5
+    } catch (TypeError e) {
+        trace(e.message); // half returned 1.5, but its result type is 'int'
+    }
+    return 0;
+}
+```
+
+An exception thrown by JavaScript becomes an `Error` with code
+`ASX-RUN-008` and a message such as `readFile threw Error: ENOENT: …`.
+Nothing catches it unless your program does.
+
+### Errors in both directions
+
+RuneScript errors and JavaScript share one class. The module exports
+`RSError`, the class of RuneScript error values. JavaScript receives errors
+as `RSError` objects with `name`, `message`, and `errorID`, and it can
+create, return, and throw them. An `RSError` that JavaScript throws reaches
+RuneScript unchanged, so it's caught by its own type. With
+`extern "./even.mjs" int halveEven(int n);`, `halveEven(3)` throws an
+`ArgumentError` that `catch (ArgumentError e)` catches:
+
+```js
+// even.mjs: the compiled program is prog.js
+import { RSError } from "./prog.js";
+
+export const halveEven = (n) => {
+  if (n % 2 !== 0) throw new RSError("ArgumentError", "n must be even", 1);
+  return n / 2;
+};
+```
+
 ## Limits of the JavaScript target
 
 - **Stack depth.** Browsers and Node.js often run out of stack before
@@ -91,9 +223,12 @@ random non-ASCII text.
 - **Very long strings.** JavaScript engines cap string length (around
   2<sup>29</sup>–2<sup>30</sup> UTF-16 units). Exceeding it inside
   `string.repeat` or `string.replace` is reported as `ASX-RUN-004`.
-- **No JavaScript interop yet.** A program can't call JavaScript functions
-  or the DOM, and JavaScript can call only `run`. Calling into JavaScript
-  is planned as `use "js:<module>";` with typed declarations whose values
-  are checked when they enter RuneScript.
+- **Limited JavaScript interop.** Extern functions exchange only numbers,
+  `bool`, `string`, and errors. Objects, arrays, callbacks, and the DOM
+  can't cross yet, and JavaScript can call into RuneScript only through
+  `run`.
+- **Not full JavaScript compatibility.** The output targets ES2015 plus
+  `BigInt`, `??`, and ES modules, and it is tested on Node.js. Other hosts
+  are expected to work but aren't tested.
 
 Next: [Packages and files](12-packages-and-files.md)

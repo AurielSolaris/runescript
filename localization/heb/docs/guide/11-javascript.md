@@ -25,9 +25,18 @@ node examples/fizzbuzz.js                         # runs it; main's result is th
 [חבילות וקבצים](12-packages-and-files.md)) הופכת למודול אחד, ושגיאות זמן ריצה
 מציינות את הקובץ שבו קרו.
 
+**מה מובטח ומה לא.** RuneScript עדיין **אינה** מבטיחה תאימות מלאה ל-JavaScript.
+המודול צריך מנוע שתומך ב-ES2015, ב-`BigInt`, ב-`??` ובמודולי ES. הוא מחליף עם
+JavaScript רק מספרים, `bool`, `string` ושגיאות, דרך פונקציות extern (בהמשך). ו-`rune:fs`
+הוא בינתיים ה-API היחיד שאינו תלוי בסביבת ההרצה. מה שהיא **כן** מבטיחה הוא קוד קפדני:
+שום דבר לא נכנס לתוכנית RuneScript בלי בדיקה. TypeScript סומכת על ההצהרות שלה
+ומוחקת אותן, ולכן `.d.ts` שאומר `number` יכול להחזיר מחרוזת בזמן ריצה. RuneScript
+בודקת כל ערך שחוזר מ-JavaScript מול הטיפוס המוצהר שלו, ועוצרת עם `TypeError` כשהוא
+לא תואם. אין `any`, אין המרה מרומזת ואין המרה לא בדוקה.
+
 ## שימוש במודול בדף אינטרנט
 
-הפלט הוא מודול ES2022 אחד, עצמאי, בלי תלויות. הוא מייצא את `run`, שקוראת ל-`main`
+הפלט הוא מודול ES2015 אחד (בתוספת BigInt ו-`??`), עצמאי, בלי תלויות. הוא מייצא את `run`, שקוראת ל-`main`
 ומחזירה את קוד היציאה שלה, ואת `RuneScriptError`, ש-`run` זורקת כשהתוכנית נעצרת עם
 שגיאת זמן ריצה.
 
@@ -52,6 +61,9 @@ node examples/fizzbuzz.js                         # runs it; main's result is th
 `options.trace` מקבלת כל שורה של פלט `trace`. בלעדיה, השורות הולכות ל-`console.log`.
 ל-`RuneScriptError` יש גם `code`, `file`, `line`, `col` ו-`detail` (ההודעה בלי
 המיקום).
+
+תוכנית עם פונקציות extern מייבאת את המודולים שלהן, ולכן היא רצה רק היכן שהמודולים
+האלה קיימים: מודול שמשתמש ב-`rune:fs` רץ ב-Node.js, לא בדפדפן.
 
 ## איך הקפדת הטיפוסים שורדת את התרגום
 
@@ -95,6 +107,124 @@ public int main() {
 קודי יציאה ושגיאות זהים. היא גם משווה כל פונקציה של `std:string` לזו של Go על טקסט
 אקראי שאינו ASCII.
 
+## קריאה ל-JavaScript: פונקציות extern
+
+הצהרת `extern` נותנת שם לפונקציה שמודול JavaScript מממש:
+
+</div>
+
+```actionscript
+package notes;
+
+extern "rune:fs" void writeFile(string path, string data);
+extern "rune:fs" string readFile(string path);
+extern "./clock.mjs" float64 now();
+
+public int main() {
+    writeFile("notes.txt", "ᚱᚢᚾᛖ");
+    trace(readFile("notes.txt"), now() > 0);
+    return 0;
+}
+```
+
+```js
+// clock.mjs, next to the compiled module
+export const now = () => Date.now();
+```
+
+<div dir="rtl">
+
+- הצהרת extern נכתבת ברמה העליונה של הקובץ. אין לה מגדיר גישה, והיא נראית רק
+  באותו קובץ. שמות הפרמטרים אינם חובה.
+- אפשר רק לקרוא לפונקציית extern. כדי להעביר אותה כערך, עטפו אותה בלמבדה:
+  `(string p) => readFile(p)`.
+- מחרוזת המודול היא **מודול שאינו תלוי בסביבת ההרצה** (`rune:…`, בהמשך), או כל
+  דבר ש-`import` של JavaScript מקבל: קובץ כמו `"./clock.mjs"` (יחסית למודול
+  המהודר), שם של חבילה, או מודול של סביבת הרצה מסוימת כמו `"node:fs"`. מודול כזה
+  עובד, אבל הוא קושר את התוכנית לסביבה אחת, ולכן מדווחת עליו האזהרה `ASX-WARN-006`.
+- רק יעד JavaScript מריץ פונקציות extern. `runescript check` מקבלת את התוכנית, אבל
+  `runescript run` מדווחת `ASX-TARGET-002`. מתוכננת סביבת הרצה של JavaScript שתגיע
+  יחד עם RuneScript, כדי שתוכניות כאלה ירוצו בלי Node.js.
+
+### מודולים שאינם תלויים בסביבת ההרצה
+
+מודול `rune:` הוא חלק מ-RuneScript, לא מסביבת הרצה אחת. הפונקציות שלו קבועות,
+והצהרה חייבת להתאים לאחת מהן בדיוק (אחרת `ASX-TYPE-024`). המהדר ממפה כל פונקציה
+ל-API של סביבת ההרצה עצמה; היום הסביבה הזו היא Node.js.
+
+| פונקציה של `rune:fs` | מה היא עושה |
+|---|---|
+| `string readFile(string path)` | מחזירה את תוכן הקובץ, שנקרא כ-UTF-8 (בתים לא תקינים הופכים ל-U+FFFD) |
+| `void writeFile(string path, string data)` | יוצרת קובץ או מחליפה אותו |
+| `void appendFile(string path, string data)` | מוסיפה לסוף הקובץ, ויוצרת אותו אם צריך |
+| `bool exists(string path)` | האם קובץ או תיקייה קיימים |
+| `void remove(string path)` | מוחקת קובץ |
+
+פונקציה שנכשלת, למשל `readFile` על קובץ חסר, זורקת `Error` (`ASX-RUN-008`).
+`rune:process` הוא הבא בתור.
+
+### מה חוצה את הגבול
+
+ארגומנטים עוברים ל-JavaScript כמו שהם: מספרים, ערכים בוליאניים, מחרוזות, ושגיאות
+כאובייקטי `RSError` (בהמשך). התוצאות **נבדקות** בדרך חזרה:
+
+| התוצאה המוצהרת | מה JavaScript חייבת להחזיר |
+|---|---|
+| `int`, `uint` | מספר שלם בטווח של הטיפוס (`-0` הופך ל-`0`) |
+| `float`, `float64` | כל מספר, כולל `NaN` ו-`Infinity` |
+| `float32` | כל מספר. הוא מעוגל ל-float32 עם `Math.fround` |
+| `bool` | `true` או `false` |
+| `string` | מחרוזת בלי surrogates בודדים, כדי שתהיה UTF-8 תקין |
+| `void` | `undefined` |
+| `Error`, `RangeError`, `TypeError`, `ArgumentError` | `RSError` מאותו טיפוס (או מתת-טיפוס), או `Error` של JavaScript, שמומר: `RangeError` ו-`TypeError` שומרים על שמם, כל אחר הופך ל-`Error`, וה-`errorID` הוא `0` |
+
+כל דבר אחר זורק `TypeError` עם הקוד `ASX-RUN-007` במקום הקריאה:
+
+</div>
+
+```actionscript
+package demo;
+
+extern "./lib.mjs" int half(int n);
+
+public int main() {
+    try {
+        trace(half(3)); // JavaScript returns 1.5
+    } catch (TypeError e) {
+        trace(e.message); // half returned 1.5, but its result type is 'int'
+    }
+    return 0;
+}
+```
+
+<div dir="rtl">
+
+חריגה ש-JavaScript זורקת הופכת ל-`Error` עם הקוד `ASX-RUN-008` והודעה כמו
+`readFile threw Error: ENOENT: …`. איש לא תופס אותה, אלא אם התוכנית שלכם תופסת.
+
+### שגיאות בשני הכיוונים
+
+לשגיאות של RuneScript ול-JavaScript יש מחלקה משותפת. המודול מייצא את `RSError`,
+המחלקה של ערכי השגיאה של RuneScript. JavaScript מקבלת שגיאות כאובייקטי `RSError` עם
+`name`, `message` ו-`errorID`, ויכולה ליצור אותן, להחזיר אותן ולזרוק אותן. `RSError`
+ש-JavaScript זורקת מגיע ל-RuneScript בלי שינוי, ולכן הוא נתפס לפי הטיפוס שלו. עם
+`extern "./even.mjs" int halveEven(int n);`, הקריאה `halveEven(3)` זורקת
+`ArgumentError` ש-`catch (ArgumentError e)` תופס:
+
+</div>
+
+```js
+// even.mjs: the compiled program is prog.js
+import { RSError } from "./prog.js";
+
+export const halveEven = (n) => {
+  if (n % 2 !== 0) throw new RSError("ArgumentError", "n must be even", 1);
+  return n / 2;
+};
+```
+
+<div dir="rtl">
+
 ## המגבלות של יעד JavaScript
 
 - **עומק המחסנית.** לדפדפנים ול-Node.js נגמרת המחסנית לעיתים קרובות לפני 10,000
@@ -104,10 +234,11 @@ public int main() {
 - **מחרוזות ארוכות מאוד.** מנועי JavaScript מגבילים את אורך המחרוזת (בערך
   2<sup>29</sup>–2<sup>30</sup> יחידות UTF-16). חריגה מכך בתוך `string.repeat` או
   `string.replace` מדווחת כ-`ASX-RUN-004`.
-- **עדיין אין עבודה משותפת עם JavaScript.** תוכנית אינה יכולה לקרוא לפונקציות
-  JavaScript או ל-DOM, ו-JavaScript יכולה לקרוא רק ל-`run`. קריאה ל-JavaScript
-  מתוכננת בצורת `use "js:<module>";` עם הצהרות מוקלדות, שהערכים שלהן נבדקים כשהם
-  נכנסים ל-RuneScript.
+- **עבודה משותפת מוגבלת עם JavaScript.** פונקציות extern מחליפות רק מספרים, `bool`,
+  `string` ושגיאות. אובייקטים, מערכים, פונקציות callback וה-DOM עדיין לא יכולים לחצות,
+  ו-JavaScript יכולה לקרוא ל-RuneScript רק דרך `run`.
+- **לא תאימות מלאה ל-JavaScript.** הפלט מכוון ל-ES2015 בתוספת `BigInt`, `??` ומודולי
+  ES, והוא נבדק ב-Node.js. סביבות אחרות אמורות לעבוד, אבל הן לא נבדקות.
 
 הבא: [חבילות וקבצים](12-packages-and-files.md)
 

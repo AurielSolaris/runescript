@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/AurielSolaris/runescript/internal/driver"
+	"github.com/AurielSolaris/runescript/internal/jsgen"
 	"github.com/AurielSolaris/runescript/internal/runtime"
 )
 
@@ -17,6 +18,7 @@ var (
 	fenceRE        = regexp.MustCompile("(?s)```actionscript\r?\n(.*?)```")
 	compileErrRE   = regexp.MustCompile(`// error: (ASX-[A-Z]+-\d+)`)
 	runtimeErrRE   = regexp.MustCompile(`// runtime error: (ASX-RUN-\d+)`)
+	externRE       = regexp.MustCompile(`(?m)^extern "`)
 	docSourceGlobs = []string{"../README.md", "../docs/*.md", "../docs/guide/*.md", "../localization/*/README.md", "../localization/*/docs/guide/*.md"}
 )
 
@@ -54,6 +56,15 @@ func checkDocProgram(t *testing.T, src string) {
 		_, diags := driver.Check([]byte(src))
 		if len(diags) == 0 || diags[0].Code.String() != m[1] {
 			t.Errorf("expected %s, got %v\n%s", m[1], diags, src)
+		}
+		return
+	}
+	if externRE.MatchString(src) {
+		// Extern functions need their JavaScript modules, which the docs
+		// don't include: the program must check and compile to
+		// JavaScript. (tests/testdata/extern runs such programs on Node.js.)
+		if _, diags, err := driver.BuildJS("doc.rsc", []byte(src), jsgen.Options{}); diags != nil || err != nil {
+			t.Fatalf("doc program does not compile to JavaScript: %v %v\n%s", diags, err, src)
 		}
 		return
 	}

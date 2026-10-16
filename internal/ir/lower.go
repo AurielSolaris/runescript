@@ -12,8 +12,9 @@ import (
 // panics if info is incomplete, which would be a checker bug, not a user
 // error.
 func Lower(info *checker.Info) *Program {
-	l := &lowerer{info: info, funcs: map[*ast.FuncDecl]*Func{}, syms: map[*checker.FuncSym]*Func{}}
 	p := &Program{EntryVoid: info.EntryVoid, EntrySite: info.Entry.Name.Span}
+	l := &lowerer{info: info, prog: p, funcs: map[*ast.FuncDecl]*Func{}, syms: map[*checker.FuncSym]*Func{},
+		externs: map[*checker.ExternSym]*Extern{}}
 	for _, file := range info.Program.Files {
 		for _, fd := range file.AST.Funcs {
 			if fd.Body != nil {
@@ -28,7 +29,9 @@ func Lower(info *checker.Info) *Program {
 }
 
 type lowerer struct {
-	info *checker.Info
+	info    *checker.Info
+	prog    *Program
+	externs map[*checker.ExternSym]*Extern
 	// funcs maps definitions to their IR function, created on first
 	// reference so calls may precede definitions.
 	funcs map[*ast.FuncDecl]*Func
@@ -324,6 +327,9 @@ func (l *lowerer) call(e *ast.CallExpr) Expr {
 	if nf, ok := l.info.Natives[e]; ok {
 		return &CallNative{Pkg: e.Pkg.Name, Func: nf, Args: args, Site: e.Span}
 	}
+	if x, ok := l.info.Externs[e]; ok {
+		return &CallExtern{Extern: l.extern(x), Args: args, Site: e.Span}
+	}
 	if callee != nil {
 		return &CallValue{Callee: callee, Args: args, Site: e.Span}
 	}
@@ -338,4 +344,16 @@ func (l *lowerer) call(e *ast.CallExpr) Expr {
 	}
 	// A variable holding a function value.
 	return &CallValue{Callee: &Load{Var: l.lookup(e.Fn.Name)}, Args: args, Site: e.Span}
+}
+
+// extern returns the IR form of an extern function, adding it to the
+// program on first use.
+func (l *lowerer) extern(x *checker.ExternSym) *Extern {
+	if e, ok := l.externs[x]; ok {
+		return e
+	}
+	e := &Extern{Name: x.Name, Module: x.Module, Type: x.Type, Host: x.Host}
+	l.externs[x] = e
+	l.prog.Externs = append(l.prog.Externs, e)
+	return e
 }

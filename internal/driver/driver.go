@@ -26,6 +26,22 @@ type Input struct {
 	// Notes, if set, receives a line for each file that was converted to
 	// UTF-8 from another encoding.
 	Notes io.Writer
+	// Warnings says how warnings are reported.
+	Warnings WarningPolicy
+}
+
+// WarningPolicy controls warnings. Warnings are only reported for programs
+// without errors: a program with errors often has follow-on warnings that
+// disappear once the errors are fixed.
+type WarningPolicy struct {
+	// Allow lists warning codes that are not reported.
+	Allow map[diagnostics.Code]bool
+	// AsErrors turns every reported warning into an error (-Werror).
+	AsErrors bool
+	// Report, if set, receives the warnings of a program that checks.
+	// It is not called when AsErrors is set: the warnings are then
+	// returned as errors.
+	Report func([]*diagnostics.Diagnostic)
 }
 
 // Memory is an in-memory entry file named name, with uses resolved
@@ -68,6 +84,22 @@ func CheckInput(in Input) (*checker.Info, []*diagnostics.Diagnostic, error) {
 	if len(diags) > 0 {
 		return nil, sorted(diags), nil
 	}
+	var warns []*diagnostics.Diagnostic
+	for _, w := range info.Warnings {
+		if !in.Warnings.Allow[w.Code] {
+			warns = append(warns, w)
+		}
+	}
+	switch {
+	case len(warns) == 0:
+	case in.Warnings.AsErrors:
+		for _, w := range warns {
+			w.Severity, w.Promoted = diagnostics.Error, true
+		}
+		return nil, sorted(warns), nil
+	case in.Warnings.Report != nil:
+		in.Warnings.Report(sorted(warns))
+	}
 	return info, nil, nil
 }
 
@@ -86,8 +118,32 @@ func RunInput(in Input, out io.Writer) (int, []*diagnostics.Diagnostic, error) {
 	if diags != nil || err != nil {
 		return 0, diags, err
 	}
+	if diags := needsJS(info); diags != nil {
+		return 0, diags, nil
+	}
 	code, err := runtime.Run(info, out)
 	return code, nil, err
+}
+
+// needsJS reports, once, that a program with extern declarations can only
+// run on the JavaScript target (OQ-JS-02). It returns nil for any other
+// program.
+func needsJS(info *checker.Info) []*diagnostics.Diagnostic {
+	if len(info.ExternDecls) == 0 {
+		return nil
+	}
+	first := info.ExternDecls[0]
+	for _, x := range info.ExternDecls[1:] {
+		if x.Decl.Span.Start.Before(first.Decl.Span.Start) {
+			first = x
+		}
+	}
+	msg := fmt.Sprintf("extern function '%s' is implemented in JavaScript, so the interpreter cannot run this program", first.Name)
+	if n := len(info.ExternDecls) - 1; n > 0 {
+		msg += fmt.Sprintf(" (%d more extern function(s) are declared)", n)
+	}
+	return []*diagnostics.Diagnostic{diagnostics.New(diagnostics.TargetNeedsJS, first.Decl.Span, "%s", msg).
+		WithHelp("compile with `runescript build` and run the module with node")}
 }
 
 // BuildJSInput checks a program and compiles it to one JavaScript module.

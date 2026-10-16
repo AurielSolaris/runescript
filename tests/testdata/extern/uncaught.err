@@ -1,0 +1,1 @@
+prog.rsc:7:11: error ASX-RUN-007: halfInt returned 2.5, but its result type is 'int'

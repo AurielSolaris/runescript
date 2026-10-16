@@ -263,9 +263,12 @@ func (c *checker) ident(e *ast.Ident) *types.Type {
 	case sym.fn != nil:
 		c.info.FuncRefs[e] = sym.fn
 		return sym.fn.Type
+	case sym.ext != nil:
+		c.externValueError(e)
 	case crossed:
 		c.boundaryError(e)
 	default:
+		sym.read = true
 		return sym.typ
 	}
 	return types.InvalidT
@@ -495,13 +498,19 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	case sym.fn != nil:
 		c.info.Callees[e] = sym.fn
 		return c.checkArgs(sym.fn.Type, e, "function '"+name+"'")
+	case sym.ext != nil:
+		c.info.Externs[e] = sym.ext
+		return c.checkArgs(sym.ext.Type, e, "extern function '"+name+"'")
 	case crossed:
 		c.boundaryError(e.Fn)
 	case sym.typ.Kind == types.Func:
+		sym.read = true
 		c.info.Types[e.Fn] = sym.typ
 		return c.checkArgs(sym.typ, e, "'"+name+"'")
 	case sym.typ.Kind == types.Invalid:
+		sym.read = true
 	default:
+		sym.read = true
 		c.errorf(diagnostics.NameNotCallable, e.Fn.Span, "'%s' is a variable of type '%s', not a function", name, sym.typ)
 	}
 	c.exprs(e.Args)
@@ -568,6 +577,9 @@ func (c *checker) checkArgs(ft *types.Type, e *ast.CallExpr, what string) *types
 // qualifiedCall checks a call such as string.toUpper(s) or geom.area(2).
 func (c *checker) qualifiedCall(e *ast.CallExpr) *types.Type {
 	b := c.quals[e.Pkg.Name]
+	if b != nil {
+		b.used = true
+	}
 	switch {
 	case b == nil && c.isVariable(e.Pkg.Name):
 		t := c.ident(e.Pkg)
@@ -625,7 +637,7 @@ func (c *checker) nativeCall(e *ast.CallExpr, pkg *stdlib.Package) *types.Type {
 // isVariable reports whether name is a visible variable.
 func (c *checker) isVariable(name string) bool {
 	sym, _ := c.lookup(name)
-	return sym != nil && sym.fn == nil
+	return sym != nil && sym.fn == nil && sym.ext == nil
 }
 
 // ---- conversions, errors, and fields ----
@@ -757,6 +769,7 @@ func fieldHelp(t *types.Type) string {
 // selector checks x.name: a field of an error value.
 func (c *checker) selector(e *ast.SelectorExpr) *types.Type {
 	if id, ok := e.X.(*ast.Ident); ok && !c.isVariable(id.Name) && c.quals[id.Name] != nil {
+		c.quals[id.Name].used = true
 		c.errorf(diagnostics.NameNotAValue, e.Span, "'%s.%s' can only be called; package functions cannot be used as values yet", id.Name, e.Name.Name).
 			WithHelp(fmt.Sprintf("wrap it in a lambda, e.g. (int x) => %s.%s(x)", id.Name, e.Name.Name))
 		return types.InvalidT

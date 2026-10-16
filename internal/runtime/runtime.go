@@ -135,6 +135,10 @@ type interp struct {
 // Run executes the program's entry point and returns main's result as the
 // process exit code (0 for a void main).
 func Run(info *checker.Info, out io.Writer) (code int, err error) {
+	if len(info.ExternDecls) > 0 {
+		// The driver reports this as ASX-TARGET-002 before calling Run.
+		return 0, fmt.Errorf("the program declares extern function '%s'; only the JavaScript target can run it", info.ExternDecls[0].Name)
+	}
 	in := &interp{info: info, out: out}
 	defer func() {
 		if r := recover(); r != nil {

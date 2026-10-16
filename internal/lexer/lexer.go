@@ -51,6 +51,7 @@ var keywords = map[string]bool{
 	"int": true, "sint": true, "uint": true, "string": true, "void": true,
 	"float": true, "float32": true, "float64": true,
 	"try": true, "catch": true, "finally": true, "throw": true, "new": true,
+	"extern": true,
 }
 
 // reserved words named by the specification for features that are not yet

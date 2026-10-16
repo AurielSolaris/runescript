@@ -22,12 +22,17 @@ import (
 const Version = "0.3.0-dev"
 
 const usage = `usage:
-  runescript run <file>      check and run a program
-  runescript check <file>    check a program without running it
-  runescript build [--target js] [-o <out.js>] <file>
+  runescript run [flags] <file>     check and run a program
+  runescript check [flags] <file>   check a program without running it
+  runescript build [flags] [--target js] [-o <out.js>] <file>
                              compile a program to a JavaScript module
                              (default output: <file> with a .js extension)
   runescript version         print the version
+
+flags:
+  -Werror                    treat warnings as errors
+  --allow <code>[,<code>]    do not report these warnings, e.g.
+                             --allow ASX-WARN-002 (may be repeated)
 `
 
 // Exit codes used by the CLI itself. A successful `run` exits with the
@@ -50,11 +55,17 @@ func cli(args []string, stdout, stderr io.Writer) int {
 	if len(args) >= 1 && args[0] == "build" {
 		return build(args[1:], stderr)
 	}
-	if len(args) != 2 || (args[0] != "run" && args[0] != "check") {
+	if len(args) < 2 || (args[0] != "run" && args[0] != "check") {
 		fmt.Fprint(stderr, usage)
 		return exitUsage
 	}
-	in, err := input(args[1], stderr)
+	fs, policy := flags(args[0], stderr)
+	if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 || policy.err != nil {
+		usageError(stderr, policy.err)
+		return exitUsage
+	}
+	in, err := input(fs.Arg(0), stderr)
+	in.Warnings = policy.WarningPolicy
 	if err != nil {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage
@@ -86,6 +97,45 @@ func cli(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	return code
+}
+
+// warningFlags holds the warning flags of a command.
+type warningFlags struct {
+	driver.WarningPolicy
+	err error // a bad code given to --allow
+}
+
+// flags returns the flag set of command name, with the warning flags
+// defined. Warnings are reported to stderr.
+func flags(name string, stderr io.Writer) (*flag.FlagSet, *warningFlags) {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	w := &warningFlags{WarningPolicy: driver.WarningPolicy{
+		Allow:  map[diagnostics.Code]bool{},
+		Report: func(ws []*diagnostics.Diagnostic) { report(stderr, ws) },
+	}}
+	fs.BoolVar(&w.AsErrors, "Werror", false, "")
+	fs.Func("allow", "", func(list string) error {
+		for _, s := range strings.Split(list, ",") {
+			code, ok := diagnostics.ParseCode(s)
+			if !ok || !strings.HasPrefix(string(code), "WARN-") {
+				w.err = fmt.Errorf("--allow takes warning codes such as %s, not %q", diagnostics.WarnUnusedVar, strings.TrimSpace(s))
+				return nil
+			}
+			w.Allow[code] = true
+		}
+		return nil
+	})
+	return fs, w
+}
+
+// usageError reports err, or prints the usage if err is nil.
+func usageError(stderr io.Writer, err error) {
+	if err != nil {
+		fmt.Fprintf(stderr, "runescript: %v\n", err)
+		return
+	}
+	fmt.Fprint(stderr, usage)
 }
 
 // input is the program whose entry file is path. Uses are resolved
@@ -126,12 +176,11 @@ func buildDetails() string {
 
 // build implements `runescript build`.
 func build(args []string, stderr io.Writer) int {
-	fs := flag.NewFlagSet("build", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
+	fs, policy := flags("build", stderr)
 	target := fs.String("target", "js", "")
 	out := fs.String("o", "", "")
-	if err := fs.Parse(args); err != nil || fs.NArg() != 1 {
-		fmt.Fprint(stderr, usage)
+	if err := fs.Parse(args); err != nil || fs.NArg() != 1 || policy.err != nil {
+		usageError(stderr, policy.err)
 		return exitUsage
 	}
 	if *target != "js" {
@@ -147,6 +196,7 @@ func build(args []string, stderr io.Writer) int {
 		return exitUsage
 	}
 	in, err := input(path, stderr)
+	in.Warnings = policy.WarningPolicy
 	if err != nil {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage

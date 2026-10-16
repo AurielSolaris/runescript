@@ -34,3 +34,31 @@ func TestCodeString(t *testing.T) {
 		t.Errorf("got %s", got)
 	}
 }
+
+func TestFormatWarning(t *testing.T) {
+	src := []byte("int x = 1;")
+	span := Span{Start: Pos{Offset: 4, Line: 1, Col: 5}, End: Pos{Offset: 5, Line: 1, Col: 6}}
+	d := NewWarning(WarnUnusedVar, span, "variable 'x' is never read")
+	want := "f:1:5: warning ASX-WARN-001: variable 'x' is never read\n    int x = 1;\n        ^\n"
+	if got := Format(d, "f", src); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	d.Severity, d.Promoted = Error, true
+	want = "f:1:5: error ASX-WARN-001: variable 'x' is never read [-Werror]\n    int x = 1;\n        ^\n"
+	if got := Format(d, "f", src); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestParseCode(t *testing.T) {
+	for in, want := range map[string]Code{"ASX-WARN-001": WarnUnusedVar, "warn-004": WarnUnreachable, " asx-type-004 ": TypeSignedToUnsigned} {
+		if got, ok := ParseCode(in); !ok || got != want {
+			t.Errorf("ParseCode(%q) = %q, %v", in, got, ok)
+		}
+	}
+	for _, in := range []string{"", "WARN", "WARN-1", "WARN-0001", "ASX-", "-001", "W4RN-001", "XYZ-WARN-001"} {
+		if _, ok := ParseCode(in); ok {
+			t.Errorf("ParseCode(%q) accepted", in)
+		}
+	}
+}

@@ -37,9 +37,11 @@ const $rt = (() => {
 
   // RSError is a RuneScript error value. code is the diagnostic it is
   // reported with if nothing catches it; site is where it was raised (-1
-  // until it is thrown).
+  // until it is thrown). The module exports it, so JavaScript called
+  // through extern functions can receive, create, return, and throw
+  // RuneScript errors: new RSError("RangeError", "too big", 7).
   class RSError {
-    constructor(name, message, errorID, code, site) {
+    constructor(name, message = "", errorID = 0, code = CODES.uncaught, site = -1) {
       this.name = name;
       this.message = message;
       this.errorID = errorID;
@@ -60,7 +62,7 @@ const $rt = (() => {
     return e;
   };
   // FAULTS are the error types of runtime errors that can be caught.
-  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error" };
+  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error", [CODES.externThrew]: "Error" };
 
   // at returns the file, line, and column of a call site.
   const at = (site) => {
@@ -219,6 +221,99 @@ const $rt = (() => {
     return r;
   }
 
+  // ---- extern (JavaScript) functions (OQ-JS-02) ----
+  //
+  // Arguments need no checks: RuneScript values are already valid
+  // JavaScript values, and errors are RSError objects. Everything coming
+  // back is checked against its declared type, because JavaScript code is
+  // not type-checked: a wrong value throws a RuneScript TypeError
+  // (externResult), and a JavaScript exception becomes a RuneScript Error
+  // (externThrew). An RSError thrown or returned by JavaScript crosses as
+  // it is, once checked.
+
+  const ERROR_TYPES = { Error: true, RangeError: true, TypeError: true, ArgumentError: true };
+
+  // wellFormed reports whether s has no lone surrogates, so that it is a
+  // valid RuneScript (UTF-8) string; toWellFormed replaces them by U+FFFD.
+  function wellFormed(s) {
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      if (c >= 0xD800 && c <= 0xDBFF) {
+        const d = s.charCodeAt(i + 1);
+        if (!(d >= 0xDC00 && d <= 0xDFFF)) return false;
+        i++;
+      } else if (c >= 0xDC00 && c <= 0xDFFF) {
+        return false;
+      }
+    }
+    return true;
+  }
+  const toWellFormed = (s) =>
+    wellFormed(s) ? s : Array.from(s, (c) => (c.length === 1 && c >= "\uD800" && c <= "\uDFFF" ? "�" : c)).join("");
+
+  // describe names a JavaScript value in an error message.
+  function describe(v) {
+    if (typeof v === "string") return toWellFormed(JSON.stringify(v));
+    if (typeof v === "bigint") return v + "n";
+    if (typeof v === "function") return "a function";
+    if (v instanceof RSError) return "an error value (" + toWellFormed(String(v.name)) + ")";
+    if (v instanceof Error) return "a JavaScript " + toWellFormed(String(v.name));
+    if (v !== null && typeof v === "object") return "an object";
+    return String(v);
+  }
+
+  const validError = (e) =>
+    e instanceof RSError && ERROR_TYPES[e.name] === true && typeof e.message === "string" && wellFormed(e.message) &&
+    Number.isInteger(e.errorID) && e.errorID >= INT_MIN && e.errorID <= INT_MAX;
+
+  // fromJS converts a JavaScript Error into a RuneScript error value.
+  const fromJS = (e) =>
+    newError(e.name === "RangeError" || e.name === "TypeError" ? e.name : "Error", toWellFormed(String(e.message)), 0);
+
+  // ext calls the extern function name of module. kind is the result's
+  // conversion code (i, u, f, f32, b, s), "v" for void, or an error type's
+  // name; type is the result type as written.
+  function ext(site, name, module, kind, type, fn, ...args) {
+    if (typeof fn !== "function") {
+      fail(CODES.externThrew, site, `${module} has no function '${name}'`);
+    }
+    let r;
+    try {
+      r = fn(...args);
+    } catch (e) {
+      if (e instanceof RuneScriptError) throw e;
+      if (validError(e)) throw thrown(e, site);
+      if (e instanceof RSError) {
+        fail(CODES.externResult, site, `${name} threw an invalid error value`, "TypeError");
+      }
+      const what = e instanceof Error ? toWellFormed(String(e.name)) + ": " + toWellFormed(String(e.message)) : describe(e);
+      fail(CODES.externThrew, site, `${name} threw ${what}`);
+    }
+    const bad = () => fail(CODES.externResult, site, `${name} returned ${describe(r)}, but its result type is '${type}'`, "TypeError");
+    switch (kind) {
+      case "i":
+        return typeof r === "number" && Number.isInteger(r) && r >= INT_MIN && r <= INT_MAX ? r + 0 : bad();
+      case "u":
+        return typeof r === "number" && Number.isInteger(r) && r >= 0 && r <= UINT_MAX ? r + 0 : bad();
+      case "f":
+        return typeof r === "number" ? r : bad();
+      case "f32":
+        return typeof r === "number" ? Math.fround(r) : bad(); // rounded (owner decision)
+      case "b":
+        return typeof r === "boolean" ? r : bad();
+      case "s":
+        return typeof r === "string" && wellFormed(r) ? r : bad();
+      case "v":
+        return r === undefined ? r : bad();
+    }
+    if (validError(r) && isA(r, kind)) return r;
+    if (r instanceof Error && !(r instanceof RSError)) {
+      const e = fromJS(r);
+      if (isA(e, kind)) return e;
+    }
+    return bad();
+  }
+
   // ---- std:string ----
   //
   // Positions and lengths are UTF-8 byte offsets, as in Go (owner decision,
@@ -254,7 +349,7 @@ const $rt = (() => {
     }
     return m;
   }
-  const lazy = (runs) => { let m = null; return () => (m ??= table(runs)); };
+  const lazy = (runs) => { let m = null; return () => m ?? (m = table(runs)); };
   const upper = lazy(/*@UPPER@*/), lower = lazy(/*@LOWER@*/), title = lazy(/*@TITLE@*/);
   const fold = lazy(/*@FOLD@*/);
   const SPACE = new Set(/*@SPACE@*/);
@@ -397,7 +492,7 @@ const $rt = (() => {
     addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
-    enter, leave, unwind, trace, native, run, std: { string },
+    enter, leave, unwind, trace, native, ext, RSError, run, std: { string },
   };
 })();
 // ---- end of RuneScript runtime --------------------------------------------

@@ -91,8 +91,39 @@ const (
 	RunNativeFailed Code = "RUN-004"
 	RunUncaught     Code = "RUN-005" // a thrown error that nothing caught
 	RunConversion   Code = "RUN-006" // a (Type) x conversion that failed
+	RunExternResult Code = "RUN-007" // a JavaScript function returned a value of the wrong type
+	RunExternThrew  Code = "RUN-008" // a JavaScript function threw
 
+	// Extern (JavaScript) function declarations.
+	TypeExternType     Code = "TYPE-023" // a type that cannot cross the JavaScript boundary
+	TypeExternMismatch Code = "TYPE-024" // a prototype that differs from the rune: function
+	UseExternUnknown   Code = "USE-009"  // an unknown rune: module or function
+	TargetNeedsJS      Code = "TARGET-002"
+
+	// Warnings. A warning does not stop a program from running unless
+	// warnings are treated as errors (-Werror).
+	WarnUnusedVar     Code = "WARN-001" // a local variable that is never read
+	WarnUnusedParam   Code = "WARN-002" // a parameter that is never read
+	WarnUnusedUse     Code = "WARN-003" // a use whose qualifier is never referenced
+	WarnUnreachable   Code = "WARN-004" // a statement that can never run
+	WarnDiscardResult Code = "WARN-005" // a call whose non-void result is ignored
+	WarnHostModule    Code = "WARN-006" // an extern from one host's module, e.g. node:fs
 )
+
+// Severity says whether a diagnostic is an error or a warning.
+type Severity int
+
+const (
+	Error Severity = iota
+	Warning
+)
+
+func (s Severity) String() string {
+	if s == Warning {
+		return "warning"
+	}
+	return "error"
+}
 
 // Source is one source file of a program.
 type Source struct {
@@ -154,22 +185,45 @@ type Span struct {
 	End   Pos
 }
 
-// Diagnostic is a single error reported against a source span.
+// Diagnostic is a single error or warning reported against a source span.
 type Diagnostic struct {
-	Code    Code
-	Span    Span
-	Message string
-	Help    string
+	Code     Code
+	Severity Severity
+	Span     Span
+	Message  string
+	Help     string
+	// Promoted marks a warning reported as an error because warnings are
+	// treated as errors (-Werror). Its Severity is Error.
+	Promoted bool
 }
 
 // Error implements error so a diagnostic can be returned directly.
 func (d *Diagnostic) Error() string {
-	return fmt.Sprintf("%s: error %s: %s", d.Span.Start, d.Code, d.Message)
+	return fmt.Sprintf("%s: %s %s: %s", d.Span.Start, d.Severity, d.Code, d.Message)
 }
 
-// New creates a diagnostic.
+// New creates an error diagnostic.
 func New(code Code, span Span, format string, args ...any) *Diagnostic {
 	return &Diagnostic{Code: code, Span: span, Message: fmt.Sprintf(format, args...)}
+}
+
+// NewWarning creates a warning diagnostic.
+func NewWarning(code Code, span Span, format string, args ...any) *Diagnostic {
+	d := New(code, span, format, args...)
+	d.Severity = Warning
+	return d
+}
+
+// ParseCode parses a diagnostic code written with or without the prefix,
+// in any case: "ASX-WARN-001", "asx-warn-001", or "WARN-001".
+func ParseCode(s string) (Code, bool) {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	s = strings.TrimPrefix(s, Prefix+"-")
+	stage, num, ok := strings.Cut(s, "-")
+	if !ok || stage == "" || len(num) != 3 || strings.Trim(num, "0123456789") != "" || strings.Trim(stage, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" {
+		return "", false
+	}
+	return Code(s), true
 }
 
 // WithHelp attaches a help line and returns d.
@@ -184,9 +238,16 @@ func (d *Diagnostic) WithHelp(help string) *Diagnostic {
 //	    uint u = s;
 //	             ^
 //	  help: ...
+//
+// Warnings say "warning" instead of "error"; a warning promoted to an
+// error by -Werror ends its first line with "[-Werror]".
 func Format(d *Diagnostic, filename string, src []byte) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s:%s: error %s: %s\n", filename, d.Span.Start, d.Code, d.Message)
+	fmt.Fprintf(&b, "%s:%s: %s %s: %s", filename, d.Span.Start, d.Severity, d.Code, d.Message)
+	if d.Promoted {
+		b.WriteString(" [-Werror]")
+	}
+	b.WriteString("\n")
 	if line, ok := sourceLine(src, d.Span.Start.Offset); ok {
 		width := 1
 		if d.Span.End.Line == d.Span.Start.Line && d.Span.End.Offset > d.Span.Start.Offset {

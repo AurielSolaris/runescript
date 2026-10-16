@@ -13,6 +13,7 @@ package ir
 
 import (
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
+	"github.com/AurielSolaris/runescript/internal/jshost"
 	"github.com/AurielSolaris/runescript/internal/types"
 	"github.com/AurielSolaris/runescript/stdlib"
 )
@@ -31,6 +32,20 @@ type Program struct {
 	// EntrySite is where a runtime error raised on entering main is
 	// reported (main's name, as in the interpreter).
 	EntrySite Span
+	// Externs are the extern functions called anywhere in the program, in
+	// order of first call.
+	Externs []*Extern
+}
+
+// Extern is a function implemented in JavaScript by Module. Its argument
+// and result types are numbers, bool, string, errors, or (result only)
+// void; results are checked when they cross into RuneScript.
+type Extern struct {
+	Name   string
+	Module string
+	Type   *types.Type
+	// Host is the host-neutral function of a rune: module, or nil.
+	Host *jshost.Func
 }
 
 // Func is a named function (top-level or nested) or a lambda.
@@ -236,6 +251,13 @@ type (
 		Args []Expr
 		Site Span
 	}
+	// CallExtern calls an extern function. A result of the wrong type, or
+	// a JavaScript exception, is a runtime error reported at Site.
+	CallExtern struct {
+		Extern *Extern
+		Args   []Expr
+		Site   Span
+	}
 	// Trace is the built-in trace(...).
 	Trace struct{ Args []Expr }
 )
@@ -254,6 +276,7 @@ func (e *CallFunc) Type() *types.Type    { return e.Func.Type.Result }
 func (e *CallValue) Type() *types.Type   { return e.Callee.Type().Result }
 func (e *CallNative) Type() *types.Type  { return e.Func.Result }
 func (e *Trace) Type() *types.Type       { return types.VoidT }
+func (e *CallExtern) Type() *types.Type  { return e.Extern.Type.Result }
 func (e *FloatConst) Type() *types.Type  { return e.T }
 func (e *Neg) Type() *types.Type         { return e.X.Type() }
 func (e *Convert) Type() *types.Type     { return e.To }

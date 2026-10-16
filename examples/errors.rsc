@@ -30,7 +30,7 @@ public int main() {
     for (int step = 1; step <= 2; step++) {
         try {
             trace("adding", step);
-            big += 2147483647 * (step - 1) + 1;
+            big = big + (2147483647 * (step - 1) + 1);
             trace("never printed");
         } catch (RangeError e) {
             trace("caught", e.name, e.errorID);

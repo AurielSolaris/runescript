@@ -1,0 +1,20 @@
+-7 4 0 NaN 0.1 hello, rune
+halfInt returned 1.5, but its result type is 'int' 7
+textThree returned "3", but its result type is 'int'
+tooBig returned 2147483648, but its result type is 'int'
+negUint returned -1, but its result type is 'uint'
+oneAsBool returned 1, but its result type is 'bool'
+loneSurrogate returned "a\ud800b", but its result type is 'string'
+voidFive returned 5, but its result type is 'void'
+nothing returned null, but its result type is 'string'
+RangeError too far 42
+true ArgumentError arg 3
+RangeError from JavaScript 0
+typeErrorValue returned an error value (TypeError), but its result type is 'RangeError'
+jsPlainError returned a JavaScript Error, but its result type is 'RangeError'
+badName returned an error value (Oops), but its result type is 'Error'
+Error throwsError threw Error: disk on fire 8
+ArgumentError bad argument 5
+throwsString threw "just a string"
+round trip 9
+./boundary.mjs has no function 'missing' 8

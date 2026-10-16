@@ -14,7 +14,22 @@ type File struct {
 	Package *PackageDecl
 	Uses    []*UseDecl
 	Funcs   []*FuncDecl
+	Externs []*ExternDecl
 }
+
+// ExternDecl is `extern "module" Type name(Type p, ...);`: a function
+// implemented in JavaScript by the named module. It is visible only in
+// the file that declares it.
+type ExternDecl struct {
+	Module     string
+	ModuleSpan Span
+	Result     *TypeRef
+	Name       *Ident
+	Params     []*Param // names are optional
+	Span       Span
+}
+
+func (d *ExternDecl) NodeSpan() Span { return d.Span }
 
 // UseDecl is `use "path";` or `use "path" as name;`. The path names a
 // standard library package ("std:string"), a RuneScript package

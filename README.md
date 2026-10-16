@@ -63,9 +63,20 @@ protected int main() {
   of signed → unsigned assignment
 - Integer overflow and division by zero are reported as runtime errors and
   never wrap silently
-- Compilation to JavaScript (`runescript build`): an ES2022 module that runs
+- Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
   in browsers and Node.js and behaves exactly like the interpreter
   ([guide](docs/guide/11-javascript.md))
+- Calling JavaScript through `extern` declarations, including the
+  host-neutral `rune:fs`. Every value that comes back from JavaScript is
+  checked against its declared type
+- Warnings for unused variables, parameters, and uses, unreachable code, and
+  discarded results, with `-Werror` and `--allow <code>`
+
+**On JavaScript compatibility:** RuneScript does not yet promise full
+JavaScript compatibility. What it promises is strict code: unlike
+TypeScript, which trusts its declarations and erases them, RuneScript
+checks every value that crosses in from JavaScript, and it has no `any`, no
+implicit conversions, and no unchecked casts.
 
 **Not yet implemented:** classes, structs, arrays, `char`, string
 concatenation, `go:` packages, `std:math`, `std:symrs`, and the planned native

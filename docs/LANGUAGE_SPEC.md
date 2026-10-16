@@ -57,6 +57,7 @@ public protected private
 int sint uint bool string void
 float float32 float64                 [v0.3]
 try catch finally throw new           [v0.3]
+extern                                [2026-10-16]
 ```
 
 `as` is a keyword only after a `use` path (§4.2). `Error`, `RangeError`,
@@ -102,7 +103,8 @@ redeclared.
 EBNF. `{ x }` means zero or more, `[ x ]` means optional.
 
 ```ebnf
-File         = PackageDecl { UseDecl } { FuncDecl } EOF ;
+File         = PackageDecl { UseDecl } { FuncDecl | ExternDecl } EOF ;
+ExternDecl   = "extern" StringLit Type Ident "(" [ Params ] ")" ";" ;   (* §12 *)
 PackageDecl  = "package" Ident { "." Ident } ";" ;
 UseDecl      = "use" StringLit [ "as" Ident ] ";" ;   (* "as" is contextual *)
 
@@ -580,13 +582,19 @@ file.rsc:LINE:COL: error CODE: message
 
 The `ASX` code prefix is **provisional**. Each code is
 `ASX-<STAGE>-<NNN>`, where the stages are `LEX`, `PARSE`, `NAME`, `TYPE`,
-`FLOW`, `USE`, `ENTRY`, and `RUN`. The full list is in `docs/guide/08-diagnostics.md`.
+`FLOW`, `USE`, `ENTRY`, `TARGET`, `RUN`, and `WARN`. The full list is in `docs/guide/08-diagnostics.md`.
+
+**[decided 2026-10-16]** Warnings (`ASX-WARN-…`) report code that is legal
+but probably wrong: unused locals, parameters, and uses; unreachable code;
+discarded results; externs from one host's own module. They are reported
+only for programs without errors, never stop a program, and are controlled
+with `-Werror` (every warning becomes an error) and `--allow <codes>`.
 
 The checker reports every semantic error it finds. The parser stops at the
 first syntax error. A runtime error that nothing catches (§7.6) ends the
 program with exit status 1 and reports the source location where it
 happened. **[v0.3]** The runtime errors `ASX-RUN-002` to `ASX-RUN-004` and
-`ASX-RUN-006` are thrown as error values and can be caught; exceeding the
+`ASX-RUN-006` to `ASX-RUN-008` are thrown as error values and can be caught; exceeding the
 call depth (`ASX-RUN-001`) cannot be caught.
 
 ## 10. Comparison with ActionScript 3
@@ -642,7 +650,11 @@ metadata, E4X XML, `Vector.<T>` (vs. `Array<T>` generics), type inference,
 ## 12. JavaScript target **[v0.2]**
 
 `runescript build [--target js] [-o out.js] file.rsc` compiles a program to
-a single ES2022 module (owner decision). **[v0.3]** Every file of the
+a single ES module (owner decision). **[decided 2026-10-16]** The module
+uses only ES2015 plus `BigInt`, `??`, and ES modules (`import`/`export`,
+`import.meta`), so that a small bundled JavaScript runtime can run it
+(planned; Node.js, ES2022, stays the reference host). `go test ./tests`
+checks the generated code for newer syntax and built-ins. **[v0.3]** Every file of the
 program is compiled into that one module, and runtime errors name the file
 they happened in, as the interpreter's do. The module exports
 `run(options)`, which calls `main` and returns the exit code, and
@@ -674,7 +686,42 @@ The one exception is listed under host limits below.
   the 10,000-call limit, the program stops with `ASX-RUN-001` at a call
   site inside the recursion. That site may differ from the interpreter's.
   Engine string-length limits surface as `ASX-RUN-004` inside `std:string`.
-- **[decided; planned]** No JavaScript interop in the first milestone.
-  Planned: `use "js:<module>";` with typed prototypes, where every value
-  entering RuneScript from JavaScript is checked against its declared type.
+- **[decided 2026-10-16] Compatibility.** Full JavaScript compatibility is
+  **not** promised yet. What is promised is strictness: no value enters a
+  RuneScript program from JavaScript unchecked. TypeScript trusts its
+  declarations and erases them; RuneScript checks them at run time.
+
+### 12.1 Extern functions **[decided 2026-10-16]**
+
+`extern "module" Type name(Type p, …);` declares a function implemented by
+a JavaScript module. Rules:
+
+- Top level only; no access modifier; visible only in the declaring file
+  (provisional). Parameter names are optional. The name may not clash with
+  a function of the file or package, and is never shadowed.
+- An extern function can only be called (`ASX-NAME-004` otherwise).
+- Parameter and result types: integer, float, `bool`, `string`, and error
+  types; `void` as the result. Anything else is `ASX-TYPE-023`.
+- `rune:<name>` modules are host-neutral and part of RuneScript; their
+  functions are fixed and a declaration must match one exactly
+  (`ASX-USE-009`, `ASX-TYPE-024`). `rune:fs` provides `readFile`,
+  `writeFile`, `appendFile`, `exists`, and `remove` (guide chapter 11).
+  Any other module string is passed to JavaScript's `import` unchanged;
+  `node:`, `bun:`, and `deno:` modules give warning `ASX-WARN-006`.
+- Arguments cross unchanged; error values cross as `RSError` objects, a
+  class the module exports so JavaScript can create, return, and throw
+  RuneScript errors.
+- Results are checked: integers must be integral and in range (`-0` becomes
+  `0`); `float`/`float64` accept any number; `float32` accepts any number
+  and rounds it with `Math.fround` (owner decision); `bool` needs a
+  boolean; `string` needs a string without unpaired surrogates; `void`
+  needs `undefined`; an error type needs a valid `RSError` of that type or
+  a subtype, or a JavaScript `Error` (converted: `RangeError` and
+  `TypeError` keep their names, others become `Error`, `errorID` 0). A
+  mismatch throws a `TypeError` (`ASX-RUN-007`) at the call.
+- A JavaScript exception becomes an `Error` (`ASX-RUN-008`); an `RSError`
+  that JavaScript throws crosses unchanged once checked.
+- The interpreter does not run extern functions: `runescript run` reports
+  `ASX-TARGET-002`, while `check` and `build` accept the program. A bundled
+  JavaScript runtime is planned (Node.js, ES2022, stays the reference).
 - **[planned]** Source maps.

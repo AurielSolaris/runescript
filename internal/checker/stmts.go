@@ -7,6 +7,7 @@ import (
 )
 
 func (c *checker) stmts(list []ast.Stmt) {
+	c.unreachable(list)
 	for _, s := range list {
 		c.stmt(s)
 	}
@@ -42,7 +43,7 @@ func (c *checker) stmt(s ast.Stmt) {
 			c.errorf(diagnostics.TypeBadOperand, s.Span, "operator '%s' requires an integer variable, but '%s' has type '%s'", s.Op, s.Target.Name, v.typ)
 		}
 	case *ast.ExprStmt:
-		c.call(s.Call)
+		c.discarded(s.Call, c.call(s.Call))
 	case *ast.ReturnStmt:
 		c.returnStmt(s)
 	case *ast.IfStmt:
@@ -139,7 +140,7 @@ func (c *checker) target(id *ast.Ident) *symbol {
 	switch {
 	case v == nil:
 		c.errorf(diagnostics.NameUndefined, id.Span, "undefined variable '%s'", id.Name)
-	case v.fn != nil:
+	case v.fn != nil || v.ext != nil:
 		c.errorf(diagnostics.NameAssignToParam, id.Span, "cannot assign to function '%s'", id.Name).
 			WithHelp("declare a variable of a function type to hold function values")
 	case crossed:
@@ -151,6 +152,7 @@ func (c *checker) target(id *ast.Ident) *symbol {
 		c.errorf(diagnostics.NameAssignToParam, id.Span, "cannot assign to caught error '%s'", id.Name).
 			WithHelp("the error variable of a catch clause is read-only")
 	default:
+		v.written = true
 		return v
 	}
 	return nil

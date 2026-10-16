@@ -127,9 +127,55 @@ func (p *parser) file() *ast.File {
 		if p.isKeyword("use") {
 			p.fail(diagnostics.ParseUnexpected, p.tok().Span, "use declarations must come before any function")
 		}
+		if p.isKeyword("extern") {
+			f.Externs = append(f.Externs, p.externDecl())
+			continue
+		}
 		f.Funcs = append(f.Funcs, p.funcDecl())
 	}
 	return f
+}
+
+// externDecl parses `extern "module" Type name(Type p, ...);`.
+func (p *parser) externDecl() *ast.ExternDecl {
+	start := p.expectKeyword("extern")
+	if !p.is(lexer.String, "") {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+			`name the JavaScript module as a string, e.g. extern "rune:fs" string readFile(string path);`,
+			"expected module string after 'extern', found %s", p.tok().Describe())
+	}
+	mod := p.next()
+	d := &ast.ExternDecl{Module: mod.Text, ModuleSpan: mod.Span}
+	if _, ok := visibilities[p.tok().Text]; ok && p.tok().Kind == lexer.Keyword {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+			"an extern function is visible only in the file that declares it",
+			"extern declarations take no access modifier")
+	}
+	d.Result = p.typeRef("return type")
+	d.Name = p.ident("function name")
+	p.expect(lexer.LParen, "'(' after function name")
+	if !p.is(lexer.RParen, "") {
+		for {
+			prm := &ast.Param{Type: p.typeRef("parameter type")}
+			if p.is(lexer.Ident, "") {
+				prm.Name = p.ident("parameter name")
+			}
+			d.Params = append(d.Params, prm)
+			if !p.is(lexer.Comma, "") {
+				break
+			}
+			p.next()
+		}
+	}
+	p.expect(lexer.RParen, "')' after parameters")
+	if p.is(lexer.LBrace, "") {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+			"the function is implemented in JavaScript by the module; end the declaration with ';'",
+			"an extern declaration has no body")
+	}
+	end := p.expect(lexer.Semicolon, "';' after extern declaration")
+	d.Span = span(start.Span, end.Span)
+	return d
 }
 
 func (p *parser) useDecl() *ast.UseDecl {
@@ -367,6 +413,10 @@ func (p *parser) stmt() ast.Stmt {
 		return &ast.ThrowStmt{Value: v, Span: span(t.Span, end.Span)}
 	case t.Kind == lexer.Keyword && t.Text == "try":
 		return p.tryStmt()
+	case t.Kind == lexer.Keyword && t.Text == "extern":
+		p.failHelp(diagnostics.ParseUnexpected, t.Span,
+			"declare extern functions at the top level of the file, outside any function",
+			"extern declarations are not allowed inside a function")
 	case t.Kind == lexer.Keyword && (t.Text == "break" || t.Text == "continue"):
 		p.next()
 		end := p.expect(lexer.Semicolon, "';' after '"+t.Text+"'")

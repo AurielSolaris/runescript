@@ -19,9 +19,20 @@ node examples/fizzbuzz.js                         # runs it; main's result is th
 (দেখুন [প্যাকেজ ও ফাইল](12-packages-and-files.md)) একটি মডিউলে পরিণত হয়, আর
 রানটাইম এরর জানায় কোন ফাইলে সেটি ঘটেছে।
 
+**কী প্রতিশ্রুতি দেওয়া হয়, আর কী হয় না।** RuneScript এখনো JavaScript-এর সঙ্গে
+পূর্ণ সামঞ্জস্যের প্রতিশ্রুতি **দেয় না**। মডিউলটির দরকার ES2015, `BigInt`, `??`
+ও ES মডিউল সমর্থনকারী একটি ইঞ্জিন। এটি JavaScript-এর সঙ্গে কেবল সংখ্যা, `bool`,
+`string` ও এরর আদান-প্রদান করে, নিচের extern ফাংশনের মাধ্যমে। আর এখন পর্যন্ত
+একমাত্র হোস্ট-নিরপেক্ষ API হলো `rune:fs`। যা এটি **দেয়**, তা হলো কঠোর কোড:
+যাচাই ছাড়া কোনো কিছুই RuneScript প্রোগ্রামে ঢুকতে পারে না। TypeScript তার
+ঘোষণাগুলোকে বিশ্বাস করে এবং মুছে ফেলে, তাই যে `.d.ts` বলে `number`, সেটি রানটাইমে
+একটি স্ট্রিং দিতে পারে। RuneScript JavaScript থেকে ফেরত আসা প্রতিটি মানকে তার
+ঘোষিত টাইপের সঙ্গে যাচাই করে, আর না মিললে `TypeError` দিয়ে থামে। কোনো `any`
+নেই, কোনো অন্তর্নিহিত রূপান্তর নেই, কোনো যাচাইহীন কাস্ট নেই।
+
 ## ওয়েব পেজে মডিউলটি ব্যবহার
 
-আউটপুট হলো নির্ভরতাহীন, স্বয়ংসম্পূর্ণ একটি ES2022 মডিউল। এটি এক্সপোর্ট করে `run`,
+আউটপুট হলো নির্ভরতাহীন, স্বয়ংসম্পূর্ণ একটি ES2015 মডিউল (সাথে BigInt ও `??`)। এটি এক্সপোর্ট করে `run`,
 যা `main` কল করে তার এক্সিট কোড ফেরত দেয়, এবং `RuneScriptError`, প্রোগ্রাম কোনো
 রানটাইম এরর দিয়ে থেমে গেলে `run` যেটি throw করে।
 
@@ -42,6 +53,10 @@ node examples/fizzbuzz.js                         # runs it; main's result is th
 `options.trace` `trace` আউটপুটের প্রতিটি লাইন পায়। এটি না দিলে লাইনগুলো যায়
 `console.log`-এ। একটি `RuneScriptError`-এর আরও আছে `code`, `file`, `line`, `col`
 ও `detail` (অবস্থান বাদ দিয়ে বার্তাটি)।
+
+extern ফাংশনসহ একটি প্রোগ্রাম সেগুলোর মডিউল ইমপোর্ট করে, তাই এটি কেবল সেখানেই
+চলে যেখানে সেই মডিউলগুলো আছে: `rune:fs` ব্যবহারকারী একটি মডিউল Node.js-এ চলে,
+ব্রাউজারে নয়।
 
 ## অনুবাদের পরেও কঠোর টাইপিং কীভাবে টিকে থাকে
 
@@ -81,6 +96,119 @@ JavaScript সংখ্যা ওই গুণফল ধরে রাখতে �
 চালায়, এবং হুবহু একই আউটপুট, এক্সিট কোড ও এরর দাবি করে। এটি প্রতিটি `std:string`
 ফাংশনকে এলোমেলো অ-ASCII লেখার উপর Go-র ফাংশনের সঙ্গে তুলনাও করে।
 
+## JavaScript কল করা: extern ফাংশন
+
+একটি `extern` ঘোষণা এমন একটি ফাংশনের নাম দেয়, যা একটি JavaScript মডিউল
+বাস্তবায়ন করে:
+
+```actionscript
+package notes;
+
+extern "rune:fs" void writeFile(string path, string data);
+extern "rune:fs" string readFile(string path);
+extern "./clock.mjs" float64 now();
+
+public int main() {
+    writeFile("notes.txt", "ᚱᚢᚾᛖ");
+    trace(readFile("notes.txt"), now() > 0);
+    return 0;
+}
+```
+
+```js
+// clock.mjs, next to the compiled module
+export const now = () => Date.now();
+```
+
+- extern ঘোষণা ফাইলের শীর্ষ স্তরে থাকে। এর কোনো অ্যাক্সেস মডিফায়ার নেই, আর এটি
+  কেবল সেই ফাইলেই দৃশ্যমান। প্যারামিটারের নাম ঐচ্ছিক।
+- একটি extern ফাংশন কেবল কল করা যায়। এটিকে মান হিসেবে পাঠাতে একটি ল্যাম্বডায়
+  মুড়ে দিন: `(string p) => readFile(p)`।
+- মডিউল স্ট্রিংটি হয় একটি **হোস্ট-নিরপেক্ষ মডিউল** (`rune:…`, নিচে দেখুন), অথবা
+  JavaScript-এর `import` যা গ্রহণ করে তার যেকোনোটি: একটি ফাইল যেমন
+  `"./clock.mjs"` (কম্পাইল করা মডিউলের সাপেক্ষে), একটি প্যাকেজের নাম, অথবা কোনো
+  হোস্টের নিজস্ব মডিউল যেমন `"node:fs"`। হোস্টের নিজস্ব মডিউল কাজ করে, কিন্তু তা
+  প্রোগ্রামটিকে সেই হোস্টে বেঁধে ফেলে, তাই এটি সতর্কবার্তা `ASX-WARN-006` হিসেবে
+  জানানো হয়।
+- কেবল JavaScript টার্গেট extern ফাংশন চালায়। `runescript check` প্রোগ্রামটি
+  গ্রহণ করে, কিন্তু `runescript run` জানায় `ASX-TARGET-002`। RuneScript-এর সঙ্গে
+  একটি নিজস্ব JavaScript রানটাইম দেওয়ার পরিকল্পনা আছে, যাতে এমন প্রোগ্রাম
+  Node.js ছাড়াই চলে।
+
+### হোস্ট-নিরপেক্ষ মডিউল
+
+একটি `rune:` মডিউল RuneScript-এর অংশ, কোনো একটি হোস্টের নয়। এর ফাংশনগুলো
+নির্দিষ্ট, আর একটি ঘোষণাকে তার একটির সঙ্গে হুবহু মিলতে হবে (নইলে
+`ASX-TYPE-024`)। কম্পাইলার প্রতিটি ফাংশনকে হোস্টের নিজস্ব API-তে রূপান্তর করে;
+আজ সেই হোস্ট হলো Node.js।
+
+| `rune:fs` ফাংশন | কাজ |
+|---|---|
+| `string readFile(string path)` | একটি ফাইলের বিষয়বস্তু ফেরত দেয়, UTF-8 হিসেবে পড়ে (অবৈধ বাইট U+FFFD হয়ে যায়) |
+| `void writeFile(string path, string data)` | একটি ফাইল তৈরি করে বা প্রতিস্থাপন করে |
+| `void appendFile(string path, string data)` | একটি ফাইলের শেষে যোগ করে, দরকার হলে ফাইলটি তৈরি করে |
+| `bool exists(string path)` | একটি ফাইল বা ডিরেক্টরি আছে কি না |
+| `void remove(string path)` | একটি ফাইল মুছে ফেলে |
+
+কোনো ফাংশন ব্যর্থ হলে, যেমন অনুপস্থিত ফাইলে `readFile`, একটি `Error`
+(`ASX-RUN-008`) থ্রো হয়। এরপর আসছে `rune:process`।
+
+### সীমানা পার হয়ে কী যায়
+
+আর্গুমেন্টগুলো JavaScript-এ যেমন আছে তেমনই যায়: সংখ্যা, বুলিয়ান, স্ট্রিং, আর
+এরর যায় `RSError` অবজেক্ট হিসেবে (নিচে দেখুন)। ফলাফল ফেরার পথে **যাচাই** করা হয়:
+
+| ঘোষিত ফলাফল | JavaScript-কে ফেরত দিতে হবে |
+|---|---|
+| `int`, `uint` | টাইপের পরিসরের মধ্যে একটি পূর্ণসংখ্যা (`-0` হয়ে যায় `0`) |
+| `float`, `float64` | যেকোনো সংখ্যা, `NaN` ও `Infinity` সহ |
+| `float32` | যেকোনো সংখ্যা। এটি `Math.fround` দিয়ে float32-এ রাউন্ড করা হয় |
+| `bool` | `true` বা `false` |
+| `string` | জোড়াহীন সারোগেট ছাড়া একটি স্ট্রিং, যাতে এটি বৈধ UTF-8 হয় |
+| `void` | `undefined` |
+| `Error`, `RangeError`, `TypeError`, `ArgumentError` | সেই টাইপের (বা একটি সাবটাইপের) একটি `RSError`, অথবা একটি JavaScript `Error`, যা রূপান্তরিত হয়: `RangeError` ও `TypeError` তাদের নাম রাখে, বাকি সব হয় `Error`, আর `errorID` হয় `0` |
+
+অন্য যেকোনো কিছু কলের জায়গায় `ASX-RUN-007` কোডসহ একটি `TypeError` থ্রো করে:
+
+```actionscript
+package demo;
+
+extern "./lib.mjs" int half(int n);
+
+public int main() {
+    try {
+        trace(half(3)); // JavaScript returns 1.5
+    } catch (TypeError e) {
+        trace(e.message); // half returned 1.5, but its result type is 'int'
+    }
+    return 0;
+}
+```
+
+JavaScript-এর থ্রো করা একটি এক্সেপশন `ASX-RUN-008` কোডসহ একটি `Error` হয়ে যায়,
+যার বার্তা হয় এরকম `readFile threw Error: ENOENT: …`। আপনার প্রোগ্রাম না ধরলে
+কেউ এটি ধরে না।
+
+### দুই দিকেই এরর
+
+RuneScript-এর এরর আর JavaScript একটি ক্লাস ভাগ করে নেয়। মডিউলটি `RSError`
+এক্সপোর্ট করে, যা RuneScript-এর এরর মানের ক্লাস। JavaScript এররগুলো পায় `name`,
+`message` ও `errorID` সহ `RSError` অবজেক্ট হিসেবে, এবং সেগুলো তৈরি করতে, ফেরত
+দিতে ও থ্রো করতে পারে। JavaScript-এর থ্রো করা একটি `RSError` অপরিবর্তিত অবস্থায়
+RuneScript-এ পৌঁছায়, তাই এটি তার নিজের টাইপ দিয়েই ধরা পড়ে।
+`extern "./even.mjs" int halveEven(int n);` থাকলে `halveEven(3)` একটি
+`ArgumentError` থ্রো করে, যা `catch (ArgumentError e)` ধরে:
+
+```js
+// even.mjs: the compiled program is prog.js
+import { RSError } from "./prog.js";
+
+export const halveEven = (n) => {
+  if (n % 2 !== 0) throw new RSError("ArgumentError", "n must be even", 1);
+  return n / 2;
+};
+```
+
 ## JavaScript টার্গেটের সীমাবদ্ধতা
 
 - **স্ট্যাকের গভীরতা।** ব্রাউজার ও Node.js-এ প্রায়ই ১০,০০০ নেস্টেড কলের আগেই
@@ -90,9 +218,11 @@ JavaScript সংখ্যা ওই গুণফল ধরে রাখতে �
 - **খুব লম্বা স্ট্রিং।** JavaScript ইঞ্জিন স্ট্রিংয়ের দৈর্ঘ্যের একটি সীমা রাখে (মোটামুটি
   2<sup>29</sup>–2<sup>30</sup> UTF-16 একক)। `string.repeat` বা `string.replace`-এর
   ভেতরে সেটি ছাড়িয়ে গেলে `ASX-RUN-004` জানানো হয়।
-- **এখনো JavaScript-এর সঙ্গে আদান-প্রদান নেই।** প্রোগ্রাম JavaScript ফাংশন বা DOM
-  কল করতে পারে না, আর JavaScript কেবল `run` কল করতে পারে। JavaScript-এ কল করার
-  পরিকল্পনা আছে `use "js:<module>";` হিসেবে, টাইপসহ ঘোষণা দিয়ে, যাদের মান
-  RuneScript-এ ঢোকার সময় যাচাই করা হবে।
+- **JavaScript-এর সঙ্গে সীমিত আদান-প্রদান।** extern ফাংশন কেবল সংখ্যা, `bool`,
+  `string` ও এরর আদান-প্রদান করে। অবজেক্ট, অ্যারে, কলব্যাক ও DOM এখনো সীমানা
+  পার হতে পারে না, আর JavaScript কেবল `run`-এর মাধ্যমে RuneScript-এ কল করতে পারে।
+- **পূর্ণ JavaScript সামঞ্জস্য নয়।** আউটপুট লক্ষ্য করে ES2015, সঙ্গে `BigInt`, `??`
+  ও ES মডিউল, আর এটি Node.js-এ পরীক্ষিত। অন্য হোস্টে কাজ করার কথা, কিন্তু সেগুলো
+  পরীক্ষা করা হয় না।
 
 পরবর্তী: [প্যাকেজ ও ফাইল](12-packages-and-files.md)

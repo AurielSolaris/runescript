@@ -252,6 +252,12 @@ func (v *verifier) expr(e Expr) *types.Type {
 		v.args(t, e.Args, "call of a function value")
 	case *CallNative:
 		v.args(types.NewFunc(e.Func.Params, e.Func.Result), e.Args, "call of "+e.Pkg+"."+e.Func.Name)
+	case *CallExtern:
+		for _, t := range e.Extern.Type.Params {
+			v.boundary(t, false, e.Extern.Name)
+		}
+		v.boundary(e.Extern.Type.Result, true, e.Extern.Name)
+		v.args(e.Extern.Type, e.Args, "call of extern "+e.Extern.Name)
 	case *Trace:
 		for _, a := range e.Args {
 			switch t := v.expr(a); t.Kind {
@@ -292,4 +298,17 @@ func Convertible(from, to *types.Type) bool {
 		return num(to) || to.Kind == types.Bool
 	}
 	return from.Kind == types.Bool && to.Kind == types.Bool
+}
+
+// boundary checks that t can cross the JavaScript boundary.
+func (v *verifier) boundary(t *types.Type, result bool, name string) {
+	switch t.Kind {
+	case types.Signed, types.Unsigned, types.Float, types.Bool, types.String, types.Error:
+	case types.Void:
+		if !result {
+			v.fail("extern %s has a void parameter", name)
+		}
+	default:
+		v.fail("extern %s has type %s at the JavaScript boundary", name, t)
+	}
 }

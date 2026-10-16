@@ -64,13 +64,34 @@ conditionals, loops, and basic functions.
 
 ### JavaScript target ✅
 - [x] Typed IR (`internal/ir`) lowered from the checked AST, with an independent verifier
-- [x] `internal/jsgen`: ES2022 module output with checked integer arithmetic, call-depth limit, and located runtime errors
+- [x] `internal/jsgen`: ES module output with checked integer arithmetic, call-depth limit, and located runtime errors
 - [x] `std:string` in JavaScript with UTF-8 byte offsets and Go-derived Unicode tables
 - [x] `runescript build [--target js] [-o out.js]`; modules run with `node` or `import { run }`
 - [x] Differential tests (interpreter vs. Node.js) for every example and runtime program, and randomized `std:string` conformance
 - [ ] Source maps
-- [ ] JavaScript interop: `use "js:<module>";` with typed prototypes, checked at the boundary
+- [ ] JavaScript interop: moved to "JavaScript target, part 2" below
 - [ ] Measure generated-code performance before optimizing (e.g. inlining range checks)
+
+### Warnings ✅ (requested by the owner, 2026-10-16)
+- [x] Warning severity in diagnostics (`warning ASX-WARN-…`), reported only for programs without errors
+- [x] `-Werror` and `--allow <codes>` on `run`, `check`, and `build`
+- [x] Unused locals and parameters (`ASX-WARN-001`/`002`), unused `use` (`003`), unreachable code (`004`), discarded results (`005`)
+- [x] Docs (guide chapter 8, in all translations) and tests
+
+### JavaScript target, part 2 (owner decisions, 2026-10-16)
+- [x] Generated code limited to ES2015 plus `BigInt`, `??`, and ES modules (`import.meta` included); `tests/jslevel_test.go` lints every generated program and the runtime (removed `??=` and BigInt `**`)
+- [x] No `process` dependence beyond running the module directly: `process` is only used under `import.meta.main`
+- [x] `extern "<module>" Type name(Type p, …);` declarations for JavaScript functions (no `use "js:…"`, owner decision)
+- [x] Host-neutral `rune:fs` (readFile, writeFile, appendFile, exists, remove) mapped to `node:fs`; `node:`/`bun:`/`deno:` modules allowed with `ASX-WARN-006`
+- [x] Boundary checks on every result (scalars and errors; float32 rounded): `ASX-RUN-007` `TypeError`; JavaScript exceptions are `ASX-RUN-008` `Error`; error values cross as the exported `RSError` class
+- [x] The interpreter rejects programs with externs (`ASX-TARGET-002`); Node.js tests in `tests/testdata/extern`
+- [ ] `rune:process` (arguments, environment, exit code)
+- [ ] Objects, arrays, and callbacks across the boundary (need classes and arrays first)
+- [ ] Source maps
+
+### Bundled JavaScript runtime (planned, not started)
+- [ ] A small ES2015-compatible JavaScript engine shipped with RuneScript, so compiled programs run without Node.js or Bun. It supports the extras above (`BigInt`, `??`, modules)
+- [ ] Conformance: its output is compared against Node.js (ES2022), the reference host
 
 ## v0.3: `use` for packages and files (current)
 

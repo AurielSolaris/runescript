@@ -49,10 +49,17 @@ type Info struct {
 	// Builtins maps calls of the built-in functions isNaN and isFinite to
 	// their name. (trace is recognised by name, as it cannot be hidden.)
 	Builtins map[*ast.CallExpr]string
+	// Externs maps calls of extern (JavaScript) functions to the function
+	// called; ExternDecls lists every extern function declared.
+	Externs     map[*ast.CallExpr]*ExternSym
+	ExternDecls []*ExternSym
 	// Entry is the program entry point; EntryVoid reports whether it
 	// returns void.
 	Entry     *ast.FuncDecl
 	EntryVoid bool
+	// Warnings holds the warnings found, in no particular order. They are
+	// not in the diagnostics Check returns.
+	Warnings []*diagnostics.Diagnostic
 }
 
 // FuncSym is a named function: top-level or nested, possibly declared by a
@@ -78,8 +85,12 @@ func (f *FuncSym) visibility() ast.Visibility { return firstDecl(f).Visibility }
 type symbol struct {
 	typ     *types.Type // variable type
 	isParam bool
-	isCatch bool     // the error variable of a catch clause (read-only)
-	fn      *FuncSym // non-nil for named functions
+	isCatch bool       // the error variable of a catch clause (read-only)
+	fn      *FuncSym   // non-nil for named functions
+	ext     *ExternSym // non-nil for extern functions (typ is their type)
+	decl    *ast.Ident // where a variable or parameter is declared
+	read    bool       // the variable's value is used somewhere
+	written bool       // the variable is assigned after its declaration
 }
 
 // scope is one lexical scope. A boundary scope is the outermost scope of a
@@ -124,6 +135,7 @@ type binding struct {
 	std  *stdlib.Package
 	pkg  *loader.Package
 	decl *ast.UseDecl
+	used bool // the qualifier is referenced
 }
 
 // Check type-checks a loaded program. Every file must have parsed. It
@@ -141,6 +153,7 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 			FloatConsts: map[ast.Expr]float64{},
 			CatchTypes:  map[*ast.CatchClause]*types.Type{},
 			Builtins:    map[*ast.CallExpr]string{},
+			Externs:     map[*ast.CallExpr]*ExternSym{},
 		},
 		pkgs:  map[*loader.Package]*scope{},
 		files: map[*loader.File]*scope{},
@@ -163,12 +176,17 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 	}
 	for _, f := range prog.Files {
 		c.enterFile(f)
+		c.declareExterns(f.AST)
+	}
+	for _, f := range prog.Files {
+		c.enterFile(f)
 		c.useDecls(f)
 		for _, fn := range f.AST.Funcs {
 			if fn.Body != nil {
 				c.funcBody(fn, sigs[fn])
 			}
 		}
+		c.reportUnusedUses()
 	}
 	for _, f := range prog.Files {
 		c.enterFile(f)
@@ -260,6 +278,7 @@ func (c *checker) push(boundary bool) {
 
 func (c *checker) pop() {
 	c.reportUndefined(c.scopes[len(c.scopes)-1])
+	c.reportUnused(c.scopes[len(c.scopes)-1])
 	c.scopes = c.scopes[:len(c.scopes)-1]
 }
 
@@ -297,8 +316,11 @@ func (c *checker) conflict(id *ast.Ident) bool {
 	}
 	prev, crossed := c.lookup(id.Name)
 	switch {
-	case prev == nil, crossed && prev.fn == nil:
+	case prev == nil, crossed && prev.fn == nil && prev.ext == nil:
 		return false
+	case prev.ext != nil:
+		c.errorf(diagnostics.NameRedeclared, id.Span, "'%s' is already declared as an extern function", id.Name).
+			WithHelp("shadowing is not allowed; choose a different name")
 	case prev.fn != nil:
 		c.errorf(diagnostics.NameRedeclared, id.Span, "'%s' is already declared as a function", id.Name).
 			WithHelp("shadowing is not allowed; choose a different name")
@@ -311,7 +333,7 @@ func (c *checker) conflict(id *ast.Ident) bool {
 
 func (c *checker) declareVar(id *ast.Ident, t *types.Type, isParam bool) {
 	c.conflict(id)
-	c.top().add(id.Name, &symbol{typ: t, isParam: isParam})
+	c.top().add(id.Name, &symbol{typ: t, isParam: isParam, decl: id})
 }
 
 // reportUndefined reports prototypes in s that never got a definition.

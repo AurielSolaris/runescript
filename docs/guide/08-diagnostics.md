@@ -61,6 +61,7 @@ The parser stops at the first syntax error.
 | `ASX-USE-006` | Not a valid package name, e.g. `"1abc"` or `"if.then"`, or a path written with `\` |
 | `ASX-USE-007` | A `.rsm` file in a package's directory declares a different package |
 | `ASX-USE-008` | Two uses in one file would have the same qualifier; give one an alias with `as` |
+| `ASX-USE-009` | An extern names an unknown `rune:` module, or a function that module doesn't have |
 
 ## Type errors
 
@@ -88,6 +89,8 @@ The parser stops at the first syntax error.
 | `ASX-TYPE-020` | A field that doesn't exist, e.g. `e.what`, a field of a non-error value, or a method call such as `e.toString()` |
 | `ASX-TYPE-021` | `throw` of a value that isn't an error, or a catch clause whose type isn't an error type |
 | `ASX-TYPE-022` | A catch clause that can never run, because an earlier clause already catches its type |
+| `ASX-TYPE-023` | An extern function's parameter or result has a type that can't cross the JavaScript boundary, e.g. a function type |
+| `ASX-TYPE-024` | An extern declaration of a `rune:` function doesn't match that function's type |
 
 ## Other compile-time errors
 
@@ -97,6 +100,38 @@ The parser stops at the first syntax error.
 | `ASX-ENTRY-001` | No `main` function |
 | `ASX-ENTRY-002` | `main` has parameters, or returns something other than `int`/`void` |
 | `ASX-ENTRY-003` | More than one file defines `main`; a program has exactly one |
+| `ASX-TARGET-002` | `runescript run` was given a program with extern functions, which only the JavaScript target can run |
+
+## Warnings
+
+A warning points at code that is legal but probably a mistake. The program
+still runs:
+
+```text
+prog.rsc:3:9: warning ASX-WARN-001: variable 'unused' is never used
+        int unused = 1;
+            ^
+  help: remove the declaration
+```
+
+Warnings are reported only when a program has no errors, since errors often
+cause follow-on warnings that disappear once the errors are fixed.
+`runescript run`, `check`, and `build` all take two flags:
+
+- `-Werror` makes every warning an error: the program doesn't run or build,
+  and each warning is shown as `error ASX-WARN-…: … [-Werror]`.
+- `--allow <codes>` stops reporting the listed warnings, e.g.
+  `--allow ASX-WARN-002` or `--allow WARN-002,WARN-005`. The flag may be
+  repeated.
+
+| Code | Meaning |
+|---|---|
+| `ASX-WARN-001` | A local variable is never read. Assigning to it, including `x += 1` and `x++`, doesn't count as reading |
+| `ASX-WARN-002` | A parameter of a function or lambda is never read. The variable of a `catch` clause is never reported |
+| `ASX-WARN-003` | A `use` declaration whose qualifier is never referenced |
+| `ASX-WARN-004` | Statements that can never run, because they come after a `return`, `throw`, `break`, or `continue` (or an `if`/`try` whose every path ends in one). Loops are not followed, so code after `while (true) { }` isn't reported |
+| `ASX-WARN-005` | A call used as a statement whose result isn't `void` is thrown away |
+| `ASX-WARN-006` | An extern names one host's own module, e.g. `"node:fs"`; prefer a host-neutral `rune:` module |
 
 ## Runtime errors
 
@@ -112,6 +147,8 @@ error has already been printed.
 | `ASX-RUN-004` | A standard library function failed, e.g. `string.repeat` with a negative count | `Error` |
 | `ASX-RUN-005` | An error created with `new` was thrown and nothing caught it | |
 | `ASX-RUN-006` | A conversion failed, e.g. `(int) "12x"` or `(uint) -1` at run time | `TypeError` or `RangeError` |
+| `ASX-RUN-007` | A JavaScript function returned a value that doesn't match its extern declaration, e.g. `1.5` for an `int` | `TypeError` |
+| `ASX-RUN-008` | A JavaScript function threw an exception, or its module has no such function | `Error` |
 
 On the JavaScript target, `ASX-RUN-001` is also reported when the host's own
 stack runs out before 10,000 calls (see [chapter 11](11-javascript.md)).
