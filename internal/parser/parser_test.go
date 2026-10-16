@@ -331,3 +331,26 @@ func TestParseExternErrors(t *testing.T) {
 		})
 	}
 }
+
+// `>>` is a shift operator, but it also closes two type-argument lists.
+func TestNestedTypeArgumentsAndShifts(t *testing.T) {
+	src := "package p;\npublic void f() {\n    Array<Array<int>> g = [];\n    Array<Array<Array<int>>> h = [];\n    int x = 256 >> 2 << 1;\n    x >>= 1;\n}"
+	f, diags := Parse([]byte(src))
+	if len(diags) != 0 {
+		t.Fatal(diags)
+	}
+	stmts := f.Funcs[0].Body.Stmts
+	if got := stmts[0].(*ast.VarDecl).Type.String(); got != "Array<Array<int>>" {
+		t.Errorf("got type %s", got)
+	}
+	if got := stmts[1].(*ast.VarDecl).Type.String(); got != "Array<Array<Array<int>>>" {
+		t.Errorf("got type %s", got)
+	}
+	shl := stmts[2].(*ast.VarDecl).Init.(*ast.BinaryExpr)
+	if shl.Op != "<<" || shl.X.(*ast.BinaryExpr).Op != ">>" {
+		t.Errorf("shifts parsed as %s(%s)", shl.Op, shl.X.(*ast.BinaryExpr).Op)
+	}
+	if op := stmts[3].(*ast.AssignStmt).Op; op != ">>=" {
+		t.Errorf("got assignment %s", op)
+	}
+}
