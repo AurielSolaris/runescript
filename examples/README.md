@@ -25,6 +25,7 @@ with their JavaScript helper modules instead of here.
 | [`primes.rsc`](primes.rsc) | Predicate callbacks, a lambda, a nested helper, and `string.repeat` |
 | [`temperatures.rsc`](temperatures.rsc) | `float`, `float32`, and checked conversions such as `(int) f` and `(float) "98.6"` |
 | [`errors.rsc`](errors.rsc) | `throw`, `try`/`catch`/`finally`, error types, and catching a runtime error |
+| [`wordcount.rsc`](wordcount.rsc) | A text report: `Array<T>`, `char` callbacks, `+`, `$"…"`, and `string.split`/`fields`/`map`/`join` |
 
 These two are **rejected on purpose**. Run them with `check` to see the
 diagnostics:

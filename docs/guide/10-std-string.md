@@ -32,6 +32,8 @@ public void main() {
   `int`. Assigning one to a `uint` is the usual `ASX-TYPE-004` error.
 - **Behaviour matches Go.** Edge cases, such as an empty separator or a
   negative `n`, behave as Go documents them.
+- **Joining strings** uses `+` or an interpolated string `$"…"`, not a
+  library function ([chapter 16](16-text-and-arrays.md)).
 
 ## Function reference
 
@@ -118,6 +120,120 @@ public void main() {
 `trimPrefix`/`trimSuffix` remove a whole string once. `trimLeft`/`trimRight`
 remove any run of the listed characters.
 
+### Length and slicing
+
+Go measures and cuts strings with its built-ins `len(s)` and `s[i:j]`.
+RuneScript has functions for them, which also count in bytes:
+
+| Function | Returns | Description |
+|---|---|---|
+| `len(string s)` | `int` | The length in bytes |
+| `runeCount(string s)` | `int` | The number of characters (code points) |
+| `slice(string s, int start, int end)` | `string` | The bytes from `start` up to, not including, `end` |
+
+`slice` never cuts a character in two. Bounds outside `0 … len(s)`,
+`start > end`, or a bound in the middle of a character throw a
+`RangeError` (`ASX-RUN-004`).
+
+```actionscript
+package main;
+
+use "std:string";
+
+public void main() {
+    string s = "héllo";
+    trace(string.len(s), string.runeCount(s));   // 6 5
+    trace(string.slice(s, 0, 3));                // hé
+    int at = string.index(s, "llo");
+    trace(string.slice(s, at, string.len(s)));   // llo
+    try {
+        trace(string.slice(s, 0, 2));            // 2 is inside 'é'
+    } catch (RangeError e) {
+        trace(e.message);   // string.slice: byte offset 2 is inside a character
+    }
+}
+```
+
+Combine `index` and `slice` to take a string apart, as you would in Go.
+
+### Characters and callbacks
+
+These functions take a [`char`](16-text-and-arrays.md#characters-char),
+or a function that looks at one character at a time. Each callback is called
+in the same order as in Go: left to right, except that `lastIndexFunc` and
+the right-hand side of the trims work from the end.
+
+| Function | Returns | Description |
+|---|---|---|
+| `containsRune(string s, char c)` | `bool` | `c` occurs in `s` |
+| `indexRune(string s, char c)` | `int` | Byte offset of the first `c`, or `-1` |
+| `containsFunc(string s, bool(char) f)` | `bool` | Some character satisfies `f` |
+| `indexFunc(string s, bool(char) f)` | `int` | Byte offset of the first character satisfying `f`, or `-1` |
+| `lastIndexFunc(string s, bool(char) f)` | `int` | Byte offset of the last one, or `-1` |
+| `trimFunc(string s, bool(char) f)` | `string` | Removes leading and trailing characters satisfying `f` |
+| `trimLeftFunc(string s, bool(char) f)` | `string` | Leading ones only |
+| `trimRightFunc(string s, bool(char) f)` | `string` | Trailing ones only |
+| `map(char(char) f, string s)` | `string` | Every character replaced by `f` of it (note Go's argument order) |
+
+```actionscript
+package main;
+
+use "std:string";
+
+public bool isDigit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+public char hide(char c) {
+    if (isDigit(c)) {
+        return '#';
+    }
+    return c;
+}
+
+public void main() {
+    string order = "order 66 shipped";
+    trace(string.indexFunc(order, isDigit));            // 6
+    trace(string.trimFunc("2024-report-v2", isDigit));  // -report-v
+    trace(string.map(hide, order));                     // order ## shipped
+    trace(string.containsRune(order, 'z'));             // false
+}
+```
+
+Unlike Go's `Map`, `map` can't drop characters, because a `char` is never
+negative.
+
+### Splitting and joining
+
+These return or take an [`Array<string>`](16-text-and-arrays.md#arrays-arrayt):
+
+| Function | Returns | Description |
+|---|---|---|
+| `split(string s, string sep)` | `Array<string>` | The pieces between the separators. An empty `sep` splits into characters |
+| `splitN(string s, string sep, int n)` | `Array<string>` | At most `n` pieces, the last holding the rest; `n < 0` means all, `n == 0` none |
+| `splitAfter(string s, string sep)` | `Array<string>` | Like `split`, but each piece keeps its separator |
+| `splitAfterN(string s, string sep, int n)` | `Array<string>` | Like `splitN`, keeping the separators |
+| `fields(string s)` | `Array<string>` | The words: the runs of characters between whitespace |
+| `fieldsFunc(string s, bool(char) f)` | `Array<string>` | The runs of characters that don't satisfy `f` |
+| `join(Array<string> elems, string sep)` | `string` | The elements with `sep` between them |
+
+```actionscript
+package main;
+
+use "std:string";
+
+public void main() {
+    Array<string> cells = string.split("name,age,,city", ",");
+    trace(cells.length, cells[1], cells[2] == "");          // 4 age true
+
+    Array<string> words = string.fields("  to be   or not ");
+    trace(string.join(words, " "));                          // to be or not
+
+    Array<string> kv = string.splitN("key=value=more", "=", 2);
+    trace(kv[0], kv[1]);                                     // key value=more
+}
+```
+
 ## Not yet available
 
 These Go `strings` functions need language features RuneScript doesn't
@@ -125,16 +241,11 @@ have yet:
 
 | Go function(s) | Needs |
 |---|---|
-| `Split`, `SplitN`, `SplitAfter`, `SplitAfterN`, `Fields`, `Join` | arrays (`[]string`) |
 | `Cut`, `CutPrefix`, `CutSuffix` | multiple return values |
-| `ContainsRune`, `IndexRune`, `IndexByte`, `LastIndexByte` | `char` / byte type |
-| `ContainsFunc`, `IndexFunc`, `LastIndexFunc`, `FieldsFunc`, `TrimFunc`, `TrimLeftFunc`, `TrimRightFunc`, `Map` | function values |
+| `IndexByte`, `LastIndexByte` | a byte type |
 | `Lines`, `SplitSeq`, `SplitAfterSeq`, `FieldsSeq`, `FieldsFuncSeq` | iterators |
 | `ToUpperSpecial`, `ToLowerSpecial`, `ToTitleSpecial` | a `unicode.SpecialCase` value |
 | `Builder`, `Reader`, `Replacer`, `NewReader`, `NewReplacer` | classes |
 | `Title` | not planned: deprecated in Go because it handles Unicode word boundaries incorrectly |
-
-There's also no length function yet, because Go uses its built-in `len`.
-A length operation is planned alongside arrays.
 
 Next: [Compiling to JavaScript](11-javascript.md)

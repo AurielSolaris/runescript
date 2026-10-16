@@ -19,11 +19,11 @@ complete program in these pages is compiled by the test suite
 13. [Floats and conversions](13-floats-and-conversions.md): `float`, `float32`, `float64`, `(int) x`
 14. [Errors](14-errors.md): `throw`, `try`, `catch`, `finally`, and catching runtime errors
 15. [Web pages with `rune:dom`](15-web-pages.md): components, checked HTML and SVG templates, runes, events, `$if`, `renderApp`
+16. [Text and lists](16-text-and-arrays.md): joining strings with `+`, interpolated strings `$"…"`, `char`, and `Array<T>`
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).
 
-> **Not yet available:** classes, structs, arrays, `char`, and string
-> concatenation. Their keywords are reserved, and using them gives a clear
-> "not implemented yet" error. Objects and callbacks can't cross the
-> JavaScript boundary yet either.
+> **Not yet available:** classes and structs. Their keywords are reserved,
+> and using them gives a clear "not implemented yet" error. Objects,
+> arrays, and callbacks can't cross the JavaScript boundary yet either.

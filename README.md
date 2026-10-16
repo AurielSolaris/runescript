@@ -56,6 +56,11 @@ protected int main() {
   IEEE 754 with `NaN` and `Infinity`, as in ActionScript
 - Checked C-style conversions: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
   ([guide](docs/guide/13-floats-and-conversions.md))
+- Text and lists for scripting: `+` and `$"{count} files"` for strings,
+  `char`, and `Array<T>` with bounds-checked indexing
+  ([guide](docs/guide/16-text-and-arrays.md)); `std:string` covers Go's
+  `strings` package, including `split`, `fields`, `join`, and callbacks
+  ([guide](docs/guide/10-std-string.md))
 - ActionScript-style errors: `throw new RangeError("…")`,
   `try`/`catch (Error e)`/`catch (e)`/`finally`; runtime errors are catchable
   ([guide](docs/guide/14-errors.md))
@@ -86,8 +91,8 @@ TypeScript, which trusts its declarations and erases them, RuneScript
 checks every value that crosses in from JavaScript, and it has no `any`, no
 implicit conversions, and no unchecked casts.
 
-**Not yet implemented:** classes, structs, arrays, `char`, string
-concatenation, `go:` packages, `std:math`, `std:symrs`, objects, arrays, and
+**Not yet implemented:** classes, structs, for-each loops, command-line
+arguments, `go:` packages, `std:math`, `std:symrs`, objects, arrays, and
 callbacks across the JavaScript boundary, `rune:process`, `$foreach` and
 component tags in templates, and the planned native graphics package. See
 the [roadmap](docs/ROADMAP.md).
@@ -165,6 +170,7 @@ test suite; the web examples run on a fake DOM under Node.js.
 - [Guide](docs/guide/README.md): tour of every feature, with examples (all compiled by the tests)
 - [Language specification](docs/LANGUAGE_SPEC.md): grammar and rules, with each rule's implementation status
 - [Standard library: std:string](docs/guide/10-std-string.md)
+- [Text and lists: +, $"…", char, Array<T>](docs/guide/16-text-and-arrays.md)
 - [Compiling to JavaScript](docs/guide/11-javascript.md)
 - [Web pages with rune:dom](docs/guide/15-web-pages.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)

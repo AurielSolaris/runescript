@@ -69,6 +69,10 @@ protected int main() {
   IEEE 754 עם `NaN` ו-`Infinity`, כמו ב-ActionScript
 - המרות בדוקות בסגנון C: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
   ([מדריך](docs/guide/13-floats-and-conversions.md))
+- טקסט ורשימות לסקריפטים: `+` ו-`$"{count} files"` למחרוזות, `char`, ו-`Array<T>`
+  עם גישה לפי אינדקס שנבדקת ([מדריך](docs/guide/16-text-and-arrays.md)); `std:string`
+  מכסה את חבילת `strings` של Go, כולל `split`, `fields`, `join` ו-callbacks
+  ([מדריך](docs/guide/10-std-string.md))
 - שגיאות בסגנון ActionScript: `throw new RangeError("…")`,
   `try`/`catch (Error e)`/`catch (e)`/`finally`; אפשר לתפוס גם שגיאות זמן ריצה
   ([מדריך](docs/guide/14-errors.md))
@@ -93,8 +97,8 @@ protected int main() {
 RuneScript בודקת כל ערך שנכנס מ-JavaScript, ואין בה `any`, המרות מרומזות או
 המרות לא בדוקות.
 
-**עדיין לא מומש:** מחלקות, מבנים (structs), מערכים, `char`, שרשור מחרוזות,
-חבילות `go:`, `std:math`, `std:symrs`, אובייקטים, מערכים ו-callbacks שחוצים את הגבול
+**עדיין לא מומש:** מחלקות, מבנים (structs), לולאות for-each, ארגומנטים משורת
+הפקודה, חבילות `go:`, `std:math`, `std:symrs`, אובייקטים, מערכים ו-callbacks שחוצים את הגבול
 עם JavaScript, `rune:process`, `$foreach` ותגי רכיבים בתבניות, וחבילת הגרפיקה
 המקורית המתוכננת. ראו את
 [מפת הדרכים](../../docs/ROADMAP.md) (באנגלית).
@@ -181,6 +185,7 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [מדריך](docs/guide/README.md): סיור בכל התכונות, עם דוגמאות (כולן מתקמפלות בבדיקות)
 - [מפרט השפה](../../docs/LANGUAGE_SPEC.md) (באנגלית): הדקדוק והכללים, ומצב המימוש של כל כלל
 - [הספרייה הסטנדרטית: std:string](docs/guide/10-std-string.md)
+- [טקסט ורשימות: +, $"…", char, Array<T>](docs/guide/16-text-and-arrays.md)
 - [הידור ל-JavaScript](docs/guide/11-javascript.md)
 - [מדריך הודעות האבחון](docs/guide/08-diagnostics.md)
 - [למי שמגיע מ-ActionScript 3](docs/guide/09-coming-from-actionscript.md)

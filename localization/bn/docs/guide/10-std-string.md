@@ -36,6 +36,8 @@ public void main() {
   দেয়। এমন একটি মান `uint`-এ অ্যাসাইন করলে সেই পরিচিত `ASX-TYPE-004` এরর হয়।
 - **আচরণ Go-র সঙ্গে মেলে।** প্রান্তিক ক্ষেত্রগুলো, যেমন খালি বিভাজক বা ঋণাত্মক
   `n`, Go-র ডকুমেন্টেশনে যেমন বলা আছে তেমনই আচরণ করে।
+- **স্ট্রিং জোড়া লাগানো** হয় `+` বা ইন্টারপোলেটেড স্ট্রিং `$"…"` দিয়ে, কোনো
+  লাইব্রেরি ফাংশন দিয়ে নয় ([অধ্যায় ১৬](16-text-and-arrays.md))।
 
 ## ফাংশন তালিকা
 
@@ -122,6 +124,119 @@ public void main() {
 `trimPrefix`/`trimSuffix` একটি পুরো স্ট্রিং একবার সরায়। `trimLeft`/`trimRight`
 তালিকাভুক্ত অক্ষরগুলোর যেকোনো টানা সারি সরায়।
 
+### দৈর্ঘ্য ও স্লাইস
+
+Go তার বিল্ট-ইন `len(s)` ও `s[i:j]` দিয়ে স্ট্রিং মাপে ও কাটে। RuneScript-এ এদের
+জন্য ফাংশন আছে, যেগুলোও বাইটে গোনে:
+
+| ফাংশন | ফেরত দেয় | বিবরণ |
+|---|---|---|
+| `len(string s)` | `int` | বাইটে দৈর্ঘ্য |
+| `runeCount(string s)` | `int` | অক্ষরের (কোড পয়েন্টের) সংখ্যা |
+| `slice(string s, int start, int end)` | `string` | `start` থেকে `end`-এর আগ পর্যন্ত বাইটগুলো |
+
+`slice` কখনো একটি অক্ষরকে দুই টুকরো করে না। `0 … len(s)`-এর বাইরের সীমানা,
+`start > end`, অথবা কোনো অক্ষরের মাঝখানের সীমানা একটি `RangeError`
+(`ASX-RUN-004`) ছোড়ে।
+
+```actionscript
+package main;
+
+use "std:string";
+
+public void main() {
+    string s = "héllo";
+    trace(string.len(s), string.runeCount(s));   // 6 5
+    trace(string.slice(s, 0, 3));                // hé
+    int at = string.index(s, "llo");
+    trace(string.slice(s, at, string.len(s)));   // llo
+    try {
+        trace(string.slice(s, 0, 2));            // 2 is inside 'é'
+    } catch (RangeError e) {
+        trace(e.message);   // string.slice: byte offset 2 is inside a character
+    }
+}
+```
+
+Go-তে যেমন, তেমনি `index` ও `slice` মিলিয়ে একটি স্ট্রিংকে টুকরো করুন।
+
+### অক্ষর ও কলব্যাক
+
+এই ফাংশনগুলো একটি [`char`](16-text-and-arrays.md#characters-char) নেয়, অথবা এমন
+একটি ফাংশন, যা একবারে একটি অক্ষর দেখে। প্রতিটি কলব্যাক Go-র মতো একই ক্রমে ডাকা হয়:
+বাঁ থেকে ডানে, কেবল `lastIndexFunc` ও ট্রিমের ডান দিকটি শেষ থেকে কাজ করে।
+
+| ফাংশন | ফেরত দেয় | বিবরণ |
+|---|---|---|
+| `containsRune(string s, char c)` | `bool` | `s`-এ `c` আছে |
+| `indexRune(string s, char c)` | `int` | প্রথম `c`-এর বাইট অফসেট, অথবা `-1` |
+| `containsFunc(string s, bool(char) f)` | `bool` | কোনো একটি অক্ষর `f` পূরণ করে |
+| `indexFunc(string s, bool(char) f)` | `int` | `f` পূরণ করে এমন প্রথম অক্ষরের বাইট অফসেট, অথবা `-1` |
+| `lastIndexFunc(string s, bool(char) f)` | `int` | শেষটির বাইট অফসেট, অথবা `-1` |
+| `trimFunc(string s, bool(char) f)` | `string` | শুরু ও শেষের যেসব অক্ষর `f` পূরণ করে, সেগুলো সরায় |
+| `trimLeftFunc(string s, bool(char) f)` | `string` | কেবল শুরুরগুলো |
+| `trimRightFunc(string s, bool(char) f)` | `string` | কেবল শেষেরগুলো |
+| `map(char(char) f, string s)` | `string` | প্রতিটি অক্ষরের জায়গায় তার `f` (Go-র আর্গুমেন্ট-ক্রম লক্ষ করুন) |
+
+```actionscript
+package main;
+
+use "std:string";
+
+public bool isDigit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+public char hide(char c) {
+    if (isDigit(c)) {
+        return '#';
+    }
+    return c;
+}
+
+public void main() {
+    string order = "order 66 shipped";
+    trace(string.indexFunc(order, isDigit));            // 6
+    trace(string.trimFunc("2024-report-v2", isDigit));  // -report-v
+    trace(string.map(hide, order));                     // order ## shipped
+    trace(string.containsRune(order, 'z'));             // false
+}
+```
+
+Go-র `Map`-এর মতো নয়, `map` কোনো অক্ষর বাদ দিতে পারে না, কারণ `char` কখনো ঋণাত্মক
+হয় না।
+
+### ভাগ করা ও জোড়া লাগানো
+
+এগুলো একটি [`Array<string>`](16-text-and-arrays.md#arrays-arrayt) ফেরত দেয় বা নেয়:
+
+| ফাংশন | ফেরত দেয় | বিবরণ |
+|---|---|---|
+| `split(string s, string sep)` | `Array<string>` | বিভাজকগুলোর মাঝের টুকরো। খালি `sep` অক্ষরে অক্ষরে ভাগ করে |
+| `splitN(string s, string sep, int n)` | `Array<string>` | সর্বোচ্চ `n`টি টুকরো, শেষটিতে বাকি সব; `n < 0` মানে সবগুলো, `n == 0` মানে একটিও না |
+| `splitAfter(string s, string sep)` | `Array<string>` | `split`-এর মতো, তবে প্রতিটি টুকরো তার বিভাজক রাখে |
+| `splitAfterN(string s, string sep, int n)` | `Array<string>` | `splitN`-এর মতো, বিভাজক রেখে |
+| `fields(string s)` | `Array<string>` | শব্দগুলো: হোয়াইটস্পেসের মাঝের অক্ষরের সারি |
+| `fieldsFunc(string s, bool(char) f)` | `Array<string>` | যেসব অক্ষর `f` পূরণ করে না, তাদের সারি |
+| `join(Array<string> elems, string sep)` | `string` | এলিমেন্টগুলো, মাঝে `sep` দিয়ে |
+
+```actionscript
+package main;
+
+use "std:string";
+
+public void main() {
+    Array<string> cells = string.split("name,age,,city", ",");
+    trace(cells.length, cells[1], cells[2] == "");          // 4 age true
+
+    Array<string> words = string.fields("  to be   or not ");
+    trace(string.join(words, " "));                          // to be or not
+
+    Array<string> kv = string.splitN("key=value=more", "=", 2);
+    trace(kv[0], kv[1]);                                     // key value=more
+}
+```
+
 ## এখনো নেই
 
 Go-র `strings`-এর এই ফাংশনগুলোর জন্য এমন ভাষা-বৈশিষ্ট্য লাগে যা RuneScript-এ এখনো
@@ -129,16 +244,11 @@ Go-র `strings`-এর এই ফাংশনগুলোর জন্য এ�
 
 | Go ফাংশন | যা লাগবে |
 |---|---|
-| `Split`, `SplitN`, `SplitAfter`, `SplitAfterN`, `Fields`, `Join` | অ্যারে (`[]string`) |
 | `Cut`, `CutPrefix`, `CutSuffix` | একাধিক রিটার্ন মান |
-| `ContainsRune`, `IndexRune`, `IndexByte`, `LastIndexByte` | `char` / বাইট টাইপ |
-| `ContainsFunc`, `IndexFunc`, `LastIndexFunc`, `FieldsFunc`, `TrimFunc`, `TrimLeftFunc`, `TrimRightFunc`, `Map` | ফাংশন মান |
+| `IndexByte`, `LastIndexByte` | একটি বাইট টাইপ |
 | `Lines`, `SplitSeq`, `SplitAfterSeq`, `FieldsSeq`, `FieldsFuncSeq` | ইটারেটর |
 | `ToUpperSpecial`, `ToLowerSpecial`, `ToTitleSpecial` | একটি `unicode.SpecialCase` মান |
 | `Builder`, `Reader`, `Replacer`, `NewReader`, `NewReplacer` | ক্লাস |
 | `Title` | পরিকল্পনায় নেই: Go-তে এটি অপ্রচলিত, কারণ এটি Unicode শব্দের সীমানা ভুলভাবে সামলায় |
-
-দৈর্ঘ্য মাপার ফাংশনও এখনো নেই, কারণ Go তার বিল্ট-ইন `len` ব্যবহার করে। অ্যারের
-সঙ্গে একটি দৈর্ঘ্য-অপারেশনের পরিকল্পনা আছে।
 
 পরবর্তী: [JavaScript-এ কম্পাইল](11-javascript.md)

@@ -60,6 +60,10 @@ protected int main() {
   ActionScript-এর মতোই `NaN` ও `Infinity` সহ IEEE 754
 - যাচাইকৃত C-ধাঁচের রূপান্তর: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
   ([গাইড](docs/guide/13-floats-and-conversions.md))
+- স্ক্রিপ্টের জন্য লেখা ও তালিকা: স্ট্রিংয়ের জন্য `+` ও `$"{count} files"`, `char`,
+  এবং সীমা-যাচাই করা ইনডেক্সসহ `Array<T>` ([গাইড](docs/guide/16-text-and-arrays.md));
+  `std:string` Go-র `strings` প্যাকেজ জুড়ে আছে, `split`, `fields`, `join` ও
+  কলব্যাকসহ ([গাইড](docs/guide/10-std-string.md))
 - ActionScript-ধাঁচের এরর: `throw new RangeError("…")`,
   `try`/`catch (Error e)`/`catch (e)`/`finally`; রানটাইম এররও ধরা (catch) যায়
   ([গাইড](docs/guide/14-errors.md))
@@ -88,8 +92,8 @@ TypeScript তার ঘোষণাগুলোকে বিশ্বাস ক
 JavaScript থেকে আসা প্রতিটি মান যাচাই করে, এবং এতে কোনো `any`, কোনো অন্তর্নিহিত
 রূপান্তর বা কোনো যাচাইহীন কাস্ট নেই।
 
-**এখনো তৈরি হয়নি:** ক্লাস, স্ট্রাক্ট, অ্যারে, `char`, স্ট্রিং জোড়া লাগানো
-(concatenation), `go:` প্যাকেজ, `std:math`, `std:symrs`, JavaScript-এর সীমানা
+**এখনো তৈরি হয়নি:** ক্লাস, স্ট্রাক্ট, for-each লুপ, কমান্ড-লাইন আর্গুমেন্ট,
+`go:` প্যাকেজ, `std:math`, `std:symrs`, JavaScript-এর সীমানা
 পেরিয়ে অবজেক্ট, অ্যারে ও কলব্যাক, `rune:process`, টেমপ্লেটে `$foreach` ও কম্পোনেন্ট
 ট্যাগ, এবং পরিকল্পিত নেটিভ গ্রাফিক্স প্যাকেজ। দেখুন [রোডম্যাপ](../../docs/ROADMAP.md) (ইংরেজিতে)।
 
@@ -164,6 +168,7 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [গাইড](docs/guide/README.md): উদাহরণসহ প্রতিটি বৈশিষ্ট্যের পরিচয় (সবগুলো টেস্টে কম্পাইল হয়)
 - [ভাষার স্পেসিফিকেশন](../../docs/LANGUAGE_SPEC.md) (ইংরেজিতে): ব্যাকরণ ও নিয়ম, প্রতিটি নিয়ম কতটা বাস্তবায়িত তা সহ
 - [স্ট্যান্ডার্ড লাইব্রেরি: std:string](docs/guide/10-std-string.md)
+- [লেখা ও তালিকা: +, $"…", char, Array<T>](docs/guide/16-text-and-arrays.md)
 - [JavaScript-এ কম্পাইল](docs/guide/11-javascript.md)
 - [ডায়াগনস্টিক তালিকা](docs/guide/08-diagnostics.md)
 - [ActionScript 3 থেকে আসছেন?](docs/guide/09-coming-from-actionscript.md)

@@ -623,7 +623,7 @@ error (`ASX-RUN-004`).
 
 | Package | Contents |
 |---|---|
-| `std:string` | The 25 functions of Go's `strings` that can be expressed with `string`/`int`/`bool` (see `docs/guide/10-std-string.md`) |
+| `std:string` | 43 functions: Go's `strings` functions expressible with `string`, `int`, `bool`, `char`, callbacks, and `Array<string>`, plus `len`, `runeCount`, and `slice` (see `docs/guide/10-std-string.md`) |
 | `std:math` | [planned] Go's `math`, once floating-point types exist |
 | `std:symrs` | [planned] Symbolic mathematics, a port of the owner's SympJS library; needs objects, floats, and arrays |
 

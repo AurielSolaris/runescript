@@ -21,10 +21,13 @@ public void main() {
 | `float`, `float32`, `float64` | as ActionScript prints numbers: `64`, `0.5`, `1e+21`, `NaN` ([chapter 13](13-floats-and-conversions.md)) |
 | `bool` | `true` / `false` |
 | `string` | the text itself, with no quotes |
+| `char` | the character itself, e.g. `é` |
 | an error | its name and message, e.g. `RangeError: too big` ([chapter 14](14-errors.md)) |
 
-There's no string concatenation yet, so pass several arguments instead of
-building one string.
+To print one string built from several values, join them with `+` or use
+an interpolated string such as `$"{name} is {age}"`
+([chapter 16](16-text-and-arrays.md)). Arrays can't be traced; join them
+with `string.join` first.
 
 `trace` is a reserved built-in. You can't declare a function or variable
 named `trace`.
