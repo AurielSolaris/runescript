@@ -8,17 +8,17 @@ RuneScript-এর যেসব বৈশিষ্ট্য **আজ** আছে,
 প্রতিটি সম্পূর্ণ প্রোগ্রাম টেস্ট-সংগ্রহ (`tests/docs_test.go`) কম্পাইল করে দেখে।
 কোনোটি কম্পাইল হওয়া বন্ধ হলে বিল্ড ব্যর্থ হয়।
 
-1. [শুরু করা](01-getting-started.md): CLI তৈরি করা, একটি প্রোগ্রাম চালানো
+1. [শুরু করা](01-getting-started.md): CLI তৈরি করা, একটি প্রোগ্রাম চালানো, `run --watch`
 2. [প্রোগ্রামের গঠন](02-program-structure.md): প্যাকেজ, কমেন্ট, `main`
 3. [টাইপ ও ভেরিয়েবল](03-types-and-variables.md): `int`, `uint`, `bool`, `string`, অ্যাসাইনমেন্ট
 4. [অপারেটর](04-operators.md): গাণিতিক, তুলনা, লজিক
 5. [কন্ট্রোল ফ্লো](05-control-flow.md): `if`, `while`, `for`, `break`, `continue`
 6. [ফাংশন](06-functions.md): প্যারামিটার, রিটার্ন মান, রিকার্শন
 7. [`trace` দিয়ে আউটপুট](07-trace.md)
-8. [ডায়াগনস্টিক তালিকা](08-diagnostics.md): প্রতিটি এরর কোড
+8. [ডায়াগনস্টিক তালিকা](08-diagnostics.md): প্রতিটি এরর ও সতর্কবার্তার কোড, `-Werror`, `--allow`
 9. [ActionScript 3 থেকে আসছেন?](09-coming-from-actionscript.md)
 10. [স্ট্যান্ডার্ড লাইব্রেরি: `std:string`](10-std-string.md): RuneScript-এ Go-র `strings`
-11. [JavaScript-এ কম্পাইল](11-javascript.md): `runescript build`, এবং কঠোর টাইপিং কীভাবে বজায় থাকে
+11. [JavaScript-এ কম্পাইল](11-javascript.md): `runescript build`, কঠোর টাইপিং কীভাবে বজায় থাকে, `extern` দিয়ে JavaScript কল করা, এবং `runescript dev` দিয়ে লাইভ রিলোড
 12. [প্যাকেজ ও ফাইল](12-packages-and-files.md): `use`, একাধিক ফাইলের প্রোগ্রাম, দৃশ্যমানতা
 13. [ফ্লোট ও রূপান্তর](13-floats-and-conversions.md): `float`, `float32`, `float64`, `(int) x`
 14. [এরর](14-errors.md): `throw`, `try`, `catch`, `finally`, এবং রানটাইম এরর ধরা
@@ -28,4 +28,4 @@ RuneScript-এর যেসব বৈশিষ্ট্য **আজ** আছে,
 
 > **এখনো নেই:** ক্লাস, স্ট্রাক্ট, অ্যারে, `char`, এবং স্ট্রিং জোড়া লাগানো
 > (concatenation)। এদের কিওয়ার্ড সংরক্ষিত, আর ব্যবহার করলে স্পষ্ট "এখনো তৈরি হয়নি"
-> এরর দেখায়।
+> এরর দেখায়। অবজেক্ট ও কলব্যাকও এখনো JavaScript-এর সীমানা পার হতে পারে না।

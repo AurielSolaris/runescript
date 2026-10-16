@@ -664,7 +664,8 @@ calls `run` itself.
 **Semantics are the language's, not JavaScript's.** A program that checks
 behaves identically on the interpreter and on the JavaScript target: same
 output, same exit code, same runtime errors (code, message, position).
-The one exception is listed under host limits below.
+The one exception is listed under host limits below. **[2026-10-16]**
+Programs with extern functions (§12.1) run only on the JavaScript target.
 
 - **[v0.2]** Static safety: code is generated from a typed intermediate
   representation (`internal/ir`) in which every expression has a concrete

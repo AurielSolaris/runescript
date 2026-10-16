@@ -77,7 +77,7 @@ protected int main() {
 - גלישה של מספרים שלמים וחלוקה באפס מדווחות כשגיאות זמן ריצה, ולעולם אינן
   "מתגלגלות" בשקט
 - הידור ל-JavaScript (`runescript build`): מודול ES2015 (בתוספת BigInt ו-`??`) שרץ בדפדפנים וב-Node.js
-  ומתנהג בדיוק כמו המפרש ([מדריך](docs/guide/11-javascript.md))
+  ומתנהג בדיוק כמו המפרש בכל תוכנית שהמפרש יכול להריץ ([מדריך](docs/guide/11-javascript.md))
 - קריאה ל-JavaScript דרך הצהרות `extern`, כולל `rune:fs` שאינו תלוי בסביבת ההרצה.
   כל ערך שחוזר מ-JavaScript נבדק מול הטיפוס המוצהר שלו
 - אזהרות על משתנים, פרמטרים והצהרות use שאינם בשימוש, על קוד שלא ירוץ לעולם ועל
@@ -91,7 +91,9 @@ RuneScript בודקת כל ערך שנכנס מ-JavaScript, ואין בה `any`,
 המרות לא בדוקות.
 
 **עדיין לא מומש:** מחלקות, מבנים (structs), מערכים, `char`, שרשור מחרוזות,
-חבילות `go:`, `std:math`, `std:symrs`, וחבילת הגרפיקה המקורית המתוכננת. ראו את
+חבילות `go:`, `std:math`, `std:symrs`, אובייקטים, מערכים ו-callbacks שחוצים את הגבול
+עם JavaScript, `rune:process`, תבניות DOM (`rune:dom`, בתכנון; רשימת האלמנטים של
+HTML4, HTML5 ו-SVG כבר קיימת), וחבילת הגרפיקה המקורית המתוכננת. ראו את
 [מפת הדרכים](../../docs/ROADMAP.md) (באנגלית).
 
 ## התקנה
@@ -126,6 +128,8 @@ go build -o runescript ./cmd/runescript
 ./runescript check examples/signedness_error.rsc   # shows a compile-time error
 ./runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
+./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
+./runescript run --watch examples/hello.rsc         # runs it again on every save
 go test ./...
 ```
 
@@ -155,7 +159,13 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - תוכניות של שגיאות זמן ריצה;
 - בדיקות השוואתיות שמריצות כל תוכנית גם במפרש וגם ב-Node.js ודורשות תוצאות זהות
   (מדולגות אם `node` אינו מותקן);
-- בדיקה שכל תוכנית בתיעוד מתקמפלת.
+- הרצות ב-Node.js של תוכניות שקוראות ל-JavaScript דרך `extern`, כולל JavaScript
+  שמחזירה ערכים שגויים בכוונה;
+- בדיקה שה-JavaScript שנוצר לא משתמש בשום דבר חדש מ-ES2015 בתוספת `BigInt`, `??`
+  ומודולים;
+- בדיקות לשרת הפיתוח, למעקב אחרי קבצים ול-`run --watch`;
+- בדיקה שכל תוכנית בתיעוד מתקמפלת, ושהתרגומים שומרים על כל בלוק קוד של הדפים
+  באנגלית.
 
 ## דוגמאות
 
@@ -178,17 +188,24 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 </div>
 
 ```text
-cmd/runescript/        CLI (run, check, build, version)
+cmd/runescript/        CLI (run, check, build, dev, version)
 internal/lexer/        tokens and source positions
 internal/parser/       recursive-descent parser → AST
 internal/ast/          syntax tree
 internal/types/        semantic types
-internal/checker/      name resolution and type checking
+internal/srcenc/       reads source files (UTF-8; UTF-16 and UTF-32 are converted)
+internal/loader/       loads a program's files and resolves uses
+internal/checker/      name resolution, type checking, and warnings
 internal/runtime/      tree-walking interpreter
+internal/conv/         number and string conversions shared by both targets
 internal/ir/           typed intermediate representation and its verifier
 internal/jsgen/        JavaScript code generator and its inlined runtime
+internal/jshost/       host-neutral JavaScript modules (rune:fs)
+internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
 internal/diagnostics/  error codes and formatting
 internal/driver/       wires the stages together
+internal/watch/        file watcher for run --watch and dev
+internal/devserver/    the runescript dev server and its browser client
 stdlib/                standard library packages (std:string), implemented in Go
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests

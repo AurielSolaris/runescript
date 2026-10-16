@@ -64,8 +64,8 @@ protected int main() {
 - Integer overflow and division by zero are reported as runtime errors and
   never wrap silently
 - Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
-  in browsers and Node.js and behaves exactly like the interpreter
-  ([guide](docs/guide/11-javascript.md))
+  in browsers and Node.js and behaves exactly like the interpreter for every
+  program the interpreter can run ([guide](docs/guide/11-javascript.md))
 - Calling JavaScript through `extern` declarations, including the
   host-neutral `rune:fs`. Every value that comes back from JavaScript is
   checked against its declared type
@@ -82,8 +82,10 @@ checks every value that crosses in from JavaScript, and it has no `any`, no
 implicit conversions, and no unchecked casts.
 
 **Not yet implemented:** classes, structs, arrays, `char`, string
-concatenation, `go:` packages, `std:math`, `std:symrs`, and the planned native
-graphics package. See the [roadmap](docs/ROADMAP.md).
+concatenation, `go:` packages, `std:math`, `std:symrs`, objects, arrays, and
+callbacks across the JavaScript boundary, `rune:process`, DOM templates
+(`rune:dom`, being designed; the HTML4, HTML5, and SVG element list exists),
+and the planned native graphics package. See the [roadmap](docs/ROADMAP.md).
 
 ## Install
 
@@ -111,6 +113,8 @@ go build -o runescript ./cmd/runescript
 ./runescript check examples/signedness_error.rsc   # shows a compile-time error
 ./runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
+./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
+./runescript run --watch examples/hello.rsc         # runs it again on every save
 go test ./...
 ```
 
@@ -134,7 +138,13 @@ The suite includes:
 - runtime-error programs;
 - differential tests that run every program on both the interpreter and
   Node.js and require identical results (skipped if `node` is missing);
-- a check that every program in the documentation compiles.
+- Node.js runs of programs that call JavaScript through `extern`, including
+  JavaScript that returns wrong values on purpose;
+- a check that generated JavaScript uses nothing newer than ES2015 plus
+  `BigInt`, `??`, and modules;
+- tests for the dev server, the file watcher, and `run --watch`;
+- a check that every program in the documentation compiles, and that the
+  translations keep every code block of the English pages.
 
 ## Examples
 
@@ -156,17 +166,24 @@ checked by the test suite.
 ## Repository layout
 
 ```text
-cmd/runescript/        CLI (run, check, build, version)
+cmd/runescript/        CLI (run, check, build, dev, version)
 internal/lexer/        tokens and source positions
 internal/parser/       recursive-descent parser → AST
 internal/ast/          syntax tree
 internal/types/        semantic types
-internal/checker/      name resolution and type checking
+internal/srcenc/       reads source files (UTF-8; UTF-16 and UTF-32 are converted)
+internal/loader/       loads a program's files and resolves uses
+internal/checker/      name resolution, type checking, and warnings
 internal/runtime/      tree-walking interpreter
+internal/conv/         number and string conversions shared by both targets
 internal/ir/           typed intermediate representation and its verifier
 internal/jsgen/        JavaScript code generator and its inlined runtime
+internal/jshost/       host-neutral JavaScript modules (rune:fs)
+internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
 internal/diagnostics/  error codes and formatting
 internal/driver/       wires the stages together
+internal/watch/        file watcher for run --watch and dev
+internal/devserver/    the runescript dev server and its browser client
 stdlib/                standard library packages (std:string), implemented in Go
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests

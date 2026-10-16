@@ -4,7 +4,13 @@ Run any example with:
 
 ```sh
 go run ./cmd/runescript run examples/hello.rsc
+go run ./cmd/runescript run --watch examples/hello.rsc   # runs it again on every save
+go run ./cmd/runescript dev examples/fizzbuzz.rsc        # in the browser, with live reload
 ```
+
+Programs that call JavaScript through `extern` run only on the JavaScript
+target, so they live in [`tests/testdata/extern/`](../tests/testdata/extern/)
+with their JavaScript helper modules instead of here.
 
 | Example | Shows |
 |---|---|

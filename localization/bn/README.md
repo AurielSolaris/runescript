@@ -68,8 +68,8 @@ protected int main() {
 - পূর্ণসংখ্যার ওভারফ্লো ও শূন্য দিয়ে ভাগ রানটাইম এরর হিসেবে জানানো হয়, কখনো
   নিঃশব্দে ঘুরে (wrap) যায় না
 - JavaScript-এ কম্পাইল (`runescript build`): একটি ES2015 মডিউল (সাথে BigInt ও `??`), যা ব্রাউজার ও
-  Node.js-এ চলে এবং ইন্টারপ্রেটারের মতো হুবহু আচরণ করে
-  ([গাইড](docs/guide/11-javascript.md))
+  Node.js-এ চলে এবং ইন্টারপ্রেটার যে প্রোগ্রাম চালাতে পারে তার প্রতিটিতে
+  ইন্টারপ্রেটারের মতো হুবহু আচরণ করে ([গাইড](docs/guide/11-javascript.md))
 - `extern` ঘোষণার মাধ্যমে JavaScript কল করা, হোস্ট-নিরপেক্ষ `rune:fs` সহ।
   JavaScript থেকে ফেরত আসা প্রতিটি মান তার ঘোষিত টাইপের সঙ্গে যাচাই করা হয়
 - অব্যবহৃত ভেরিয়েবল, প্যারামিটার ও use, অগম্য কোড এবং ফেলে দেওয়া ফলাফলের জন্য
@@ -85,7 +85,9 @@ JavaScript থেকে আসা প্রতিটি মান যাচা�
 রূপান্তর বা কোনো যাচাইহীন কাস্ট নেই।
 
 **এখনো তৈরি হয়নি:** ক্লাস, স্ট্রাক্ট, অ্যারে, `char`, স্ট্রিং জোড়া লাগানো
-(concatenation), `go:` প্যাকেজ, `std:math`, `std:symrs`, এবং পরিকল্পিত নেটিভ
+(concatenation), `go:` প্যাকেজ, `std:math`, `std:symrs`, JavaScript-এর সীমানা
+পেরিয়ে অবজেক্ট, অ্যারে ও কলব্যাক, `rune:process`, DOM টেমপ্লেট (`rune:dom`, নকশা
+চলছে; HTML4, HTML5 ও SVG এলিমেন্টের তালিকা তৈরি আছে), এবং পরিকল্পিত নেটিভ
 গ্রাফিক্স প্যাকেজ। দেখুন [রোডম্যাপ](../../docs/ROADMAP.md) (ইংরেজিতে)।
 
 ## ইনস্টল
@@ -114,6 +116,8 @@ go build -o runescript ./cmd/runescript
 ./runescript check examples/signedness_error.rsc   # shows a compile-time error
 ./runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
+./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
+./runescript run --watch examples/hello.rsc         # runs it again on every save
 go test ./...
 ```
 
@@ -137,7 +141,13 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - রানটাইম-এরর প্রোগ্রাম;
 - ডিফারেনশিয়াল টেস্ট, যা প্রতিটি প্রোগ্রাম ইন্টারপ্রেটার ও Node.js দুটিতেই চালায়
   এবং হুবহু একই ফল চায় (`node` না থাকলে বাদ যায়);
-- ডকুমেন্টেশনের প্রতিটি প্রোগ্রাম কম্পাইল হয় কিনা, তার যাচাই।
+- `extern` দিয়ে JavaScript কল করা প্রোগ্রাম Node.js-এ চালানো, ইচ্ছে করে ভুল মান
+  ফেরত দেওয়া JavaScript সহ;
+- তৈরি হওয়া JavaScript ES2015, `BigInt`, `??` ও মডিউলের চেয়ে নতুন কিছু ব্যবহার
+  করে না, তার যাচাই;
+- ডেভ সার্ভার, ফাইল ওয়াচার ও `run --watch`-এর টেস্ট;
+- ডকুমেন্টেশনের প্রতিটি প্রোগ্রাম কম্পাইল হয় কিনা, এবং অনুবাদগুলো ইংরেজি পেজের প্রতিটি
+  কোড ব্লক রাখে কিনা, তার যাচাই।
 
 ## উদাহরণ
 
@@ -159,17 +169,24 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 ## রিপোজিটরির গঠন
 
 ```text
-cmd/runescript/        CLI (run, check, build, version)
+cmd/runescript/        CLI (run, check, build, dev, version)
 internal/lexer/        tokens and source positions
 internal/parser/       recursive-descent parser → AST
 internal/ast/          syntax tree
 internal/types/        semantic types
-internal/checker/      name resolution and type checking
+internal/srcenc/       reads source files (UTF-8; UTF-16 and UTF-32 are converted)
+internal/loader/       loads a program's files and resolves uses
+internal/checker/      name resolution, type checking, and warnings
 internal/runtime/      tree-walking interpreter
+internal/conv/         number and string conversions shared by both targets
 internal/ir/           typed intermediate representation and its verifier
 internal/jsgen/        JavaScript code generator and its inlined runtime
+internal/jshost/       host-neutral JavaScript modules (rune:fs)
+internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
 internal/diagnostics/  error codes and formatting
 internal/driver/       wires the stages together
+internal/watch/        file watcher for run --watch and dev
+internal/devserver/    the runescript dev server and its browser client
 stdlib/                standard library packages (std:string), implemented in Go
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests
