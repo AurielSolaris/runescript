@@ -140,7 +140,7 @@ Stmt         = FuncDecl                 (* nested function or prototype *)
              | TemplateStmt ;                               (* §13 *)
 SimpleStmt   = VarDecl | Assignment | IncDec | Call ;
 VarDecl      = Type Ident "=" Expr ;
-Assignment   = Ident ( "=" | "+=" | "-=" | "*=" | "/=" | "%=" ) Expr ;
+Assignment   = ( Ident | Postfix "[" Expr "]" ) ( "=" | "+=" | "-=" | "*=" | "/=" | "%=" ) Expr ;
 IncDec       = Ident ( "++" | "--" ) ;
 
 IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
@@ -160,9 +160,10 @@ MulExpr      = Unary   { ( "*" | "/" | "%" ) Unary } ;
 Unary        = ( "-" | "!" ) Unary | Cast | Postfix ;
 Cast         = "(" CastType ")" Unary ;
 CastType     = "int" | "sint" | "uint" | "float" | "float32" | "float64" | "string" | "bool" | "char" ;
-Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" | "." Ident } ;   (* calls, fields *)
+Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" | "." Ident | "[" Expr "]" } ;   (* calls, fields, elements *)
 Primary      = IntLit | FloatLit | StringLit | InterpString | CharLit | "true" | "false"
-             | Ident | Call | Lambda | New | "(" Expr ")" ;
+             | Ident | Call | Lambda | New | "(" Expr ")"
+             | "[" [ Expr { "," Expr } ] "]" ;   (* array literal, §5.1c *)
 InterpString = '$"' { Text | "{" Expr "}" } '"' ;   (* §2.4 *)
 New          = "new" Ident "(" [ Expr { "," Expr } ] ")" ;
 Lambda       = "(" [ Type Ident { "," Type Ident } ] ")" "=>" ( Expr | Block ) ;
@@ -390,9 +391,34 @@ this:
   precision for `float32`), plain from 1e-6 to below 1e21 (`64`, `0.5`,
   `0.000001`) and in exponent form otherwise (`1e+21`, `1.5e-7`).
 
+### 5.1c Arrays **[decided 2026-10-16, details provisional]**
+`Array<T>` is a growable list of `T`, where `T` is any value type: a
+number, `bool`, `string`, `char`, a function type, an error type, or
+another array (not `Element` or `Signal`).
+
+- **Reference semantics [provisional]:** assigning or passing an array
+  shares it; changes through one name are seen through every other.
+- **Literals:** `[a, b, c]`. The element type is the declared type of the
+  destination (`Array<uint> u = [1, 2];`); without one, it is the first
+  element's type, and every other element must be assignable to it. An
+  empty `[]` needs a destination type.
+- `a[i]` reads element `i` (an `int` or `uint`); `a[i] = v` and
+  `a[i] op= v` write it. `a`, then `i`, are evaluated once. An index
+  outside `0 … a.length - 1` throws a `RangeError` (`ASX-RUN-011`).
+  For `a[i] op= v`, the element is read before `v` is evaluated, and the
+  index is checked again when storing.
+- `a.length` is the number of elements (`int`). `a.push(v)` appends `v`;
+  `a.pop()` removes and returns the last element (`ASX-RUN-011` when
+  empty).
+- Arrays cannot be compared, traced, converted, interpolated, held in a
+  rune, or passed across the JavaScript boundary **[provisional]**. Use
+  `string.join` to show them.
+- **[undecided]** for-each loops, slicing, sorting, `a[i]++`, `Array<T>`
+  for user generic types, and whether `array` (reserved) means the same.
+
 ### 5.2 Planned types **[planned/undecided]**
-`char`, `int8 int16 int32`, plus probably `int64` and `uint8 … uint64`.
-Also `array`, `matrix`, `struct`, `class`, and generic type parameters.
+`int8 int16 int32`, plus probably `int64` and `uint8 … uint64`.
+Also `matrix`, `struct`, `class`, and generic type parameters.
 None of these are implemented. Their names are reserved.
 
 ### 5.3 Integer constants **[v0.1, provisional]**

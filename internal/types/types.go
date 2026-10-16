@@ -41,6 +41,9 @@ const (
 	// Char is one Unicode scalar value: 0 to 0x10FFFF, except the
 	// surrogates 0xD800 to 0xDFFF (OQ-CHAR-01).
 	Char
+	// Array is Array<Elem>: a growable list, held by reference
+	// (OQ-TYPE-02a).
+	Array
 )
 
 // Type is a semantic type. Name preserves the spelling used in source so
@@ -63,6 +66,21 @@ type Type struct {
 // NewSignal returns the type Signal<elem>.
 func NewSignal(elem *Type) *Type {
 	return &Type{Kind: Signal, Name: "Signal<" + elem.Name + ">", Elem: elem}
+}
+
+// NewArray returns the type Array<elem>.
+func NewArray(elem *Type) *Type {
+	return &Type{Kind: Array, Name: "Array<" + elem.Name + ">", Elem: elem}
+}
+
+// IsElemType reports whether an array can hold values of type t: any
+// value type except the rune:dom types, which belong to the web layer.
+func IsElemType(t *Type) bool {
+	switch t.Kind {
+	case Signed, Unsigned, Float, Bool, String, Char, Func, Error, Array:
+		return true
+	}
+	return false
 }
 
 // ElementT is the type of DOM elements built by templates.
@@ -178,7 +196,7 @@ func Identical(a, b *Type) bool {
 		return a.Bits == b.Bits
 	case Error:
 		return a == b
-	case Signal:
+	case Signal, Array:
 		return Identical(a.Elem, b.Elem)
 	case Func:
 	default:

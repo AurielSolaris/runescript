@@ -63,6 +63,10 @@ type Info struct {
 	DOMCalls map[*ast.CallExpr]string
 	// QualRefs maps pkg.name used as a value to the function it names.
 	QualRefs map[*ast.SelectorExpr]*FuncSym
+	// ArrayCalls maps calls of array methods (a.push(v), a.pop()) to the
+	// method's name. The array is e.Pkg, or the X of the SelectorExpr
+	// callee.
+	ArrayCalls map[*ast.CallExpr]string
 	// TemplateElems and TemplateAttrs map the elements and attributes of
 	// templates to their entries in the element list.
 	TemplateElems map[*ast.MElement]*dom.Element
@@ -177,6 +181,7 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 			Signals:     map[*ast.CallExpr]SignalOp{},
 			DOMCalls:    map[*ast.CallExpr]string{},
 			QualRefs:    map[*ast.SelectorExpr]*FuncSym{},
+			ArrayCalls:  map[*ast.CallExpr]string{},
 
 			TemplateElems: map[*ast.MElement]*dom.Element{},
 			TemplateAttrs: map[*ast.MAttr]*dom.Attr{},
@@ -403,6 +408,9 @@ func (c *checker) resolveType(ref *ast.TypeRef) *types.Type {
 	}
 	if ref.Name == "Element" || ref.Name == "Signal" {
 		return c.domType(ref)
+	}
+	if ref.Name == "Array" {
+		return c.arrayType(ref)
 	}
 	if len(ref.Args) > 0 {
 		c.errorf(diagnostics.TypeArgs, ref.Span, "type '%s' takes no type arguments", ref.Name)

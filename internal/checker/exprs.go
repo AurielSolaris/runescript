@@ -25,6 +25,9 @@ func (c *checker) assign(dst *types.Type, e ast.Expr, verb string) {
 	if call, ok := unparen(e).(*ast.CallExpr); ok && dst.Kind == types.Signal && c.isSignalBuiltin(call) {
 		src = operand{typ: c.signalNew(call, dst.Elem)}
 		c.info.Types[e] = src.typ
+	} else if lit, ok := unparen(e).(*ast.ArrayLit); ok && dst.Kind == types.Array {
+		src = operand{typ: c.arrayLit(lit, dst)}
+		c.info.Types[e] = src.typ
 	} else if lam, ok := unparen(e).(*ast.LambdaExpr); ok && dst.Kind == types.Func {
 		// A lambda takes its result type from the function type it is
 		// assigned, passed, or returned to.
@@ -221,6 +224,10 @@ func (c *checker) exprInner(e ast.Expr) operand {
 		return operand{typ: types.StringT}
 	case *ast.CharLit:
 		return operand{typ: types.CharT}
+	case *ast.IndexExpr:
+		return operand{typ: c.index(e)}
+	case *ast.ArrayLit:
+		return operand{typ: c.arrayLit(e, nil)}
 	case *ast.BoolLit:
 		return operand{typ: types.BoolT}
 	case *ast.ParenExpr:
@@ -494,15 +501,26 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	case e.Pkg != nil:
 		return c.qualifiedCall(e)
 	case e.Fn == nil:
+		if sel, ok := e.Callee.(*ast.SelectorExpr); ok && !c.isPackageRef(sel) {
+			// x.name(args): a method of the value x
+			t := c.defaulted(sel.X).typ
+			if t.Kind == types.Array {
+				return c.arrayMethod(e, sel.Name, t)
+			}
+			ft := c.selectorOf(sel, t)
+			c.info.Types[sel] = ft
+			return c.callValue(ft, e, fmt.Sprintf("a value of type '%s'", ft))
+		}
 		t := c.expr(e.Callee).typ
 		return c.callValue(t, e, fmt.Sprintf("a value of type '%s'", t))
 	case e.Fn.Name == "trace":
 		for _, a := range e.Args {
-			op := c.defaulted(a)
-			switch op.typ.Kind {
-			case types.Void:
+			if t := c.defaulted(a).typ; t.Kind == types.Array {
+				c.errorf(diagnostics.TypeBadOperand, a.NodeSpan(), "arrays cannot be traced").
+					WithHelp(`join the elements first, e.g. trace(string.join(names, ", "))`)
+			} else if t.Kind == types.Void {
 				c.errorf(diagnostics.TypeVoidValue, a.NodeSpan(), "expression has type 'void' and cannot be traced")
-			case types.Func:
+			} else if t.Kind == types.Func {
 				c.errorf(diagnostics.TypeBadOperand, a.NodeSpan(), "function values cannot be traced")
 			}
 		}
@@ -628,8 +646,12 @@ func (c *checker) qualifiedCall(e *ast.CallExpr) *types.Type {
 	switch {
 	case b == nil && c.isVariable(e.Pkg.Name):
 		t := c.ident(e.Pkg)
+		c.info.Types[e.Pkg] = t
 		if t.Kind == types.Signal {
 			return c.signalMethod(e, t)
+		}
+		if t.Kind == types.Array {
+			return c.arrayMethod(e, e.Fn, t)
 		}
 		c.errorf(diagnostics.TypeNoField, e.Fn.Span, "values of type '%s' have no methods", t).
 			WithHelp(fieldHelp(t))
@@ -821,16 +843,30 @@ func fieldHelp(t *types.Type) string {
 	return ""
 }
 
-// selector checks x.name: a field of an error value.
+// isPackageRef reports whether e is pkg.name for a package qualifier.
+func (c *checker) isPackageRef(e *ast.SelectorExpr) bool {
+	id, ok := e.X.(*ast.Ident)
+	return ok && !c.isVariable(id.Name) && c.quals[id.Name] != nil
+}
+
+// selector checks x.name: a field of an error value or an array, or a
+// package function used as a value.
 func (c *checker) selector(e *ast.SelectorExpr) *types.Type {
-	if id, ok := e.X.(*ast.Ident); ok && !c.isVariable(id.Name) && c.quals[id.Name] != nil {
+	if c.isPackageRef(e) {
+		id := e.X.(*ast.Ident)
 		c.quals[id.Name].used = true
 		return c.packageFuncValue(e, c.quals[id.Name])
 	}
-	t := c.defaulted(e.X).typ
+	return c.selectorOf(e, c.defaulted(e.X).typ)
+}
+
+// selectorOf checks the field name of a value of type t.
+func (c *checker) selectorOf(e *ast.SelectorExpr, t *types.Type) *types.Type {
 	switch {
 	case t.Kind == types.Invalid:
 		return types.InvalidT
+	case t.Kind == types.Array:
+		return c.arrayField(e, t)
 	case t.Kind != types.Error:
 		c.errorf(diagnostics.TypeNoField, e.Name.Span, "values of type '%s' have no fields", t)
 		return types.InvalidT

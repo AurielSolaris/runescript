@@ -108,6 +108,12 @@ func TestStdStringMatchesGo(t *testing.T) {
 				switch p.Kind {
 				case types.String:
 					args[j] = randomString(r)
+				case types.Array: // Array<string>
+					list := []string{}
+					for n := r.Intn(4); n > 0; n-- {
+						list = append(list, randomString(r))
+					}
+					args[j] = list
 				case types.Char:
 					c, _ := utf8.DecodeRuneInString(alphabet[r.Intn(len(alphabet))])
 					args[j], goArgs[j] = c, c
@@ -133,7 +139,7 @@ func TestStdStringMatchesGo(t *testing.T) {
 	dir := t.TempDir()
 	script := Runtime() + callbacksJS + `
 const cases = JSON.parse(require("node:fs").readFileSync(process.argv[2], "utf8"));
-const arg = (a) => (a !== null && typeof a === "object" ? callbacks[a.callback] : a);
+const arg = (a) => (a !== null && typeof a === "object" && !Array.isArray(a) ? callbacks[a.callback] : a);
 const results = cases.map((c) => {
   try {
     return { got: $rt.std.string[c.fn](...c.args.map(arg)) };
@@ -165,11 +171,10 @@ process.stdout.write(JSON.stringify(results));
 	failures := 0
 	for i, c := range cases {
 		got := results[i]
-		want := c.Want
-		if n, ok := want.(int64); ok {
-			want = float64(n) // JSON numbers decode as float64
-		}
-		if got.Fails != c.Fails || (!c.Fails && got.Got != want) {
+		// Compare as JSON: numbers decode as float64, arrays as []any.
+		g, _ := json.Marshal(got.Got)
+		w, _ := json.Marshal(c.Want)
+		if got.Fails != c.Fails || (!c.Fails && string(g) != string(w)) {
 			failures++
 			if failures <= 20 {
 				t.Errorf("string.%s%q: JavaScript gave %#v (fails=%v), Go gave %#v (fails=%v)",

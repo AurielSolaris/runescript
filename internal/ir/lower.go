@@ -121,6 +121,8 @@ func (l *lowerer) typeOf(ref *ast.TypeRef) *types.Type {
 	switch ref.Name {
 	case "char":
 		return types.CharT
+	case "Array":
+		return types.NewArray(l.typeOf(ref.Args[0]))
 	case "Element":
 		return types.ElementT
 	case "Signal":
@@ -201,6 +203,21 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 			value = &Arith{Op: s.Op[:1], T: v.Type, X: &Load{Var: v}, Y: value, Site: s.Span}
 		}
 		return &Assign{Var: v, Value: value}
+	case *ast.IndexAssignStmt:
+		set := &IndexSet{X: l.expr(s.Target.X), I: l.expr(s.Target.Index), Site: s.Span}
+		value := l.expr(s.Value)
+		if s.Op != "=" {
+			elem := l.concrete(s.Target, l.info.Types[s.Target])
+			old := &IndexOld{T: elem}
+			if elem.Kind == types.String {
+				value = concat(old, value)
+			} else {
+				value = &Arith{Op: s.Op[:1], T: elem, X: old, Y: value, Site: s.Span}
+			}
+			set.Compound = true
+		}
+		set.Value = value
+		return set
 	case *ast.IncDecStmt:
 		v := l.lookup(s.Target.Name)
 		one := &IntConst{T: v.Type, Value: 1}
@@ -305,7 +322,11 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		if sym, ok := l.info.QualRefs[e]; ok {
 			return &FuncRef{Func: l.fn(sym)}
 		}
-		return &Field{X: l.expr(e.X), Name: e.Name.Name, T: l.concrete(e, l.info.Types[e])}
+		x := l.expr(e.X)
+		if x.Type().Kind == types.Array {
+			return &ArrayLen{X: x}
+		}
+		return &Field{X: x, Name: e.Name.Name, T: l.concrete(e, l.info.Types[e])}
 	case *ast.ParenExpr:
 		return l.expr(e.X)
 	case *ast.StringLit:
@@ -330,6 +351,14 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		return &BoolConst{Value: e.Value}
 	case *ast.CharLit:
 		return &CharConst{Value: e.Value}
+	case *ast.ArrayLit:
+		lit := &ArrayLit{T: l.concrete(e, l.info.Types[e])}
+		for _, x := range e.Elems {
+			lit.Elems = append(lit.Elems, l.expr(x))
+		}
+		return lit
+	case *ast.IndexExpr:
+		return &Index{X: l.expr(e.X), I: l.expr(e.Index), Site: e.Span}
 	case *ast.IntLit:
 		l.ice("integer literal at %s was not given a type", e.Span.Start)
 	case *ast.Ident:
@@ -383,6 +412,18 @@ func concat(parts ...Expr) *Concat {
 }
 
 func (l *lowerer) call(e *ast.CallExpr) Expr {
+	if method, ok := l.info.ArrayCalls[e]; ok {
+		var recv Expr
+		if e.Pkg != nil {
+			recv = &Load{Var: l.lookup(e.Pkg.Name)}
+		} else {
+			recv = l.expr(e.Callee.(*ast.SelectorExpr).X)
+		}
+		if method == "push" {
+			return &ArrayPush{X: recv, V: l.expr(e.Args[0])}
+		}
+		return &ArrayPop{X: recv, Site: e.Span}
+	}
 	var callee Expr
 	if e.Callee != nil {
 		callee = l.expr(e.Callee) // evaluated before the arguments

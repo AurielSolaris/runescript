@@ -33,6 +33,8 @@ const (
 	RParen
 	LBrace
 	RBrace
+	LBracket
+	RBracket
 	Comma
 	Semicolon
 	Dot
@@ -43,7 +45,7 @@ const (
 var kindNames = map[Kind]string{
 	EOF: "end of file", Ident: "identifier", Int: "integer literal", Float: "floating-point literal",
 	String: "string literal", StrHead: "interpolated string", StrMid: "'}'", StrTail: "'}'", Char: "character literal", Keyword: "keyword", Reserved: "reserved word",
-	LParen: "'('", RParen: "')'", LBrace: "'{'", RBrace: "'}'", Comma: "','",
+	LParen: "'('", RParen: "')'", LBrace: "'{'", RBrace: "'}'", LBracket: "'['", RBracket: "']'", Comma: "','",
 	Semicolon: "';'", Dot: "'.'", Assign: "'='", Op: "operator",
 }
 
@@ -160,7 +162,7 @@ func (l *lexer) emit(kind Kind, text string, start diagnostics.Pos) {
 }
 
 var punct = map[byte]Kind{
-	'(': LParen, ')': RParen, '{': LBrace, '}': RBrace,
+	'(': LParen, ')': RParen, '{': LBrace, '}': RBrace, '[': LBracket, ']': RBracket,
 	',': Comma, ';': Semicolon, '.': Dot,
 }
 

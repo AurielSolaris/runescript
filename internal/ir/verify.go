@@ -75,7 +75,7 @@ func (v *verifier) fn(f *Func) {
 func (v *verifier) storable(t *types.Type, what string) {
 	switch t.Kind {
 	case types.Signed, types.Unsigned, types.Bool, types.String, types.Func, types.Float, types.Error,
-		types.Element, types.Signal, types.Char:
+		types.Element, types.Signal, types.Char, types.Array:
 		return
 	}
 	v.fail("%s has type %s, which cannot hold a value", what, t)
@@ -111,6 +111,10 @@ func (v *verifier) stmt(s Stmt) {
 		v.same(s.Var.Type, s.Value, "assignment to "+s.Var.Name)
 	case *Eval:
 		v.expr(s.X)
+	case *IndexSet:
+		t := v.array(s.X, "element assignment")
+		v.index(s.I)
+		v.same(t.Elem, s.Value, "element assignment")
 	case *Return:
 		if s.Value == nil {
 			if v.result.Kind != types.Void {
@@ -211,6 +215,24 @@ func (v *verifier) expr(e Expr) *types.Type {
 		if t := v.expr(e.X); t.Kind != types.Error || want == nil || !types.Identical(want, e.T) {
 			v.fail("field %s of %s", e.Name, t)
 		}
+	case *ArrayLit:
+		if e.T.Kind != types.Array || !types.IsElemType(e.T.Elem) {
+			v.fail("array literal of type %s", e.T)
+		}
+		for _, x := range e.Elems {
+			v.same(e.T.Elem, x, "array element")
+		}
+	case *Index:
+		v.array(e.X, "indexing")
+		v.index(e.I)
+	case *IndexOld:
+	case *ArrayLen:
+		v.array(e.X, "length")
+	case *ArrayPush:
+		t := v.array(e.X, "push")
+		v.same(t.Elem, e.V, "pushed element")
+	case *ArrayPop:
+		v.array(e.X, "pop")
 	case *CharConst:
 		if !types.ValidChar(int64(e.Value)) {
 			v.fail("char constant %d is not a Unicode scalar value", e.Value)
@@ -303,6 +325,20 @@ func (v *verifier) expr(e Expr) *types.Type {
 		v.fail("unexpected expression %T", e)
 	}
 	return e.Type()
+}
+
+func (v *verifier) array(x Expr, what string) *types.Type {
+	t := v.expr(x)
+	if t.Kind != types.Array {
+		v.fail("%s of a %s", what, t)
+	}
+	return t
+}
+
+func (v *verifier) index(i Expr) {
+	if t := v.expr(i); t.Kind != types.Signed && t.Kind != types.Unsigned {
+		v.fail("index of type %s", t)
+	}
 }
 
 func (v *verifier) args(ft *types.Type, args []Expr, what string) {

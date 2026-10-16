@@ -112,6 +112,7 @@ const (
 	TypeArgs           Code = "TYPE-025" // wrong type arguments, e.g. Signal<Error>
 	RunNoMountTarget   Code = "RUN-009"  // dom.renderApp found no element
 	RunDOMValue        Code = "RUN-010"  // a {{ }} value an attribute cannot take
+	RunIndex           Code = "RUN-011"  // an array index out of range, or pop of an empty array
 
 	// Warnings. A warning does not stop a program from running unless
 	// warnings are treated as errors (-Werror).

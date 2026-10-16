@@ -315,6 +315,7 @@ func fillRuntime(tables, keep map[string]bool) string {
 		"externThrew":   diagnostics.RunExternThrew.String(),
 		"noMountTarget": diagnostics.RunNoMountTarget.String(),
 		"domValue":      diagnostics.RunDOMValue.String(),
+		"index":         diagnostics.RunIndex.String(),
 	})
 	table := func(name string, runs func() []int64) string {
 		if !tables[name] {
@@ -393,7 +394,7 @@ func (g *gen) stmt(s ir.Stmt) {
 	switch s := s.(type) {
 	case *ir.FuncStmt:
 		g.funcDecl(s.Func)
-	case *ir.Decl, *ir.Assign, *ir.Eval:
+	case *ir.Decl, *ir.Assign, *ir.Eval, *ir.IndexSet:
 		g.line("%s;", g.simple(s))
 	case *ir.Return:
 		if s.Value == nil {
@@ -501,6 +502,15 @@ func (g *gen) simple(s ir.Stmt) string {
 		return fmt.Sprintf("%s = %s", jsName(s.Var.Name), g.expr(s.Value, precAssign))
 	case *ir.Eval:
 		return g.expr(s.X, precLowest)
+	case *ir.IndexSet:
+		site := g.site(s.Site)
+		if s.Compound {
+			// $o is the old element (ir.IndexOld) in the value.
+			return fmt.Sprintf("%s(%s, %s, ($o) => %s, %d)", g.use("aupd"), g.expr(s.X, precAssign),
+				g.expr(s.I, precAssign), g.expr(s.Value, precAssign), site)
+		}
+		return fmt.Sprintf("%s(%s, %s, %s, %d)", g.use("aset"), g.expr(s.X, precAssign),
+			g.expr(s.I, precAssign), g.expr(s.Value, precAssign), site)
 	}
 	panic(fmt.Sprintf("jsgen: unexpected simple statement %T", s))
 }
@@ -555,6 +565,22 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		return quote(e.Value), precCall
 	case *ir.BoolConst:
 		return strconv.FormatBool(e.Value), precCall
+	case *ir.ArrayLit:
+		parts := make([]string, len(e.Elems))
+		for i, x := range e.Elems {
+			parts[i] = g.expr(x, precAssign)
+		}
+		return "[" + strings.Join(parts, ", ") + "]", precCall
+	case *ir.Index:
+		return fmt.Sprintf("%s(%s, %s, %d)", g.use("aget"), g.expr(e.X, precAssign), g.expr(e.I, precAssign), g.site(e.Site)), precCall
+	case *ir.IndexOld:
+		return "$o", precCall
+	case *ir.ArrayLen:
+		return g.expr(e.X, precCall) + ".length", precCall
+	case *ir.ArrayPush:
+		return g.expr(e.X, precCall) + ".push(" + g.expr(e.V, precAssign) + ")", precCall
+	case *ir.ArrayPop:
+		return fmt.Sprintf("%s(%s, %d)", g.use("apop"), g.expr(e.X, precAssign), g.site(e.Site)), precCall
 	case *ir.CharConst:
 		// A char is its code point; the comment shows the character.
 		return fmt.Sprintf("%d /* %s */", e.Value, charComment(e.Value)), precCall

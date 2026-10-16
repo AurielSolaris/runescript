@@ -38,7 +38,13 @@ type Value struct {
 	// *ast.LambdaExpr. Functions do not capture variables, so no
 	// environment is needed.
 	Fn ast.Node
+	// Arr is an array. Arrays are held by reference: copying the Value
+	// shares the elements.
+	Arr *ArrayValue
 }
+
+// ArrayValue holds the elements of an array.
+type ArrayValue struct{ Elems []Value }
 
 func (v Value) String() string {
 	switch v.Kind {
@@ -89,6 +95,7 @@ var faultTypes = map[diagnostics.Code]*types.Type{
 	diagnostics.RunOverflow:     types.RangeErrorT,
 	diagnostics.RunDivideByZero: types.RangeErrorT,
 	diagnostics.RunNativeFailed: types.ErrorT,
+	diagnostics.RunIndex:        types.RangeErrorT,
 }
 
 // ErrorID is the errorID of a runtime error: its code's number, e.g. 2 for
@@ -272,6 +279,8 @@ func (in *interp) stmt(f *frame, s ast.Stmt) control {
 			v = in.arith(s.Op[:1], *dst, v, s.Span)
 		}
 		*dst = v
+	case *ast.IndexAssignStmt:
+		in.indexAssign(f, s)
 	case *ast.IncDecStmt:
 		dst := f.lookup(s.Target.Name)
 		*dst = in.arith(s.Op[:1], *dst, Value{Kind: dst.Kind, Int: 1}, s.Span)
@@ -427,7 +436,11 @@ func (in *interp) expr(f *frame, e ast.Expr) Value {
 		if fn, ok := in.info.QualRefs[e]; ok { // pkg.name used as a value
 			return Value{Kind: types.Func, Fn: fn.Def}
 		}
-		err := in.expr(f, e.X).Err
+		x := in.expr(f, e.X)
+		if x.Kind == types.Array { // length
+			return Value{Kind: types.Signed, Int: int64(len(x.Arr.Elems))}
+		}
+		err := x.Err
 		switch e.Name.Name {
 		case "message":
 			return Value{Kind: types.String, Str: err.Message}
@@ -449,6 +462,16 @@ func (in *interp) expr(f *frame, e ast.Expr) Value {
 		return Value{Kind: types.Bool, Bool: e.Value}
 	case *ast.CharLit:
 		return Value{Kind: types.Char, Int: int64(e.Value)}
+	case *ast.ArrayLit:
+		arr := &ArrayValue{Elems: make([]Value, len(e.Elems))}
+		for i, x := range e.Elems {
+			arr.Elems[i] = in.expr(f, x)
+		}
+		return Value{Kind: types.Array, Arr: arr}
+	case *ast.IndexExpr:
+		a := in.expr(f, e.X).Arr
+		i := in.expr(f, e.Index).Int
+		return a.Elems[in.checkIndex(a, i, e.Span)]
 	case *ast.ParenExpr:
 		return in.expr(f, e.X)
 	case *ast.Ident:
@@ -478,6 +501,9 @@ func (in *interp) expr(f *frame, e ast.Expr) Value {
 
 // callExpr evaluates the callee first, then the arguments left to right.
 func (in *interp) callExpr(f *frame, e *ast.CallExpr) Value {
+	if method, ok := in.info.ArrayCalls[e]; ok {
+		return in.arrayCall(f, e, method)
+	}
 	var callee Value
 	if e.Callee != nil {
 		callee = in.expr(f, e.Callee)
@@ -729,6 +755,12 @@ func (in *interp) native(f *stdlib.Func, args []Value, e *ast.CallExpr) (result 
 	goArgs := make([]any, len(args))
 	for i, a := range args {
 		switch a.Kind {
+		case types.Array: // Array<string>, the only array a native takes
+			strs := make([]string, len(a.Arr.Elems))
+			for j, v := range a.Arr.Elems {
+				strs[j] = v.Str
+			}
+			goArgs[i] = strs
 		case types.String:
 			goArgs[i] = a.Str
 		case types.Bool:
@@ -763,6 +795,13 @@ func (in *interp) native(f *stdlib.Func, args []Value, e *ast.CallExpr) (result 
 		return Value{Kind: types.Bool, Bool: out.(bool)}
 	case types.Char:
 		return Value{Kind: types.Char, Int: int64(out.(rune))}
+	case types.Array: // Array<string>
+		strs := out.([]string)
+		arr := &ArrayValue{Elems: make([]Value, len(strs))}
+		for i, s := range strs {
+			arr.Elems[i] = Value{Kind: types.String, Str: s}
+		}
+		return Value{Kind: types.Array, Arr: arr}
 	}
 	n := out.(int64)
 	if !types.InRange(f.Result, n) {
@@ -787,4 +826,61 @@ func (in *interp) goFunc(v Value, t *types.Type, site diagnostics.Span) any {
 		}
 	}
 	panic("runtime: no Go form for function type " + t.Name) // a stdlib signature bug
+}
+
+// ---- arrays ----
+
+// checkIndex returns i if it is an index of a, and throws a RangeError
+// otherwise.
+func (in *interp) checkIndex(a *ArrayValue, i int64, span diagnostics.Span) int64 {
+	if i < 0 || i >= int64(len(a.Elems)) {
+		in.fail(diagnostics.RunIndex, span, "index %d is out of range for an array of length %d", i, len(a.Elems))
+	}
+	return i
+}
+
+// indexAssign runs a[i] op= v. The array, then the index, are evaluated
+// once. For =, the value comes next and the index is checked when storing;
+// for a compound assignment, the element is read (checking the index)
+// before the value is evaluated, and the index is checked again when
+// storing, since evaluating the value may have shortened the array.
+func (in *interp) indexAssign(f *frame, s *ast.IndexAssignStmt) {
+	a := in.expr(f, s.Target.X).Arr
+	i := in.expr(f, s.Target.Index).Int
+	var v Value
+	if s.Op == "=" {
+		v = in.expr(f, s.Value)
+	} else {
+		old := a.Elems[in.checkIndex(a, i, s.Span)]
+		v = in.expr(f, s.Value)
+		switch {
+		case old.Kind == types.String:
+			v = Value{Kind: types.String, Str: old.Str + v.Str}
+		case old.Kind == types.Float:
+			v = in.floatArith(s.Op[:1], old, v, floatType(old.Bits))
+		default:
+			v = in.arith(s.Op[:1], old, v, s.Span)
+		}
+	}
+	a.Elems[in.checkIndex(a, i, s.Span)] = v
+}
+
+// arrayCall runs a.push(v) or a.pop().
+func (in *interp) arrayCall(f *frame, e *ast.CallExpr, method string) Value {
+	var recv ast.Expr = e.Pkg
+	if e.Pkg == nil {
+		recv = e.Callee.(*ast.SelectorExpr).X
+	}
+	a := in.expr(f, recv).Arr
+	if method == "push" {
+		v := in.expr(f, e.Args[0])
+		a.Elems = append(a.Elems, v)
+		return Value{Kind: types.Void}
+	}
+	if len(a.Elems) == 0 {
+		in.fail(diagnostics.RunIndex, e.Span, "pop from an empty array")
+	}
+	last := a.Elems[len(a.Elems)-1]
+	a.Elems = a.Elems[:len(a.Elems)-1]
+	return last
 }

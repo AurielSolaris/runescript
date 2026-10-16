@@ -21,7 +21,7 @@ same.
 | `ASX-LEX-003` | An unknown escape sequence such as `\q` |
 | `ASX-LEX-004` | A `/*` comment that is never closed |
 | `ASX-LEX-005` | An invalid number: leading zero (`007`), letters attached (`12abc`), too many dots (`1.2.3`), or too large or too small (`1e999`, `1e-999`) |
-| `ASX-LEX-006` | A literal kind that isn't supported yet: chars (`'a'`) |
+| `ASX-LEX-006` | A character literal that doesn't hold exactly one character: `''`, `'ab'` |
 | `ASX-LEX-007` | The file isn't valid UTF-8 (e.g. it was saved as Windows-1252). UTF-16 and UTF-32 files are converted instead |
 | `ASX-LEX-008` | A template, tag, interpolation, or `$if` condition that is never closed |
 
@@ -92,7 +92,7 @@ The parser stops at the first syntax error.
 | `ASX-TYPE-022` | A catch clause that can never run, because an earlier clause already catches its type |
 | `ASX-TYPE-023` | An extern function's parameter or result has a type that can't cross the JavaScript boundary, e.g. a function type |
 | `ASX-TYPE-024` | An extern declaration of a `rune:` function doesn't match that function's type |
-| `ASX-TYPE-025` | Wrong type arguments: `Signal` takes one number, `bool`, or `string` type (`Signal<int>`); other types take none |
+| `ASX-TYPE-025` | Wrong type arguments: `Array` takes one element type (`Array<string>`), `Signal` takes one number, `bool`, or `string` type (`Signal<int>`); other types take none |
 
 ## Template errors
 
@@ -162,13 +162,14 @@ error has already been printed.
 | `ASX-RUN-001` | Calls nested more than 10,000 deep (usually runaway recursion) | can't be caught |
 | `ASX-RUN-002` | Integer overflow: the result doesn't fit its type (floats become `Infinity` instead) | `RangeError` |
 | `ASX-RUN-003` | Integer division or remainder by zero (for floats, the result is `Infinity` or `NaN`) | `RangeError` |
-| `ASX-RUN-004` | A standard library function failed, e.g. `string.repeat` with a negative count | `Error` |
+| `ASX-RUN-004` | A standard library function failed, e.g. `string.repeat` with a negative count, or `string.slice` with bounds out of range or inside a character | `Error`; `RangeError` for `string.slice` |
 | `ASX-RUN-005` | An error created with `new` was thrown and nothing caught it | |
 | `ASX-RUN-006` | A conversion failed, e.g. `(int) "12x"` or `(uint) -1` at run time | `TypeError` or `RangeError` |
 | `ASX-RUN-007` | A JavaScript function returned a value that doesn't match its extern declaration, e.g. `1.5` for an `int` | `TypeError` |
 | `ASX-RUN-008` | A JavaScript function threw an exception, or its module has no such function | `Error` |
 | `ASX-RUN-009` | `dom.renderApp` found no element matching its selector | `Error` |
 | `ASX-RUN-010` | A bound attribute got a value it can't take: a keyword not in its list, or a URL that would run script | `TypeError` |
+| `ASX-RUN-011` | An array index out of range (`a[i]` with `i < 0` or `i >= a.length`), or `pop()` on an empty array | `RangeError` |
 
 On the JavaScript target, `ASX-RUN-001` is also reported when the host's own
 stack runs out before 10,000 calls (see [chapter 11](11-javascript.md)).

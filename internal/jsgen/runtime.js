@@ -66,7 +66,7 @@ const $rt = (() => {
     return e;
   };
   // FAULTS are the error types of runtime errors that can be caught.
-  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error", [CODES.externThrew]: "Error", [CODES.noMountTarget]: "Error" };
+  const FAULTS = { [CODES.overflow]: "RangeError", [CODES.divideByZero]: "RangeError", [CODES.nativeFailed]: "Error", [CODES.externThrew]: "Error", [CODES.noMountTarget]: "Error", [CODES.index]: "RangeError" };
 
   // at returns the file, line, and column of a call site.
   const at = (site) => {
@@ -186,6 +186,29 @@ const $rt = (() => {
         return to === "f32" ? Math.fround(f) : f;
       }
     }
+  }
+
+  // ---- arrays (OQ-TYPE-02a) ----
+  //
+  // Arrays are JavaScript arrays, held by reference as in RuneScript.
+  // Every access is bounds-checked, in the interpreter's order.
+
+  function checkIndex(a, i, site) {
+    if (!(i >= 0 && i < a.length)) fail(CODES.index, site, `index ${i} is out of range for an array of length ${a.length}`);
+    return i;
+  }
+  const aget = (a, i, site) => a[checkIndex(a, i, site)];
+  function aset(a, i, v, site) {
+    a[checkIndex(a, i, site)] = v;
+  }
+  // aupd is a[i] op= v: f computes the new element from the old one.
+  function aupd(a, i, f, site) {
+    const v = f(a[checkIndex(a, i, site)]);
+    a[checkIndex(a, i, site)] = v;
+  }
+  function apop(a, site) {
+    if (a.length === 0) fail(CODES.index, site, "pop from an empty array");
+    return a.pop();
   }
 
   // ---- calls ----
@@ -630,6 +653,49 @@ const $rt = (() => {
     return s.split(sub).length - 1;
   }
 
+  // genSplit follows Go's strings.genSplit: at most n pieces (all if
+  // n < 0), each keeping the separator if save is set. An empty separator
+  // splits into characters (Go's explode).
+  function genSplit(s, sep, save, n) {
+    if (n === 0) return [];
+    if (sep === "") {
+      const cs = Array.from(s);
+      if (n < 0 || n > cs.length) n = cs.length;
+      const out = cs.slice(0, Math.max(n - 1, 0));
+      if (n > 0) out.push(cs.slice(n - 1).join(""));
+      return out;
+    }
+    if (n < 0) n = count(s, sep) + 1;
+    const out = [];
+    while (out.length < n - 1) {
+      const m = s.indexOf(sep);
+      if (m < 0) break;
+      out.push(s.slice(0, save ? m + sep.length : m));
+      s = s.slice(m + sep.length);
+    }
+    out.push(s);
+    return out;
+  }
+
+  // fieldsFunc follows Go's strings.FieldsFunc: the runs of characters f
+  // rejects, calling f once per character, in order.
+  function fieldsFunc(s, f) {
+    const out = [];
+    let start = -1;
+    for (let i = 0; i < s.length;) {
+      const cp = s.codePointAt(i);
+      if (f(cp)) {
+        if (start >= 0) out.push(s.slice(start, i));
+        start = -1;
+      } else if (start < 0) {
+        start = i;
+      }
+      i += width(cp);
+    }
+    if (start >= 0) out.push(s.slice(start));
+    return out;
+  }
+
   // replace follows Go's strings.Replace, in UTF-16 indexes.
   function replace(s, old, nw, n) {
     if (old === nw || n === 0) return s;
@@ -695,12 +761,15 @@ const $rt = (() => {
       const canon = (cp) => (f.has(cp) ? f.get(cp) : cp);
       return a.every((cp, i) => cp === b[i] || canon(cp) === canon(b[i]));
     },
+    fields: (s) => fieldsFunc(s, spaces),
+    fieldsFunc,
     hasPrefix: (s, p) => s.startsWith(p),
     hasSuffix: (s, p) => s.endsWith(p),
     index: (s, sub) => byteIndex(s, s.indexOf(sub)),
     indexAny: (s, chars) => indexAny(s, chars, false),
     indexFunc: (s, f) => indexFunc(s, f, false),
     indexRune: (s, c) => byteIndex(s, s.indexOf(String.fromCodePoint(c))),
+    join: (elems, sep) => elems.join(sep),
     lastIndex: (s, sub) => byteIndex(s, s.lastIndexOf(sub)),
     lastIndexAny: (s, chars) => indexAny(s, chars, true),
     lastIndexFunc: (s, f) => indexFunc(s, f, true),
@@ -714,6 +783,10 @@ const $rt = (() => {
     replaceAll: (s, old, nw) => replace(s, old, nw, -1),
     runeCount: (s) => codePoints(s).length,
     slice,
+    split: (s, sep) => genSplit(s, sep, false, -1),
+    splitAfter: (s, sep) => genSplit(s, sep, true, -1),
+    splitAfterN: (s, sep, n) => genSplit(s, sep, true, n),
+    splitN: (s, sep, n) => genSplit(s, sep, false, n),
     toLower: (s) => mapCase(s, lower),
     toTitle: (s) => mapCase(s, title),
     toUpper: (s) => mapCase(s, upper),
@@ -756,7 +829,7 @@ const $rt = (() => {
     addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
-    enter, leave, unwind, trace, native, RSError, run,
+    enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop,
     //@section extern
     ext,
     //@end

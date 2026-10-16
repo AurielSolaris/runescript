@@ -495,6 +495,8 @@ func setEnd(s ast.Stmt, end diagnostics.Span) {
 		s.Span.End = end.End
 	case *ast.IncDecStmt:
 		s.Span.End = end.End
+	case *ast.IndexAssignStmt:
+		s.Span.End = end.End
 	}
 }
 
@@ -536,6 +538,20 @@ func (p *parser) simpleStmt(allowDecl bool) ast.Stmt {
 	}
 	next := p.peekTok(1)
 	switch {
+	case next.Kind == lexer.LBracket:
+		// a[i] = v; a[i] += v; or a call such as a[i].push(v);
+		e := p.expr()
+		if call, ok := e.(*ast.CallExpr); ok {
+			return &ast.ExprStmt{Call: call}
+		}
+		ix, ok := e.(*ast.IndexExpr)
+		op := p.tok()
+		if !ok || !(op.Kind == lexer.Assign || (op.Kind == lexer.Op && assignOps[op.Text])) {
+			p.fail(diagnostics.ParseUnexpected, e.NodeSpan(), "only assignments to an element and calls can be used as statements")
+		}
+		p.next()
+		val := p.expr()
+		return &ast.IndexAssignStmt{Target: ix, Op: op.Text, Value: val, Span: span(ix.Span, val.NodeSpan())}
 	case next.Kind == lexer.Assign || (next.Kind == lexer.Op && assignOps[next.Text]):
 		target := p.ident("variable name")
 		op := p.next().Text
@@ -686,10 +702,17 @@ func (p *parser) isCastStart() bool {
 	return p.is(lexer.LParen, "") && t1.Kind == lexer.Keyword && castTypes[t1.Text] && t2.Kind == lexer.RParen
 }
 
-// postfix parses calls and field selections applied to an expression:
-// f(1)(2), (g)(x), e.message.
+// postfix parses calls, field selections, and indexing applied to an
+// expression: f(1)(2), (g)(x), e.message, parts[0].
 func (p *parser) postfix(x ast.Expr) ast.Expr {
-	for p.is(lexer.LParen, "") || p.is(lexer.Dot, "") {
+	for p.is(lexer.LParen, "") || p.is(lexer.Dot, "") || p.is(lexer.LBracket, "") {
+		if p.is(lexer.LBracket, "") {
+			p.next()
+			i := p.expr()
+			end := p.expect(lexer.RBracket, "']' after the index")
+			x = &ast.IndexExpr{X: x, Index: i, Span: span(x.NodeSpan(), end.Span)}
+			continue
+		}
 		if p.is(lexer.Dot, "") {
 			p.next()
 			name := p.ident("field name after '.'")
@@ -804,6 +827,19 @@ func (p *parser) primary() ast.Expr {
 			call := p.callArgs(nil)
 			return &ast.NewExpr{Type: typ, Args: call.Args, Span: diagnostics.Span{Start: t.Span.Start, End: call.Span.End}}
 		}
+	case lexer.LBracket:
+		p.next()
+		lit := &ast.ArrayLit{}
+		for !p.is(lexer.RBracket, "") {
+			lit.Elems = append(lit.Elems, p.expr())
+			if !p.is(lexer.Comma, "") {
+				break
+			}
+			p.next()
+		}
+		end := p.expect(lexer.RBracket, "']' after the array elements")
+		lit.Span = span(t.Span, end.Span)
+		return lit
 	case lexer.LParen:
 		if p.isLambdaStart() {
 			return p.lambda()

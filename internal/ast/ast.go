@@ -159,6 +159,14 @@ type AssignStmt struct {
 	Span   Span
 }
 
+// IndexAssignStmt is `a[i] op value;` where op is one of = += -= *= /= %=.
+type IndexAssignStmt struct {
+	Target *IndexExpr
+	Op     string
+	Value  Expr
+	Span   Span
+}
+
 // IncDecStmt is `name++;` or `name--;` (statement form only, OQ-OP-03).
 type IncDecStmt struct {
 	Target *Ident
@@ -231,33 +239,35 @@ type CatchClause struct {
 	Span Span
 }
 
-func (s *FuncDecl) NodeSpan() Span   { return s.Span }
-func (s *Block) NodeSpan() Span      { return s.Span }
-func (s *VarDecl) NodeSpan() Span    { return s.Span }
-func (s *AssignStmt) NodeSpan() Span { return s.Span }
-func (s *IncDecStmt) NodeSpan() Span { return s.Span }
-func (s *ExprStmt) NodeSpan() Span   { return s.Call.Span }
-func (s *ReturnStmt) NodeSpan() Span { return s.Span }
-func (s *IfStmt) NodeSpan() Span     { return s.Span }
-func (s *WhileStmt) NodeSpan() Span  { return s.Span }
-func (s *ForStmt) NodeSpan() Span    { return s.Span }
-func (s *BranchStmt) NodeSpan() Span { return s.Span }
-func (s *ThrowStmt) NodeSpan() Span  { return s.Span }
-func (s *TryStmt) NodeSpan() Span    { return s.Span }
+func (s *FuncDecl) NodeSpan() Span        { return s.Span }
+func (s *Block) NodeSpan() Span           { return s.Span }
+func (s *VarDecl) NodeSpan() Span         { return s.Span }
+func (s *AssignStmt) NodeSpan() Span      { return s.Span }
+func (s *IncDecStmt) NodeSpan() Span      { return s.Span }
+func (s *IndexAssignStmt) NodeSpan() Span { return s.Span }
+func (s *ExprStmt) NodeSpan() Span        { return s.Call.Span }
+func (s *ReturnStmt) NodeSpan() Span      { return s.Span }
+func (s *IfStmt) NodeSpan() Span          { return s.Span }
+func (s *WhileStmt) NodeSpan() Span       { return s.Span }
+func (s *ForStmt) NodeSpan() Span         { return s.Span }
+func (s *BranchStmt) NodeSpan() Span      { return s.Span }
+func (s *ThrowStmt) NodeSpan() Span       { return s.Span }
+func (s *TryStmt) NodeSpan() Span         { return s.Span }
 
-func (*FuncDecl) stmt()   {}
-func (*Block) stmt()      {}
-func (*VarDecl) stmt()    {}
-func (*AssignStmt) stmt() {}
-func (*IncDecStmt) stmt() {}
-func (*ExprStmt) stmt()   {}
-func (*ReturnStmt) stmt() {}
-func (*IfStmt) stmt()     {}
-func (*WhileStmt) stmt()  {}
-func (*ForStmt) stmt()    {}
-func (*BranchStmt) stmt() {}
-func (*ThrowStmt) stmt()  {}
-func (*TryStmt) stmt()    {}
+func (*FuncDecl) stmt()        {}
+func (*Block) stmt()           {}
+func (*VarDecl) stmt()         {}
+func (*AssignStmt) stmt()      {}
+func (*IncDecStmt) stmt()      {}
+func (*IndexAssignStmt) stmt() {}
+func (*ExprStmt) stmt()        {}
+func (*ReturnStmt) stmt()      {}
+func (*IfStmt) stmt()          {}
+func (*WhileStmt) stmt()       {}
+func (*ForStmt) stmt()         {}
+func (*BranchStmt) stmt()      {}
+func (*ThrowStmt) stmt()       {}
+func (*TryStmt) stmt()         {}
 
 // ---- expressions ----
 
@@ -364,6 +374,20 @@ type NewExpr struct {
 	Span Span
 }
 
+// IndexExpr is `x[i]`, an element of an array.
+type IndexExpr struct {
+	X     Expr
+	Index Expr
+	Span  Span
+}
+
+// ArrayLit is `[a, b, c]`. Its element type comes from where it is used,
+// or from its first element.
+type ArrayLit struct {
+	Elems []Expr
+	Span  Span
+}
+
 // SelectorExpr is `x.name`, a field of a value such as e.message.
 type SelectorExpr struct {
 	X    Expr
@@ -385,6 +409,8 @@ func (e *FloatLit) NodeSpan() Span     { return e.Span }
 func (e *CastExpr) NodeSpan() Span     { return e.Span }
 func (e *NewExpr) NodeSpan() Span      { return e.Span }
 func (e *SelectorExpr) NodeSpan() Span { return e.Span }
+func (e *IndexExpr) NodeSpan() Span    { return e.Span }
+func (e *ArrayLit) NodeSpan() Span     { return e.Span }
 func (e *LambdaExpr) NodeSpan() Span   { return e.Span }
 
 func (*IntLit) expr()       {}
@@ -401,6 +427,8 @@ func (*FloatLit) expr()     {}
 func (*CastExpr) expr()     {}
 func (*NewExpr) expr()      {}
 func (*SelectorExpr) expr() {}
+func (*IndexExpr) expr()    {}
+func (*ArrayLit) expr()     {}
 func (*LambdaExpr) expr()   {}
 
 // ---- templates (rune:dom) ----

@@ -26,6 +26,8 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 					args[i] = int64(0)
 				case types.Char:
 					args[i] = rune('a')
+				case types.Array:
+					args[i] = []string{}
 				case types.Func:
 					if p.Result.Kind == types.Char {
 						args[i] = func(r rune) rune { return r }
@@ -47,6 +49,8 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 				_, ok = out.(int64)
 			case types.Char:
 				_, ok = out.(rune)
+			case types.Array:
+				_, ok = out.([]string)
 			case types.Void:
 				ok = out == nil
 			}
@@ -65,6 +69,7 @@ func TestStringPackageIsComplete(t *testing.T) {
 		"len", "runeCount", "slice",
 		"containsFunc", "containsRune", "indexFunc", "indexRune", "lastIndexFunc", "map",
 		"trimFunc", "trimLeftFunc", "trimRightFunc",
+		"fields", "fieldsFunc", "join", "split", "splitAfter", "splitAfterN", "splitN",
 		"clone", "compare", "contains", "containsAny", "count", "equalFold",
 		"hasPrefix", "hasSuffix", "index", "indexAny", "lastIndex", "lastIndexAny",
 		"repeat", "replace", "replaceAll", "toLower", "toTitle", "toUpper",

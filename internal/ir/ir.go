@@ -91,6 +91,17 @@ type (
 	}
 	// Eval evaluates an expression for its effect.
 	Eval struct{ X Expr }
+	// IndexSet stores Value in element I of the array X. X, then I, are
+	// evaluated once. For a compound assignment (a[i] += v), Value reads
+	// the old element through IndexOld: the element is read, checking the
+	// index, before the rest of Value is evaluated. The index is checked
+	// again when storing. A bad index is a RangeError reported at Site.
+	IndexSet struct {
+		X, I     Expr
+		Value    Expr
+		Compound bool
+		Site     Span
+	}
 	// Return returns Value, or nothing when Value is nil.
 	Return struct{ Value Expr }
 	// If runs Then when Cond holds, otherwise Else (nil, *Block, or *If).
@@ -145,6 +156,7 @@ func (*FuncStmt) stmt() {}
 func (*Decl) stmt()     {}
 func (*Assign) stmt()   {}
 func (*Eval) stmt()     {}
+func (*IndexSet) stmt() {}
 func (*Return) stmt()   {}
 func (*If) stmt()       {}
 func (*While) stmt()    {}
@@ -173,6 +185,29 @@ type (
 	BoolConst struct{ Value bool }
 	// CharConst is a char constant, a Unicode scalar value.
 	CharConst struct{ Value rune }
+	// ArrayLit creates an array of type T holding Elems.
+	ArrayLit struct {
+		T     *types.Type
+		Elems []Expr
+	}
+	// Index reads element I of the array X; a bad index is a RangeError
+	// reported at Site.
+	Index struct {
+		X, I Expr
+		Site Span
+	}
+	// IndexOld is the old element in the Value of a compound IndexSet.
+	IndexOld struct{ T *types.Type }
+	// ArrayLen is X.length.
+	ArrayLen struct{ X Expr }
+	// ArrayPush appends V to the array X.
+	ArrayPush struct{ X, V Expr }
+	// ArrayPop removes and returns the last element of X; an empty array
+	// is a RangeError reported at Site.
+	ArrayPop struct {
+		X    Expr
+		Site Span
+	}
 	// FloatConst is a floating-point constant of float type T, exactly
 	// representable in T.
 	FloatConst struct {
@@ -290,6 +325,12 @@ func (e *IntConst) Type() *types.Type    { return e.T }
 func (e *StringConst) Type() *types.Type { return types.StringT }
 func (e *BoolConst) Type() *types.Type   { return types.BoolT }
 func (e *CharConst) Type() *types.Type   { return types.CharT }
+func (e *ArrayLit) Type() *types.Type    { return e.T }
+func (e *Index) Type() *types.Type       { return e.X.Type().Elem }
+func (e *IndexOld) Type() *types.Type    { return e.T }
+func (e *ArrayLen) Type() *types.Type    { return types.Int }
+func (e *ArrayPush) Type() *types.Type   { return types.VoidT }
+func (e *ArrayPop) Type() *types.Type    { return e.X.Type().Elem }
 func (e *Load) Type() *types.Type        { return e.Var.Type }
 func (e *FuncRef) Type() *types.Type     { return e.Func.Type }
 func (e *Lambda) Type() *types.Type      { return e.Func.Type }

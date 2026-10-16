@@ -22,6 +22,14 @@ func init() {
 	pred := types.NewFunc([]*types.Type{C}, B)
 	mapper := types.NewFunc([]*types.Type{C}, C)
 	isFn := func(a any) func(rune) bool { return a.(func(rune) bool) }
+	// Arrays of strings cross as []string (OQ-TYPE-02a).
+	SA := types.NewArray(S)
+	list := func(v []string) any {
+		if v == nil {
+			return []string{} // an empty array, never nil
+		}
+		return v
+	}
 
 	funcs := []*Func{
 		fn("clone", S, func(a []any) any { return strings.Clone(str(a[0])) }, S),
@@ -47,6 +55,13 @@ func init() {
 		fn("len", I, func(a []any) any { return int64(len(str(a[0]))) }, S),
 		fn("runeCount", I, func(a []any) any { return int64(utf8.RuneCountInString(str(a[0]))) }, S),
 		fn("slice", S, func(a []any) any { return slice(str(a[0]), num(a[1]), num(a[2])) }, S, I, I),
+		fn("fields", SA, func(a []any) any { return list(strings.Fields(str(a[0]))) }, S),
+		fn("fieldsFunc", SA, func(a []any) any { return list(strings.FieldsFunc(str(a[0]), isFn(a[1]))) }, S, pred),
+		fn("join", S, func(a []any) any { return strings.Join(a[0].([]string), str(a[1])) }, SA, S),
+		fn("split", SA, func(a []any) any { return list(strings.Split(str(a[0]), str(a[1]))) }, S, S),
+		fn("splitAfter", SA, func(a []any) any { return list(strings.SplitAfter(str(a[0]), str(a[1]))) }, S, S),
+		fn("splitAfterN", SA, func(a []any) any { return list(strings.SplitAfterN(str(a[0]), str(a[1]), num(a[2]))) }, S, S, I),
+		fn("splitN", SA, func(a []any) any { return list(strings.SplitN(str(a[0]), str(a[1]), num(a[2]))) }, S, S, I),
 		fn("lastIndexAny", I, func(a []any) any { return int64(strings.LastIndexAny(str(a[0]), str(a[1]))) }, S, S),
 		fn("repeat", S, func(a []any) any { return strings.Repeat(str(a[0]), num(a[1])) }, S, I),
 		fn("replace", S, func(a []any) any { return strings.Replace(str(a[0]), str(a[1]), str(a[2]), num(a[3])) }, S, S, S, I),
