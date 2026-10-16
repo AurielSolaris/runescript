@@ -1,4 +1,4 @@
-<!-- source: docs/guide/08-diagnostics.md @ 34d09ef -->
+<!-- source: docs/guide/08-diagnostics.md @ 3cd2c1f -->
 
 <div dir="rtl">
 

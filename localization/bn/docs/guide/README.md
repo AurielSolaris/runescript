@@ -1,4 +1,4 @@
-<!-- source: docs/guide/README.md @ 34d09ef -->
+<!-- source: docs/guide/README.md @ 3cd2c1f -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/README.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 

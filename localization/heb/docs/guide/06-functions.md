@@ -1,4 +1,4 @@
-<!-- source: docs/guide/06-functions.md @ 920cb24 -->
+<!-- source: docs/guide/06-functions.md @ 3cd2c1f -->
 
 <div dir="rtl">
 
