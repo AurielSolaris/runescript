@@ -89,6 +89,15 @@ conditionals, loops, and basic functions.
 - [ ] Objects, arrays, and callbacks across the boundary (need classes and arrays first)
 - [ ] Source maps
 
+### DOM interop (owner decisions, 2026-10-16; started)
+- [x] Internal list of HTML4 and HTML5 elements (`internal/dom`): void and obsolete elements with hints, typed attributes per element (string, url, bool, int, uint, float, keywords, id references, tokens, events), global attributes and event handlers, `data-*`/`aria-*`, and obsolete HTML4 presentational attributes; cross-checked against independent element lists
+- [ ] SVG elements and attributes
+- [ ] Declarative, component-based UI like React's, but without JSX and without a virtual DOM: state changes update the affected DOM nodes directly
+- [ ] Templates in `.rsc` files, in the style of Vue/Svelte components and Laravel Blade: `$if` and `$foreach` directives, `{{ }}` interpolation that escapes HTML by default; `Element` is a type imported with `use "rune:dom";`
+- [ ] Reactivity through explicit SolidJS-style signals, called runes: `Signal<int> count = signal(0);`, read `count()`, written `count.set(n)`; setting one updates only the DOM nodes that read it
+- [ ] Elements: HTML4 (obsolete ones warn), HTML5, and SVG; attributes typed per element
+- [ ] Needs first: a signal type (generics or opaque types), arrays, and callbacks across the JavaScript boundary; classes are not required
+
 ### Bundled JavaScript runtime (planned, not started)
 - [ ] A small ES2015-compatible JavaScript engine shipped with RuneScript, so compiled programs run without Node.js or Bun. It supports the extras above (`BigInt`, `??`, modules)
 - [ ] Conformance: its output is compared against Node.js (ES2022), the reference host
