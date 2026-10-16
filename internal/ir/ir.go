@@ -1,14 +1,18 @@
 // Package ir defines RuneScript's typed intermediate representation.
 //
-// The IR is produced from a checked AST (see Lower) and consumed by code
-// generators such as internal/jsgen. Every expression carries its concrete
+// The IR is the boundary between semantic analysis and the back ends: it
+// is produced from a checked AST (see Lower) and consumed by both the
+// interpreter (internal/runtime) and the JavaScript generator
+// (internal/jsgen). Every expression carries its concrete
 // type: there are no untyped constants, no invalid types, and no names left
 // to resolve. Integer arithmetic is a distinct node (Arith) with the
 // source location a runtime error is reported at, so a back end cannot emit
 // an integer operation without also emitting its range check.
 //
 // Verify re-checks the typing rules on the IR itself, independently of the
-// checker, before any code is generated.
+// checker, before either back end consumes it, so a checker or lowering
+// bug is reported as an internal compiler error instead of running or
+// generating questionable code.
 package ir
 
 import (

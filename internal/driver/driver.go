@@ -139,7 +139,13 @@ func RunInput(in Input, out io.Writer) (int, []*diagnostics.Diagnostic, error) {
 	if diags := needsJS(info); diags != nil {
 		return 0, diags, nil
 	}
-	code, err := runtime.Run(info, out)
+	// The interpreter runs the same verified IR the JavaScript back end
+	// compiles.
+	p := ir.Lower(info)
+	if err := ir.Verify(p); err != nil {
+		return 0, nil, err
+	}
+	code, err := runtime.Run(p, out)
 	return code, nil, err
 }
 
