@@ -80,9 +80,12 @@ redeclared.
 
 ### 2.4 Literals
 - **Integer [v0.1]**: decimal digits. `0` is valid, but other numbers with
-  leading zeros (`007`) are rejected **[provisional]**. Hex, binary, digit
-  separators, and suffixes are **[undecided]**. Literals are non-negative;
-  `-5` is unary minus applied to `5`.
+  leading zeros (`007`) are rejected **[provisional]**. **[2026-10-17]**
+  Also hex `0xFF`, binary `0b1010`, and octal `0o17` (lower-case prefixes
+  only), and `_` between two digits as a separator: `1_000_000`, `0xFFFF_0000`.
+  The largest literal is 2^64 - 1. Suffixes are **[undecided]**. Literals are
+  non-negative; `-5` is unary minus applied to `5`. Any malformed literal is
+  `ASX-LEX-005`.
 - **String [v0.1]**: `"…"` on one line. Escapes: `\n \t \r \\ \" \'`, `\0`
   (U+0000), and **[2026-10-17]** `\u{X…}`: 1 to 6 hex digits naming a
   Unicode scalar value, e.g. `\u{E9}` or `\u{1F600}`. A surrogate
@@ -100,7 +103,8 @@ redeclared.
 - **Boolean [v0.1]**: `true`, `false`.
 - **Float [v0.3]**: digits, then optionally `.` and digits, then
   optionally an exponent: `64.3`, `1e10`, `2.5E-3`. Both sides of the `.`
-  need digits (`.5` and `5.` are not literals). A literal stands for the
+  need digits (`.5` and `5.` are not literals). `_` may separate digits:
+  `1_000.5`. There are no hex floats. A literal stands for the
   nearest float64 to its decimal value; one too large for float64, or so
   small it would round to zero, is `ASX-LEX-005`.
 - **Char [decided 2026-10-16]**: exactly one character between single

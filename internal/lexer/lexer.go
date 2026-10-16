@@ -275,18 +275,22 @@ func (l *lexer) ident(start diagnostics.Pos) {
 	}
 }
 
-// number lexes a decimal integer literal (`42`) or a floating-point
-// literal (`64.3`, `1e10`, `2.5e-3`): digits, then optionally '.' and
-// digits, then optionally an exponent. Both sides of the '.' need digits.
-// Leading zeros (`007`, but not `0.5`) and suffixes are rejected because
-// their semantics are undecided.
+// number lexes a number literal (OQ-NUM-06): a decimal integer (`42`),
+// a hex, binary, or octal integer (`0xFF`, `0b1010`, `0o17`), or a decimal
+// floating-point literal (`64.3`, `1e10`, `2.5e-3`). An underscore may
+// separate two digits: `1_000_000`, `0xFF_FF`, `1_000.5`. Leading zeros
+// (`007`, but not `0.5`), upper-case prefixes, and suffixes are rejected.
 func (l *lexer) number(start diagnostics.Pos) {
-	l.digits()
+	if l.src[l.off] == '0' && strings.IndexByte("xXbBoO", l.peek(1)) >= 0 {
+		l.prefixed(start)
+		return
+	}
+	l.digitRun(isDigit)
 	isFloat := false
 	if l.off < len(l.src) && l.src[l.off] == '.' && isDigit(l.peek(1)) {
 		isFloat = true
 		l.advance()
-		l.digits()
+		l.digitRun(isDigit)
 	}
 	if l.off < len(l.src) && (l.src[l.off] == 'e' || l.src[l.off] == 'E') {
 		k := 1
@@ -298,48 +302,144 @@ func (l *lexer) number(start diagnostics.Pos) {
 			for ; k > 0; k-- {
 				l.advance()
 			}
-			l.digits()
+			l.digitRun(isDigit)
 		}
 	}
 	text := string(l.src[start.Offset:l.off])
-	if l.off < len(l.src) && (isIdentStart(l.src[l.off]) || l.src[l.off] == '.' && isDigit(l.peek(1))) {
-		for l.off < len(l.src) && (isIdentStart(l.src[l.off]) || isDigit(l.src[l.off]) || l.src[l.off] == '.') {
-			l.advance()
-		}
-		l.errorf(diagnostics.LexInvalidNumber, start, "invalid number literal %q", string(l.src[start.Offset:l.off])).
-			WithHelp("number literal prefixes and suffixes are not yet specified")
+	if l.trailing(start) || !l.underscores(start, text, isDigit) {
 		return
 	}
-	if len(text) > 1 && text[0] == '0' && isDigit(text[1]) {
+	digits := strings.ReplaceAll(text, "_", "")
+	if len(digits) > 1 && digits[0] == '0' && isDigit(digits[1]) {
 		l.errorf(diagnostics.LexInvalidNumber, start, "number literal %q has a leading zero", text).
-			WithHelp("leading zeros are rejected until octal/decimal semantics are decided; write the number without them")
+			WithHelp("leading zeros are rejected so that 017 can't be mistaken for octal; write 17, or 0o17 for octal")
 		return
 	}
 	if isFloat {
-		v, err := strconv.ParseFloat(text, 64)
+		v, err := strconv.ParseFloat(digits, 64)
 		switch {
 		case err != nil:
 			l.errorf(diagnostics.LexInvalidNumber, start, "floating-point literal %s is too large", text).
 				WithHelp("the largest float is about 1.7976931348623157e308")
 			return
-		case v == 0 && strings.Trim(strings.SplitN(strings.ToLower(text), "e", 2)[0], "0.") != "":
+		case v == 0 && strings.Trim(strings.SplitN(strings.ToLower(digits), "e", 2)[0], "0.") != "":
 			l.errorf(diagnostics.LexInvalidNumber, start, "floating-point literal %s is too small and would round to 0", text)
 			return
 		}
 		l.emit(Float, text, start)
 		return
 	}
-	if _, err := strconv.ParseUint(text, 10, 64); err != nil {
-		l.errorf(diagnostics.LexInvalidNumber, start, "integer literal %s is too large", text)
+	if _, err := ParseInt(text); err != nil {
+		l.errorf(diagnostics.LexInvalidNumber, start, "integer literal %s is too large", text).
+			WithHelp("the largest integer literal is 18446744073709551615 (0xFFFF_FFFF_FFFF_FFFF)")
 		return
 	}
 	l.emit(Int, text, start)
 }
 
-func (l *lexer) digits() {
-	for l.off < len(l.src) && isDigit(l.src[l.off]) {
+// prefixed lexes a hex, binary, or octal integer literal.
+func (l *lexer) prefixed(start diagnostics.Pos) {
+	p := l.peek(1)
+	l.advance()
+	l.advance()
+	var digit func(byte) bool
+	switch p {
+	case 'x', 'X':
+		digit = isHex
+	case 'b', 'B':
+		digit = func(c byte) bool { return c == '0' || c == '1' }
+	default:
+		digit = func(c byte) bool { return c >= '0' && c <= '7' }
+	}
+	l.digitRun(func(c byte) bool { return digit(c) || isDigit(c) || isHex(c) })
+	text := string(l.src[start.Offset:l.off])
+	if l.trailing(start) {
+		return
+	}
+	switch {
+	case p == 'X' || p == 'B' || p == 'O':
+		l.errorf(diagnostics.LexInvalidNumber, start, "number literal %q has an upper-case prefix", text).
+			WithHelp("write the prefix in lower case: 0x, 0b, or 0o")
+		return
+	case len(text) == 2:
+		l.errorf(diagnostics.LexInvalidNumber, start, "number literal %q has no digits after its prefix", text)
+		return
+	}
+	for _, c := range []byte(text[2:]) {
+		if c != '_' && !digit(c) {
+			l.errorf(diagnostics.LexInvalidNumber, start, "%q is not a digit of %s literal %q", c, map[byte]string{'x': "a hex", 'b': "a binary", 'o': "an octal"}[p], text)
+			return
+		}
+	}
+	if !l.underscores(start, text[2:], digit) {
+		return
+	}
+	if _, err := ParseInt(text); err != nil {
+		l.errorf(diagnostics.LexInvalidNumber, start, "integer literal %s is too large", text).
+			WithHelp("the largest integer literal is 18446744073709551615 (0xFFFF_FFFF_FFFF_FFFF)")
+		return
+	}
+	l.emit(Int, text, start)
+}
+
+// digitRun consumes digits accepted by digit, and underscores.
+func (l *lexer) digitRun(digit func(byte) bool) {
+	for l.off < len(l.src) && (digit(l.src[l.off]) || l.src[l.off] == '_') {
 		l.advance()
 	}
+}
+
+// trailing reports, and consumes, letters or digits stuck to the end of a
+// number literal, such as a suffix (`12abc`, `1.5f`).
+func (l *lexer) trailing(start diagnostics.Pos) bool {
+	if l.off >= len(l.src) || !(isIdentStart(l.src[l.off]) || l.src[l.off] == '.' && (isDigit(l.peek(1)) || l.peek(1) == '_')) {
+		return false
+	}
+	for l.off < len(l.src) && (isIdentStart(l.src[l.off]) || isDigit(l.src[l.off]) || l.src[l.off] == '.') {
+		l.advance()
+	}
+	l.errorf(diagnostics.LexInvalidNumber, start, "invalid number literal %q", string(l.src[start.Offset:l.off])).
+		WithHelp("number literals have no suffixes; hex, binary, and octal are written 0xFF, 0b1010, 0o17")
+	return true
+}
+
+// underscores checks that every '_' in text stands between two digits.
+func (l *lexer) underscores(start diagnostics.Pos, text string, digit func(byte) bool) bool {
+	for i := 0; i < len(text); i++ {
+		if text[i] == '_' && (i == 0 || i == len(text)-1 || !digit(text[i-1]) || !digit(text[i+1])) {
+			l.errorf(diagnostics.LexInvalidNumber, start, "misplaced '_' in number literal %q", string(l.src[start.Offset:l.off])).
+				WithHelp("an underscore can only separate two digits, as in 1_000_000")
+			return false
+		}
+	}
+	return true
+}
+
+// ParseInt returns the value of an integer literal as the lexer accepted
+// it: decimal, or 0x/0b/0o, with underscores.
+func ParseInt(text string) (uint64, error) {
+	text = strings.ReplaceAll(text, "_", "")
+	base := 10
+	if len(text) > 1 && text[0] == '0' {
+		switch text[1] {
+		case 'x':
+			base = 16
+		case 'b':
+			base = 2
+		case 'o':
+			base = 8
+		}
+		if base != 10 {
+			text = text[2:]
+		}
+	}
+	return strconv.ParseUint(text, base, 64)
+}
+
+// ParseFloat returns the value of a floating-point literal as the lexer
+// accepted it.
+func ParseFloat(text string) (float64, error) {
+	return strconv.ParseFloat(strings.ReplaceAll(text, "_", ""), 64)
 }
 
 func (l *lexer) string(start diagnostics.Pos) {

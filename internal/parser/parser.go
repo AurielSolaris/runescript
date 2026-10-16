@@ -4,7 +4,6 @@
 package parser
 
 import (
-	"strconv"
 	"unicode/utf8"
 
 	"github.com/AurielSolaris/runescript/internal/ast"
@@ -794,11 +793,11 @@ func (p *parser) primary() ast.Expr {
 	switch t.Kind {
 	case lexer.Float:
 		p.next()
-		v, _ := strconv.ParseFloat(t.Text, 64) // range already checked by the lexer
+		v, _ := lexer.ParseFloat(t.Text) // range already checked by the lexer
 		return &ast.FloatLit{Value: v, Text: t.Text, Span: t.Span}
 	case lexer.Int:
 		p.next()
-		v, _ := strconv.ParseUint(t.Text, 10, 64) // range already checked by the lexer
+		v, _ := lexer.ParseInt(t.Text) // range already checked by the lexer
 		return &ast.IntLit{Value: v, Text: t.Text, Span: t.Span}
 	case lexer.String:
 		p.next()
