@@ -5,6 +5,7 @@ package driver
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -28,6 +29,9 @@ type Input struct {
 	Notes io.Writer
 	// Warnings says how warnings are reported.
 	Warnings WarningPolicy
+	// Files, if set, receives the absolute paths of the files the program
+	// was loaded from, even when it has errors (watch mode uses them).
+	Files func(paths []string)
 }
 
 // WarningPolicy controls warnings. Warnings are only reported for programs
@@ -65,6 +69,20 @@ func CheckInput(in Input) (*checker.Info, []*diagnostics.Diagnostic, error) {
 		if prog, diags, err = loader.Load(in.Path, in.Dir); err != nil {
 			return nil, nil, err
 		}
+	}
+	if in.Files != nil {
+		paths := make([]string, 0, len(prog.Files))
+		for _, f := range prog.Files {
+			p := f.Source.Name
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(prog.Dir, filepath.FromSlash(p))
+			}
+			if abs, err := filepath.Abs(p); err == nil {
+				p = abs
+			}
+			paths = append(paths, p)
+		}
+		in.Files(paths)
 	}
 	for _, f := range prog.Files {
 		// A UTF-8 byte-order mark is dropped silently: it changes nothing.

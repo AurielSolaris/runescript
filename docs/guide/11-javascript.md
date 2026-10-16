@@ -213,6 +213,41 @@ export const halveEven = (n) => {
 };
 ```
 
+## Live reload: `runescript dev`
+
+`runescript dev` serves a program on your machine while you work on it.
+Every time you save one of its files, it compiles the program again and
+reloads the browser. When the program doesn't compile, the page keeps
+running the last good build and shows the errors in an overlay until you
+fix them. Warnings go to the browser console and the terminal.
+
+```sh
+runescript dev app.rsc             # http://127.0.0.1:5173/, reloads on every save
+runescript dev --open --port 8080 app.rsc
+runescript run --watch tool.rsc    # for command-line programs: runs again on every save
+```
+
+- It serves the folder of the entry file. An `index.html` there is used as
+  the page, with the dev client added. It should load the module as
+  `./app.js`, the same name `runescript build` writes, so the page works
+  unchanged in production. Without an `index.html`, a page with
+  `<div id="app">` is generated that runs the program and shows its `trace`
+  output.
+- The compiled module is kept in memory, so nothing is written to disk.
+  Other files in the folder are served as they are, such as helper modules
+  for extern functions, style sheets, and images.
+- It listens only on `127.0.0.1`. The default port is 5173, and the next
+  free port is used if it's taken. An explicit `--port` must be free.
+- `-Werror` and `--allow` work as for `build`.
+
+This is live reload: the page starts over after each change. Hot module
+replacement, which swaps changed components and keeps their runes'
+values, is planned for `rune:dom` components.
+
+For programs that don't use a browser, `runescript run --watch` runs the
+program again whenever one of its files changes. A run that is still going
+when you save finishes first.
+
 ## Limits of the JavaScript target
 
 - **Stack depth.** Browsers and Node.js often run out of stack before

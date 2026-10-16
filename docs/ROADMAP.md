@@ -100,6 +100,12 @@ conditionals, loops, and basic functions.
 - [ ] Templates switch to SVG inside `<svg>` (and back to HTML inside `foreignObject`)
 - [ ] Needs first: a signal type (generics or opaque types), arrays, and callbacks across the JavaScript boundary; classes are not required
 
+### Live reload (owner request, 2026-10-16)
+- [x] `runescript dev`: serves the entry file's folder on 127.0.0.1 (port 5173, or the next free one), compiles in memory, rebuilds when a program file changes, reloads the browser over Server-Sent Events, and shows compile errors in an overlay; the user's `index.html` or a generated page
+- [x] `runescript run --watch`: runs a command-line program again whenever one of its files changes
+- [x] Polling file watcher (`internal/watch`), standard library only; tests for the server, the watcher, and watch mode, and a check in Edge of reload and the overlay
+- [ ] Hot module replacement for `rune:dom` components, keeping their runes' values (needs components)
+
 ### Bundled JavaScript runtime (planned, not started)
 - [ ] A small ES2015-compatible JavaScript engine shipped with RuneScript, so compiled programs run without Node.js or Bun. It supports the extras above (`BigInt`, `??`, modules)
 - [ ] Conformance: its output is compared against Node.js (ES2022), the reference host

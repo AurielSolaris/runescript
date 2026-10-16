@@ -71,6 +71,9 @@ protected int main() {
   checked against its declared type
 - Warnings for unused variables, parameters, and uses, unreachable code, and
   discarded results, with `-Werror` and `--allow <code>`
+- Live reload while you work: `runescript dev app.rsc` serves a web program
+  and reloads the browser on every save; `runescript run --watch` re-runs a
+  command-line program
 
 **On JavaScript compatibility:** RuneScript does not yet promise full
 JavaScript compatibility. What it promises is strict code: unlike

@@ -2,11 +2,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	goruntime "runtime"
 	"runtime/debug"
@@ -22,11 +24,17 @@ import (
 const Version = "0.3.0-dev"
 
 const usage = `usage:
-  runescript run [flags] <file>     check and run a program
+  runescript run [flags] [--watch] <file>
+                             check and run a program; --watch runs it again
+                             whenever one of its files changes
   runescript check [flags] <file>   check a program without running it
   runescript build [flags] [--target js] [-o <out.js>] <file>
                              compile a program to a JavaScript module
                              (default output: <file> with a .js extension)
+  runescript dev [flags] [--port <n>] [--open] <file>
+                             serve the program on localhost and reload the
+                             browser whenever one of its files changes
+                             (default port 5173)
   runescript version         print the version
 
 flags:
@@ -55,11 +63,18 @@ func cli(args []string, stdout, stderr io.Writer) int {
 	if len(args) >= 1 && args[0] == "build" {
 		return build(args[1:], stderr)
 	}
+	if len(args) >= 1 && args[0] == "dev" {
+		return dev(args[1:], stderr)
+	}
 	if len(args) < 2 || (args[0] != "run" && args[0] != "check") {
 		fmt.Fprint(stderr, usage)
 		return exitUsage
 	}
 	fs, policy := flags(args[0], stderr)
+	watching := false
+	if args[0] == "run" {
+		fs.BoolVar(&watching, "watch", false, "")
+	}
 	if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 || policy.err != nil {
 		usageError(stderr, policy.err)
 		return exitUsage
@@ -69,6 +84,11 @@ func cli(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage
+	}
+	if watching {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		return watchRun(ctx, in, stdout, stderr)
 	}
 	if args[0] == "check" {
 		_, diags, err := driver.CheckInput(in)
@@ -82,6 +102,11 @@ func cli(args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
+	return runOnce(in, stdout, stderr)
+}
+
+// runOnce checks and runs a program and returns the exit status.
+func runOnce(in driver.Input, stdout, stderr io.Writer) int {
 	code, diags, err := driver.RunInput(in, stdout)
 	if diags != nil {
 		report(stderr, diags)
