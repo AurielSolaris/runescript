@@ -129,7 +129,7 @@ func TestParseErrors(t *testing.T) {
 		{"unclosed index", "package p;\npublic void f() {\n    trace(a[1);\n}", diagnostics.ParseUnexpected, "3:14"},
 		{"unclosed array", "package p;\npublic void f() {\n    trace([1, 2);\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"index increment", "package p;\npublic void f() {\n    a[0]++;\n}", diagnostics.ParseUnexpected, "3:5"},
-		{"empty hole","package p;\npublic void f() {\n    trace($\"a{}\");\n}", diagnostics.ParseUnexpected, "3:15"},
+		{"empty hole", "package p;\npublic void f() {\n    trace($\"a{}\");\n}", diagnostics.ParseUnexpected, "3:15"},
 		{"two values in a hole", "package p;\npublic void f() {\n    trace($\"{a b}\");\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"cast of nothing", "package p;\npublic void f() {\n    trace((int));\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"reserved type in body", "package p;\npublic void f() {\n    array x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
