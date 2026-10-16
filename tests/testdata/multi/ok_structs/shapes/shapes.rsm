@@ -1,0 +1,27 @@
+package shapes;
+
+public struct Point {
+    int x;
+    int y;
+}
+
+public struct Circle {
+    Point center;
+    int radius;
+}
+
+// Visible only inside package shapes.
+protected struct Grid {
+    int step;
+}
+
+public Circle grow(Circle c, int by) {
+    Circle bigger = c;
+    bigger.radius += by;
+    return bigger;
+}
+
+public int gridStep() {
+    Grid g = Grid{step: 5};
+    return g.step;
+}

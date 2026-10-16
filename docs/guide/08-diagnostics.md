@@ -93,6 +93,8 @@ The parser stops at the first syntax error.
 | `ASX-TYPE-023` | An extern function's parameter or result has a type that can't cross the JavaScript boundary, e.g. a function type |
 | `ASX-TYPE-024` | An extern declaration of a `rune:` function doesn't match that function's type |
 | `ASX-TYPE-025` | Wrong type arguments: `Array` takes one element type (`Array<string>`), `Signal` takes one number, `bool`, or `string` type (`Signal<int>`); other types take none |
+| `ASX-TYPE-026` | A struct literal that misses a field, names one twice, or names one the struct doesn't have: `Point{x: 1}` |
+| `ASX-TYPE-027` | A struct that contains itself by value, directly or through other structs; hold it in an `Array` instead |
 
 ## Template errors
 

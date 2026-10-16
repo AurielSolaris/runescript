@@ -48,6 +48,16 @@ type Value struct {
 	// Arr is an array. Arrays are held by reference: copying the Value
 	// shares the elements.
 	Arr *ArrayValue
+	// St is a struct. A StructValue is never changed after it is built
+	// (a field assignment builds a changed copy), so sharing one between
+	// Values is the same as copying it.
+	St *StructValue
+}
+
+// StructValue holds the fields of a struct of type T.
+type StructValue struct {
+	T      *types.Type
+	Fields []Value
 }
 
 // ArrayValue holds the elements of an array.
@@ -69,6 +79,25 @@ func (v Value) String() string {
 		if v.Bits == 64 {
 			return strconv.FormatUint(uint64(v.Int), 10)
 		}
+	case types.Struct:
+		// Point{x: 1, name: "a", initial: 'b'}: strings and chars quoted.
+		var b strings.Builder
+		b.WriteString(v.St.T.Name + "{")
+		for i, f := range v.St.Fields {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(v.St.T.Fields[i].Name + ": ")
+			switch f.Kind {
+			case types.String:
+				b.WriteString(`"` + f.Str + `"`)
+			case types.Char:
+				b.WriteString("'" + f.String() + "'")
+			default:
+				b.WriteString(f.String())
+			}
+		}
+		return b.String() + "}"
 	}
 	return strconv.FormatInt(v.Int, 10)
 }
@@ -509,6 +538,20 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 		return Value{Kind: types.Void}
 	case *ir.ArrayLit:
 		return Value{Kind: types.Array, Arr: &ArrayValue{Elems: in.exprs(f, e.Elems)}}
+	case *ir.StructLit:
+		st := &StructValue{T: e.T, Fields: make([]Value, len(e.T.Fields))}
+		for _, init := range e.Inits {
+			st.Fields[init.Index] = in.expr(f, init.Value)
+		}
+		return Value{Kind: types.Struct, St: st}
+	case *ir.GetField:
+		return in.expr(f, e.X).St.Fields[e.Index]
+	case *ir.WithField:
+		old := in.expr(f, e.X).St
+		v := in.expr(f, e.Value)
+		st := &StructValue{T: old.T, Fields: append([]Value(nil), old.Fields...)}
+		st.Fields[e.Index] = v
+		return Value{Kind: types.Struct, St: st}
 	case *ir.Index:
 		a := in.expr(f, e.X).Arr
 		i := in.expr(f, e.I)
@@ -563,6 +606,14 @@ func compare(op string, x, y Value) bool {
 		}
 	case types.String:
 		c = strings.Compare(x.Str, y.Str)
+	case types.Struct:
+		// == and != only: equal when every field is.
+		for i := range x.St.Fields {
+			if !compare("==", x.St.Fields[i], y.St.Fields[i]) {
+				c = 1
+				break
+			}
+		}
 	case types.Bool:
 		if x.Bool != y.Bool {
 			c = 1

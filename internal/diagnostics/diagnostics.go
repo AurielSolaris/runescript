@@ -102,18 +102,20 @@ const (
 	TargetNeedsJS      Code = "TARGET-002"
 
 	// Templates (rune:dom).
-	TmplPlacement      Code = "TMPL-001" // a template that does not end a function returning Element
-	TmplUnknownElement Code = "TMPL-002"
-	TmplUnknownAttr    Code = "TMPL-003"
-	TmplBadValue       Code = "TMPL-004" // a static attribute value the attribute cannot take
-	TmplBadInterp      Code = "TMPL-005" // a {{ }} value of the wrong type
-	TmplDuplicateAttr  Code = "TMPL-006"
-	TmplNeedsDOM       Code = "TMPL-007" // a template without use "rune:dom"
-	TypeArgs           Code = "TYPE-025" // wrong type arguments, e.g. Signal<Error>
-	RunNoMountTarget   Code = "RUN-009"  // dom.renderApp found no element
-	RunDOMValue        Code = "RUN-010"  // a {{ }} value an attribute cannot take
-	RunIndex           Code = "RUN-011"  // an array index out of range, or pop of an empty array
-	RunShift           Code = "RUN-012"  // a shift count outside 0 to the width minus 1
+	TmplPlacement       Code = "TMPL-001" // a template that does not end a function returning Element
+	TmplUnknownElement  Code = "TMPL-002"
+	TmplUnknownAttr     Code = "TMPL-003"
+	TmplBadValue        Code = "TMPL-004" // a static attribute value the attribute cannot take
+	TmplBadInterp       Code = "TMPL-005" // a {{ }} value of the wrong type
+	TmplDuplicateAttr   Code = "TMPL-006"
+	TmplNeedsDOM        Code = "TMPL-007" // a template without use "rune:dom"
+	TypeArgs            Code = "TYPE-025" // wrong type arguments, e.g. Signal<Error>
+	TypeStructLit       Code = "TYPE-026" // a struct literal with a missing, unknown, or repeated field
+	TypeRecursiveStruct Code = "TYPE-027" // a struct that contains itself by value
+	RunNoMountTarget    Code = "RUN-009"  // dom.renderApp found no element
+	RunDOMValue         Code = "RUN-010"  // a {{ }} value an attribute cannot take
+	RunIndex            Code = "RUN-011"  // an array index out of range, or pop of an empty array
+	RunShift            Code = "RUN-012"  // a shift count outside 0 to the width minus 1
 
 	// Warnings. A warning does not stop a program from running unless
 	// warnings are treated as errors (-Werror).

@@ -113,6 +113,9 @@ func (l *lowerer) lambda(e *ast.LambdaExpr) *Func {
 // typeOf resolves a written type. The checker has accepted it, so it is
 // one of the built-in types or a function type over them.
 func (l *lowerer) typeOf(ref *ast.TypeRef) *types.Type {
+	if t, ok := l.info.TypeRefs[ref]; ok {
+		return l.concreteType(ref, t)
+	}
 	if ref.Func != nil {
 		params := make([]*types.Type, len(ref.Func.Params))
 		for i, p := range ref.Func.Params {
@@ -205,17 +208,16 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 			value = binary(strings.TrimSuffix(s.Op, "="), v.Type, &Load{Var: v}, value, s.Span)
 		}
 		return &Assign{Var: v, Value: value}
-	case *ast.IndexAssignStmt:
-		set := &IndexSet{X: l.expr(s.Target.X), I: l.expr(s.Target.Index), Site: s.Span}
+	case *ast.SetStmt:
 		value := l.expr(s.Value)
-		if s.Op != "=" {
-			elem := l.concrete(s.Target, l.info.Types[s.Target])
-			old := &IndexOld{T: elem}
-			value = binary(strings.TrimSuffix(s.Op, "="), elem, old, value, s.Span)
-			set.Compound = true
-		}
-		set.Value = value
-		return set
+		t := l.concrete(s.Target, l.info.Types[s.Target])
+		op := strings.TrimSuffix(s.Op, "=")
+		return l.store(s.Target, s.Op != "=", func(old Expr) Expr {
+			if s.Op == "=" {
+				return value
+			}
+			return binary(op, t, old, value, s.Span)
+		}, s.Span)
 	case *ast.IncDecStmt:
 		v := l.lookup(s.Target.Name)
 		one := &IntConst{T: v.Type, Value: 1}
@@ -274,6 +276,45 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 	return nil
 }
 
+// store lowers an assignment to the place target, whose new value is
+// update(old); useOld reports whether update reads old. A variable is
+// assigned, an element is set with IndexSet (reading the old element
+// first when it is needed), and a struct field becomes an assignment of
+// a changed copy to the place holding the struct: p.a.b = v is
+// p = WithField(p, a, WithField(p.a, b, v)).
+func (l *lowerer) store(target ast.Expr, useOld bool, update func(old Expr) Expr, site Span) Stmt {
+	switch t := unparenAST(target).(type) {
+	case *ast.Ident:
+		v := l.lookup(t.Name)
+		return &Assign{Var: v, Value: update(&Load{Var: v})}
+	case *ast.IndexExpr:
+		set := &IndexSet{X: l.expr(t.X), I: l.expr(t.Index), Site: site, Compound: useOld}
+		set.Value = update(&IndexOld{T: l.concrete(t, l.info.Types[t])})
+		return set
+	case *ast.SelectorExpr:
+		st := l.concrete(t.X, l.info.Types[t.X])
+		i := types.FieldIndex(st, t.Name.Name)
+		if i < 0 {
+			l.ice("struct %s has no field %s", st, t.Name.Name)
+		}
+		return l.store(t.X, true, func(old Expr) Expr {
+			return &WithField{X: old, Index: i, Value: update(&GetField{X: old, Index: i})}
+		}, site)
+	}
+	l.ice("cannot store to %T", target)
+	return nil
+}
+
+func unparenAST(e ast.Expr) ast.Expr {
+	for {
+		p, ok := e.(*ast.ParenExpr)
+		if !ok {
+			return e
+		}
+		e = p.X
+	}
+}
+
 func (l *lowerer) ifStmt(s *ast.IfStmt) *If {
 	out := &If{Cond: l.expr(s.Cond), Then: l.block(s.Then)}
 	switch e := s.Else.(type) {
@@ -286,6 +327,13 @@ func (l *lowerer) ifStmt(s *ast.IfStmt) *If {
 }
 
 // ---- expressions ----
+
+func (l *lowerer) concreteType(ref *ast.TypeRef, t *types.Type) *types.Type {
+	if t.Kind == types.Invalid {
+		l.ice("type %s at %s was not resolved", ref, ref.Span.Start)
+	}
+	return t
+}
 
 // concrete returns t, which must be a fully resolved type.
 func (l *lowerer) concrete(e ast.Expr, t *types.Type) *types.Type {
@@ -324,6 +372,9 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		if x.Type().Kind == types.Array {
 			return &ArrayLen{X: x}
 		}
+		if x.Type().Kind == types.Struct {
+			return &GetField{X: x, Index: types.FieldIndex(x.Type(), e.Name.Name)}
+		}
 		return &Field{X: x, Name: e.Name.Name, T: l.concrete(e, l.info.Types[e])}
 	case *ast.ParenExpr:
 		return l.expr(e.X)
@@ -349,6 +400,12 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		return &BoolConst{Value: e.Value}
 	case *ast.CharLit:
 		return &CharConst{Value: e.Value}
+	case *ast.StructLit:
+		lit := &StructLit{T: l.concrete(e, l.info.Types[e])}
+		for _, fi := range e.Fields {
+			lit.Inits = append(lit.Inits, FieldInit{Index: types.FieldIndex(lit.T, fi.Name.Name), Value: l.expr(fi.Value)})
+		}
+		return lit
 	case *ast.ArrayLit:
 		lit := &ArrayLit{T: l.concrete(e, l.info.Types[e])}
 		for _, x := range e.Elems {

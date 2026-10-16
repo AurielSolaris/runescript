@@ -235,6 +235,8 @@ func (c *checker) exprInner(e ast.Expr) operand {
 		return operand{typ: c.index(e)}
 	case *ast.ArrayLit:
 		return operand{typ: c.arrayLit(e, nil)}
+	case *ast.StructLit:
+		return operand{typ: c.structLit(e)}
 	case *ast.BoolLit:
 		return operand{typ: types.BoolT}
 	case *ast.ParenExpr:
@@ -289,6 +291,9 @@ func (c *checker) ident(e *ast.Ident) *types.Type {
 	case sym.fn != nil:
 		c.info.FuncRefs[e] = sym.fn
 		return sym.fn.Type
+	case sym.st != nil:
+		c.errorf(diagnostics.NameNotAValue, e.Span, "'%s' is a struct type, not a value", e.Name).
+			WithHelp(fmt.Sprintf("build one with a literal, e.g. %s{...}", e.Name))
 	case sym.ext != nil:
 		c.externValueError(e)
 	case crossed && !isRune(sym):
@@ -359,6 +364,18 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 	case "==", "!=":
 		if x.typ.Kind == y.typ.Kind && (x.typ.Kind == types.Bool || x.typ.Kind == types.String) {
 			return operand{typ: types.BoolT}
+		}
+		if x.typ.Kind == types.Struct || y.typ.Kind == types.Struct {
+			switch {
+			case !types.Identical(x.typ, y.typ):
+				c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' compares '%s' with '%s'", op, x.typ, y.typ)
+			case !types.Comparable(x.typ):
+				c.errorf(diagnostics.TypeBadOperand, opSpan, "structs of type %s cannot be compared", x.typ).
+					WithHelp("== compares every field, and arrays, functions, and errors cannot be compared; compare the fields you need")
+			default:
+				return operand{typ: types.BoolT}
+			}
+			return invalid
 		}
 	case "+":
 		// Concatenation joins two strings; nothing is converted implicitly
@@ -496,6 +513,15 @@ func floatOf(a, b *types.Type) string {
 	return "float"
 }
 
+// literalHint suggests a literal for struct type t: "x: ..., y: ...".
+func literalHint(t *types.Type) string {
+	parts := make([]string, len(t.Fields))
+	for i, f := range t.Fields {
+		parts[i] = f.Name + ": ..."
+	}
+	return strings.Join(parts, ", ")
+}
+
 // wider names the wider of two integer types of the same signedness, to
 // suggest a conversion that cannot lose the value.
 func wider(a, b *types.Type) *types.Type {
@@ -619,6 +645,9 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 			if t := c.defaulted(a).typ; t.Kind == types.Array {
 				c.errorf(diagnostics.TypeBadOperand, a.NodeSpan(), "arrays cannot be traced").
 					WithHelp(`join the elements first, e.g. trace(string.join(names, ", "))`)
+			} else if t.Kind == types.Struct && !types.Traceable(t) {
+				c.errorf(diagnostics.TypeBadOperand, a.NodeSpan(), "structs of type %s cannot be traced: a field is an array or a function", t).
+					WithHelp("trace the fields you need")
 			} else if t.Kind == types.Void {
 				c.errorf(diagnostics.TypeVoidValue, a.NodeSpan(), "expression has type 'void' and cannot be traced")
 			} else if t.Kind == types.Func {
@@ -642,6 +671,9 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	case sym.fn != nil:
 		c.info.Callees[e] = sym.fn
 		return c.checkArgs(sym.fn.Type, e, "function '"+name+"'")
+	case sym.st != nil:
+		c.errorf(diagnostics.NameNotCallable, e.Fn.Span, "'%s' is a struct type, not a function", name).
+			WithHelp(fmt.Sprintf("build a struct with a literal naming its fields, e.g. %s{%s}", name, literalHint(sym.st.Type)))
 	case sym.ext != nil:
 		c.info.Externs[e] = sym.ext
 		return c.checkArgs(sym.ext.Type, e, "extern function '"+name+"'")
@@ -1046,6 +1078,8 @@ func (c *checker) selectorOf(e *ast.SelectorExpr, t *types.Type) *types.Type {
 		return types.InvalidT
 	case t.Kind == types.Array:
 		return c.arrayField(e, t)
+	case t.Kind == types.Struct:
+		return c.structField(e, t)
 	case t.Kind != types.Error:
 		c.errorf(diagnostics.TypeNoField, e.Name.Span, "values of type '%s' have no fields", t)
 		return types.InvalidT

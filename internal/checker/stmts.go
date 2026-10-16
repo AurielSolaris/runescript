@@ -40,8 +40,8 @@ func (c *checker) stmt(s ast.Stmt) {
 		c.declareVar(s.Name, t, false)
 	case *ast.AssignStmt:
 		c.assignStmt(s)
-	case *ast.IndexAssignStmt:
-		c.indexAssign(s)
+	case *ast.SetStmt:
+		c.setStmt(s)
 	case *ast.IncDecStmt:
 		if v := c.target(s.Target); v != nil && v.typ.Kind != types.Invalid && !types.IsInteger(v.typ) {
 			c.errorf(diagnostics.TypeBadOperand, s.Span, "operator '%s' requires an integer variable, but '%s' has type '%s'", s.Op, s.Target.Name, v.typ)

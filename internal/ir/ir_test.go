@@ -77,6 +77,13 @@ public int main() {
 	}
 }
 
+// pointT is struct Point { int x; int y; }.
+var pointT = func() *types.Type {
+	t := types.NewStruct("Point")
+	t.Fields = []*types.Field{{Name: "x", Type: types.Int}, {Name: "y", Type: types.Int}}
+	return t
+}()
+
 // Verify catches IR that breaks the typing rules, whatever produced it.
 func TestVerifyRejects(t *testing.T) {
 	u := &Var{Name: "u", Type: types.Uint}
@@ -92,19 +99,25 @@ func TestVerifyRejects(t *testing.T) {
 		"bitwise on bools":    &Eval{X: &Bits{Op: "&", T: types.BoolT, X: &BoolConst{}, Y: &BoolConst{}}},
 		"bitwise mixed widths": &Eval{X: &Bits{Op: "|", T: types.Int, X: &Load{Var: s},
 			Y: &IntConst{T: types.Int8, Value: 1}}},
-		"complement a string": &Eval{X: &Complement{X: &StringConst{}}},
-		"shift a float":       &Eval{X: &Shift{Op: "<<", X: &FloatConst{T: types.FloatT, Value: 1}, Count: &IntConst{T: types.Int}}},
-		"shift by a string":   &Eval{X: &Shift{Op: ">>", X: &Load{Var: s}, Count: &StringConst{}}},
-		"join of an int":      &Eval{X: &Concat{Parts: []Expr{&StringConst{}, &Load{Var: s}}}},
-		"empty join":          &Eval{X: &Concat{}},
-		"surrogate char":      &Eval{X: &CharConst{Value: 0xD800}},
-		"char arithmetic":     &Eval{X: &Arith{Op: "+", T: types.CharT, X: &CharConst{Value: 'a'}, Y: &CharConst{Value: 'b'}}},
-		"char to float":       &Eval{X: &Convert{X: &CharConst{Value: 'a'}, To: types.FloatT}},
-		"mixed array":         &Eval{X: &ArrayLit{T: types.NewArray(types.Int), Elems: []Expr{&StringConst{}}}},
-		"index a string":      &Eval{X: &Index{X: &StringConst{}, I: &IntConst{T: types.Int}}},
-		"string index":        &Eval{X: &Index{X: &ArrayLit{T: types.NewArray(types.Int)}, I: &StringConst{}}},
-		"push wrong type":     &Eval{X: &ArrayPush{X: &ArrayLit{T: types.NewArray(types.Int)}, V: &StringConst{}}},
-		"store wrong type":    &IndexSet{X: &ArrayLit{T: types.NewArray(types.Int)}, I: &IntConst{T: types.Int}, Value: &BoolConst{}},
+		"complement a string":            &Eval{X: &Complement{X: &StringConst{}}},
+		"shift a float":                  &Eval{X: &Shift{Op: "<<", X: &FloatConst{T: types.FloatT, Value: 1}, Count: &IntConst{T: types.Int}}},
+		"shift by a string":              &Eval{X: &Shift{Op: ">>", X: &Load{Var: s}, Count: &StringConst{}}},
+		"struct literal missing a field": &Eval{X: &StructLit{T: pointT, Inits: []FieldInit{{Index: 0, Value: &IntConst{T: types.Int}}}}},
+		"struct field wrong type": &Eval{X: &StructLit{T: pointT, Inits: []FieldInit{{Index: 0, Value: &StringConst{}},
+			{Index: 1, Value: &IntConst{T: types.Int}}}}},
+		"field of a non-struct": &Eval{X: &GetField{X: &Load{Var: s}, Index: 0}},
+		"field out of range": &Eval{X: &GetField{X: &StructLit{T: pointT, Inits: []FieldInit{{Index: 0, Value: &IntConst{T: types.Int}},
+			{Index: 1, Value: &IntConst{T: types.Int}}}}, Index: 2}},
+		"join of an int":   &Eval{X: &Concat{Parts: []Expr{&StringConst{}, &Load{Var: s}}}},
+		"empty join":       &Eval{X: &Concat{}},
+		"surrogate char":   &Eval{X: &CharConst{Value: 0xD800}},
+		"char arithmetic":  &Eval{X: &Arith{Op: "+", T: types.CharT, X: &CharConst{Value: 'a'}, Y: &CharConst{Value: 'b'}}},
+		"char to float":    &Eval{X: &Convert{X: &CharConst{Value: 'a'}, To: types.FloatT}},
+		"mixed array":      &Eval{X: &ArrayLit{T: types.NewArray(types.Int), Elems: []Expr{&StringConst{}}}},
+		"index a string":   &Eval{X: &Index{X: &StringConst{}, I: &IntConst{T: types.Int}}},
+		"string index":     &Eval{X: &Index{X: &ArrayLit{T: types.NewArray(types.Int)}, I: &StringConst{}}},
+		"push wrong type":  &Eval{X: &ArrayPush{X: &ArrayLit{T: types.NewArray(types.Int)}, V: &StringConst{}}},
+		"store wrong type": &IndexSet{X: &ArrayLit{T: types.NewArray(types.Int)}, I: &IntConst{T: types.Int}, Value: &BoolConst{}},
 		"bool attr bound to string": &Eval{X: &Template{Root: &TElement{Tag: "input",
 			Attrs: []*TAttr{{Name: "disabled", Mode: AttrBool, Value: &StringConst{}}}}}},
 		"keyword attr bound to int": &Eval{X: &Template{Root: &TElement{Tag: "input",

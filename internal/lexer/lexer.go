@@ -36,6 +36,7 @@ const (
 	LBracket
 	RBracket
 	Comma
+	Colon
 	Semicolon
 	Dot
 	Assign
@@ -45,7 +46,7 @@ const (
 var kindNames = map[Kind]string{
 	EOF: "end of file", Ident: "identifier", Int: "integer literal", Float: "floating-point literal",
 	String: "string literal", StrHead: "interpolated string", StrMid: "'}'", StrTail: "'}'", Char: "character literal", Keyword: "keyword", Reserved: "reserved word",
-	LParen: "'('", RParen: "')'", LBrace: "'{'", RBrace: "'}'", LBracket: "'['", RBracket: "']'", Comma: "','",
+	LParen: "'('", RParen: "')'", LBrace: "'{'", RBrace: "'}'", LBracket: "'['", RBracket: "']'", Comma: "','", Colon: "':'",
 	Semicolon: "';'", Dot: "'.'", Assign: "'='", Op: "operator",
 }
 
@@ -62,13 +63,13 @@ var keywords = map[string]bool{
 	"int8": true, "int16": true, "int32": true, "int64": true,
 	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
 	"try": true, "catch": true, "finally": true, "throw": true, "new": true,
-	"extern": true,
+	"extern": true, "struct": true,
 }
 
 // reserved words named by the specification for features that are not yet
 // implemented. Reserving them now keeps today's programs valid later.
 var reserved = map[string]bool{
-	"class": true, "struct": true,
+	"class": true,
 	"array": true, "matrix": true,
 }
 
@@ -162,7 +163,7 @@ func (l *lexer) emit(kind Kind, text string, start diagnostics.Pos) {
 }
 
 var punct = map[byte]Kind{
-	'(': LParen, ')': RParen, '{': LBrace, '}': RBrace, '[': LBracket, ']': RBracket,
+	'(': LParen, ')': RParen, '{': LBrace, '}': RBrace, '[': LBracket, ']': RBracket, ':': Colon,
 	',': Comma, ';': Semicolon, '.': Dot,
 }
 

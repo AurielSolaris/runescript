@@ -147,6 +147,12 @@ type (
 	}
 )
 
+// FieldInit gives field Index of a struct literal its Value.
+type FieldInit struct {
+	Index int
+	Value Expr
+}
+
 // Catch is one catch clause: it catches errors of type T (or a subtype)
 // into Var.
 type Catch struct {
@@ -188,6 +194,26 @@ type (
 	BoolConst struct{ Value bool }
 	// CharConst is a char constant, a Unicode scalar value.
 	CharConst struct{ Value rune }
+	// StructLit creates a struct of type T. Inits give every field a
+	// value, in the order they are evaluated (the literal's source order).
+	StructLit struct {
+		T     *types.Type
+		Inits []FieldInit
+	}
+	// GetField reads field Index of the struct X.
+	GetField struct {
+		X     Expr
+		Index int
+	}
+	// WithField is a copy of the struct X with field Index set to Value.
+	// Structs are values, so a field assignment p.x = v is lowered to
+	// p = WithField(p, x, v): no struct is ever changed in place, and a
+	// copy can never be told from the original.
+	WithField struct {
+		X     Expr
+		Index int
+		Value Expr
+	}
 	// ArrayLit creates an array of type T holding Elems.
 	ArrayLit struct {
 		T     *types.Type
@@ -348,6 +374,9 @@ func (e *StringConst) Type() *types.Type { return types.StringT }
 func (e *BoolConst) Type() *types.Type   { return types.BoolT }
 func (e *CharConst) Type() *types.Type   { return types.CharT }
 func (e *ArrayLit) Type() *types.Type    { return e.T }
+func (e *StructLit) Type() *types.Type   { return e.T }
+func (e *GetField) Type() *types.Type    { return e.X.Type().Fields[e.Index].Type }
+func (e *WithField) Type() *types.Type   { return e.X.Type() }
 func (e *Index) Type() *types.Type       { return e.X.Type().Elem }
 func (e *IndexOld) Type() *types.Type    { return e.T }
 func (e *ArrayLen) Type() *types.Type    { return types.Int }

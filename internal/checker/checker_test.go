@@ -427,3 +427,57 @@ func TestStdMath(t *testing.T) {
 		}
 	}
 }
+
+const pointDecl = "public struct Point {\n    int x;\n    int y;\n}\n"
+
+func TestStructs(t *testing.T) {
+	accepted := []string{
+		program("    Point p = Point{x: 1, y: 2};\n    p.x += 1;\n    Point q = p;\n    q.y = 5;\n    trace(p, p == q, p.x + q.y);", pointDecl),
+		program("    Array<Point> ps = [Point{x: 1, y: 2}];\n    ps[0].x = 3;\n    trace(ps[0]);", pointDecl),
+		program("    Line l = Line{a: Point{x: 0, y: 0}, b: Point{y: 1, x: 1}};\n    l.b.x = 2;\n    trace(l);",
+			pointDecl+"public struct Line {\n    Point a;\n    Point b;\n}\n"),
+		program("    Node n = Node{value: 1, children: []};\n    n.children.push(Node{value: 2, children: []});\n    trace(n.children.length);",
+			"public struct Node {\n    int value;\n    Array<Node> children;\n}\n"),
+		program("    trace(make(3).x);", pointDecl+"public Point make(int v) {\n    return Point{x: v, y: v};\n}\n"),
+	}
+	for _, src := range accepted {
+		if diags := check(t, src); len(diags) != 0 {
+			t.Errorf("unexpected diagnostics: %v\n%s", diags, src)
+		}
+	}
+	rejected := []struct {
+		name, src string
+		code      diagnostics.Code
+		pos       string
+	}{
+		{"missing field", program("    Point p = Point{x: 1};", pointDecl), diagnostics.TypeStructLit, "3:15"},
+		{"unknown field", program("    Point p = Point{x: 1, y: 2, z: 3};", pointDecl), diagnostics.TypeStructLit, "3:33"},
+		{"repeated field", program("    Point p = Point{x: 1, x: 2, y: 3};", pointDecl), diagnostics.TypeStructLit, "3:27"},
+		{"wrong field type", program("    Point p = Point{x: \"a\", y: 2};", pointDecl), diagnostics.TypeMismatch, "3:24"},
+		{"unknown struct", program("    Pt p = Pt{x: 1};", ""), diagnostics.TypeUnknown, "3:5"},
+		{"no such field", program("    Point p = Point{x: 1, y: 2};\n    trace(p.z);", pointDecl), diagnostics.TypeNoField, "4:13"},
+		{"assign to param field", program("", pointDecl+"public void f(Point p) {\n    p.x = 1;\n}\n"), diagnostics.NameAssignToParam, "11:5"},
+		{"temporary field", program("    make().x = 1;", pointDecl+"public Point make() {\n    return Point{x: 0, y: 0};\n}\n"), diagnostics.NameAssignToParam, "3:5"},
+		{"struct called", program("    Point p = Point(1, 2);", pointDecl), diagnostics.NameNotCallable, "3:15"},
+		{"struct as value", program("    trace(Point);", pointDecl), diagnostics.NameNotAValue, "3:11"},
+		{"recursive struct", program("", "public struct Bad {\n    int v;\n    Bad next;\n}\n"), diagnostics.TypeRecursiveStruct, "6:15"},
+		{"mutual recursion", program("", "public struct A {\n    B b;\n}\npublic struct B {\n    A a;\n}\n"), diagnostics.TypeRecursiveStruct, "6:15"},
+		{"compare with arrays", program("    Bag a = Bag{items: []};\n    trace(a == a);", "public struct Bag {\n    Array<int> items;\n}\n"), diagnostics.TypeBadOperand, "4:13"},
+		{"compare different", program("    Point p = Point{x: 1, y: 2};\n    Size s = Size{x: 1, y: 2};\n    trace(p == s);", pointDecl+"public struct Size {\n    int x;\n    int y;\n}\n"), diagnostics.TypeBadOperand, "5:13"},
+		{"struct to struct", program("    Size s = Point{x: 1, y: 2};", pointDecl+"public struct Size {\n    int x;\n    int y;\n}\n"), diagnostics.TypeMismatch, "3:14"},
+		{"duplicate struct", program("", pointDecl+pointDecl), diagnostics.NameRedeclared, "10:15"},
+		{"struct and function", program("", pointDecl+"public void Point() { }\n"), diagnostics.NameRedeclared, "10:13"},
+		{"builtin name", program("", "public struct Error {\n    int x;\n}\n"), diagnostics.NameRedeclared, "6:15"},
+		{"void field", program("", "public struct V {\n    void v;\n}\n"), diagnostics.TypeVoidValue, "7:5"},
+		{"length assign", program("    Array<int> a = [];\n    a.length = 3;", ""), diagnostics.NameAssignToParam, "4:7"},
+		{"trace with array field", program("    Bag a = Bag{items: []};\n    trace(a);", "public struct Bag {\n    Array<int> items;\n}\n"), diagnostics.TypeBadOperand, "4:11"},
+	}
+	for _, c := range rejected {
+		t.Run(c.name, func(t *testing.T) {
+			diags := check(t, c.src)
+			if len(diags) == 0 || diags[0].Code != c.code || diags[0].Span.Start.String() != c.pos {
+				t.Errorf("got %v, want %s at %s", diags, c.code, c.pos)
+			}
+		})
+	}
+}

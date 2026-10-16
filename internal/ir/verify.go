@@ -74,7 +74,7 @@ func (v *verifier) fn(f *Func) {
 func (v *verifier) storable(t *types.Type, what string) {
 	switch t.Kind {
 	case types.Signed, types.Unsigned, types.Bool, types.String, types.Func, types.Float, types.Error,
-		types.Element, types.Signal, types.Char, types.Array:
+		types.Element, types.Signal, types.Char, types.Array, types.Struct:
 		return
 	}
 	v.fail("%s has type %s, which cannot hold a value", what, t)
@@ -214,6 +214,23 @@ func (v *verifier) expr(e Expr) *types.Type {
 		if t := v.expr(e.X); t.Kind != types.Error || want == nil || !types.Identical(want, e.T) {
 			v.fail("field %s of %s", e.Name, t)
 		}
+	case *StructLit:
+		if e.T.Kind != types.Struct || len(e.Inits) != len(e.T.Fields) {
+			v.fail("struct literal of %s with %d fields", e.T, len(e.Inits))
+		}
+		given := map[int]bool{}
+		for _, in := range e.Inits {
+			if in.Index < 0 || in.Index >= len(e.T.Fields) || given[in.Index] {
+				v.fail("struct literal of %s sets field %d badly", e.T, in.Index)
+			}
+			given[in.Index] = true
+			v.same(e.T.Fields[in.Index].Type, in.Value, "field "+e.T.Fields[in.Index].Name)
+		}
+	case *GetField:
+		v.field(e.X, e.Index)
+	case *WithField:
+		t := v.field(e.X, e.Index)
+		v.same(t.Fields[e.Index].Type, e.Value, "field "+t.Fields[e.Index].Name)
 	case *ArrayLit:
 		if e.T.Kind != types.Array || !types.IsElemType(e.T.Elem) {
 			v.fail("array literal of type %s", e.T)
@@ -282,6 +299,7 @@ func (v *verifier) expr(e Expr) *types.Type {
 		ordered := e.Op != "==" && e.Op != "!="
 		switch {
 		case x.Kind == types.Signed || x.Kind == types.Unsigned || x.Kind == types.Float || x.Kind == types.Char:
+		case !ordered && x.Kind == types.Struct && types.Comparable(x):
 		case !ordered && (x.Kind == types.Bool || x.Kind == types.String):
 		default:
 			v.fail("operator %s is not defined on %s", e.Op, x)
@@ -331,6 +349,10 @@ func (v *verifier) expr(e Expr) *types.Type {
 		for _, a := range e.Args {
 			switch t := v.expr(a); t.Kind {
 			case types.Signed, types.Unsigned, types.Bool, types.String, types.Float, types.Error, types.Char:
+			case types.Struct:
+				if !types.Traceable(t) {
+					v.fail("trace of %s", t)
+				}
 			default:
 				v.fail("trace of %s", t)
 			}
@@ -339,6 +361,14 @@ func (v *verifier) expr(e Expr) *types.Type {
 		v.fail("unexpected expression %T", e)
 	}
 	return e.Type()
+}
+
+func (v *verifier) field(x Expr, i int) *types.Type {
+	t := v.expr(x)
+	if t.Kind != types.Struct || i < 0 || i >= len(t.Fields) {
+		v.fail("field %d of a %s", i, t)
+	}
+	return t
 }
 
 func (v *verifier) array(x Expr, what string) *types.Type {

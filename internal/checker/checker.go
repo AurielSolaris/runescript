@@ -63,6 +63,8 @@ type Info struct {
 	DOMCalls map[*ast.CallExpr]string
 	// QualRefs maps pkg.name used as a value to the function it names.
 	QualRefs map[*ast.SelectorExpr]*FuncSym
+	// TypeRefs holds the type every written type resolved to.
+	TypeRefs map[*ast.TypeRef]*types.Type
 	// ArrayCalls maps calls of array methods (a.push(v), a.pop()) to the
 	// method's name. The array is e.Pkg, or the X of the SelectorExpr
 	// callee.
@@ -106,6 +108,7 @@ type symbol struct {
 	isCatch bool       // the error variable of a catch clause (read-only)
 	fn      *FuncSym   // non-nil for named functions
 	ext     *ExternSym // non-nil for extern functions (typ is their type)
+	st      *StructSym // non-nil for struct types (typ is the struct type)
 	decl    *ast.Ident // where a variable or parameter is declared
 	read    bool       // the variable's value is used somewhere
 	written bool       // the variable is assigned after its declaration
@@ -121,11 +124,16 @@ type scope struct {
 }
 
 type checker struct {
-	info   *Info
-	diags  []*diagnostics.Diagnostic
-	scopes []*scope
-	pkgs   map[*loader.Package]*scope // public and protected top-level functions
-	files  map[*loader.File]*scope    // private top-level functions of each file
+	// structs are the declared structs, in declaration order; fileQuals
+	// and fileBroken are each file's use qualifiers, bound once.
+	structs    []*StructSym
+	fileQuals  map[*loader.File]map[string]*binding
+	fileBroken map[*loader.File]bool
+	info       *Info
+	diags      []*diagnostics.Diagnostic
+	scopes     []*scope
+	pkgs       map[*loader.Package]*scope // public and protected top-level functions
+	files      map[*loader.File]*scope    // private top-level functions of each file
 	// domUsed holds the files that use rune:dom's types or signal(), so
 	// their use "rune:dom" is not reported as unused.
 	domUsed map[*loader.File]bool
@@ -182,13 +190,16 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 			DOMCalls:    map[*ast.CallExpr]string{},
 			QualRefs:    map[*ast.SelectorExpr]*FuncSym{},
 			ArrayCalls:  map[*ast.CallExpr]string{},
+			TypeRefs:    map[*ast.TypeRef]*types.Type{},
 
 			TemplateElems: map[*ast.MElement]*dom.Element{},
 			TemplateAttrs: map[*ast.MAttr]*dom.Attr{},
 		},
-		pkgs:    map[*loader.Package]*scope{},
-		files:   map[*loader.File]*scope{},
-		domUsed: map[*loader.File]bool{},
+		pkgs:       map[*loader.Package]*scope{},
+		files:      map[*loader.File]*scope{},
+		fileQuals:  map[*loader.File]map[string]*binding{},
+		fileBroken: map[*loader.File]bool{},
+		domUsed:    map[*loader.File]bool{},
 	}
 	for _, p := range prog.Packages {
 		c.pkgs[p] = &scope{syms: map[string]*symbol{}}
@@ -197,8 +208,23 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 		c.files[f] = &scope{syms: map[string]*symbol{}}
 	}
 
-	// A package's top-level functions are visible in all of its files, so
-	// declare every one before checking any body.
+	// Each file's use qualifiers are bound once, first: signatures and
+	// struct fields may name another package's struct (geom.Point).
+	for _, f := range prog.Files {
+		c.enterFile(f)
+		c.useDecls(f)
+		c.fileQuals[f], c.fileBroken[f] = c.quals, c.broken
+	}
+	// A package's structs and top-level functions are visible in all of
+	// its files, so declare every one before checking any body: struct
+	// names first, then their fields, then function signatures.
+	for _, f := range prog.Files {
+		c.enterFile(f)
+		for _, d := range f.AST.Structs {
+			c.declareStruct(d)
+		}
+	}
+	c.structFields()
 	sigs := map[*ast.FuncDecl]*types.Type{}
 	for _, f := range prog.Files {
 		c.enterFile(f)
@@ -212,7 +238,6 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 	}
 	for _, f := range prog.Files {
 		c.enterFile(f)
-		c.useDecls(f)
 		for _, fn := range f.AST.Funcs {
 			if fn.Body != nil {
 				c.funcBody(fn, sigs[fn])
@@ -235,8 +260,10 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 func (c *checker) enterFile(f *loader.File) {
 	c.file = f
 	c.scopes = []*scope{c.pkgs[f.Package], c.files[f]}
-	c.quals = map[string]*binding{}
-	c.broken = false
+	c.quals, c.broken = c.fileQuals[f], c.fileBroken[f]
+	if c.quals == nil {
+		c.quals = map[string]*binding{}
+	}
 	c.dom = false
 	for _, u := range f.Uses {
 		if u.Kind == loader.UseRune && u.Name == "dom" {
@@ -395,6 +422,18 @@ func (c *checker) reportUndefined(s *scope) {
 // ---- functions ----
 
 func (c *checker) resolveType(ref *ast.TypeRef) *types.Type {
+	t := c.resolveTypeRef(ref)
+	c.info.TypeRefs[ref] = t
+	return t
+}
+
+func (c *checker) resolveTypeRef(ref *ast.TypeRef) *types.Type {
+	if ref.Pkg != nil {
+		if t := c.structType(ref); t != nil {
+			return t
+		}
+		return types.InvalidT
+	}
 	if ref.Func != nil {
 		params := make([]*types.Type, len(ref.Func.Params))
 		for i, p := range ref.Func.Params {
@@ -418,6 +457,9 @@ func (c *checker) resolveType(ref *ast.TypeRef) *types.Type {
 	}
 	t := types.Lookup(ref.Name)
 	if t == nil {
+		if st := c.structType(ref); st != nil {
+			return st
+		}
 		d := c.errorf(diagnostics.TypeUnknown, ref.Span, "unknown type '%s'", ref.Name)
 		switch ref.Name {
 		case "any", "Object", "object", "dynamic", "var", "auto", "unknown", "Any":
@@ -512,6 +554,8 @@ func (c *checker) declareIn(s *scope, fn *ast.FuncDecl, topLevel bool) *types.Ty
 		case f != nil:
 			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "function '%s' is already declared at %s", name, firstDecl(f).Name.Span.Start.Where(c.file.Source)).
 				WithHelp("functions cannot be overloaded; a prototype may appear once, before the definition")
+		case existing.st != nil:
+			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "'%s' is already declared as a struct", name)
 		default:
 			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "'%s' is already declared in this function", name)
 		}

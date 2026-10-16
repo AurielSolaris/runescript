@@ -1,8 +1,6 @@
 package checker
 
 import (
-	"strings"
-
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/types"
@@ -91,26 +89,6 @@ func (c *checker) indexValue(i ast.Expr) {
 	case op.typ.Kind == types.Signed || op.typ.Kind == types.Unsigned || op.typ.Kind == types.Invalid:
 	default:
 		c.errorf(diagnostics.TypeMismatch, i.NodeSpan(), "an index must be an integer, found '%s'", describe(op.typ))
-	}
-}
-
-// indexAssign checks a[i] op= v.
-func (c *checker) indexAssign(s *ast.IndexAssignStmt) {
-	elem := c.index(s.Target)
-	if elem.Kind == types.Invalid {
-		c.expr(s.Value)
-		return
-	}
-	c.info.Types[s.Target] = elem
-	if s.Op == "=" {
-		c.assign(elem, s.Value, "assign")
-		return
-	}
-	op := strings.TrimSuffix(s.Op, "=")
-	y := c.expr(s.Value)
-	t := c.binaryType(op, operand{typ: elem}, y, s.Target, s.Value, s.Span)
-	if t.typ.Kind != types.Invalid && !types.Identical(t.typ, elem) {
-		c.errorf(diagnostics.TypeMismatch, s.Span, "operator '%s' produces '%s', which cannot be stored in '%s'", s.Op, t.typ, elem)
 	}
 }
 

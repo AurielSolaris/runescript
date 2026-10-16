@@ -295,6 +295,28 @@ const $rt = (() => {
     return a.pop();
   }
 
+  // ---- structs (OQ-STRUCT-01) ----
+  //
+  // A struct is a plain object that is never changed once built: a field
+  // assignment builds a changed copy (withField), so objects can be shared
+  // freely while behaving as values, exactly as in the interpreter.
+
+  function withField(o, k, v) {
+    const r = Object.assign({}, o);
+    r[k] = v;
+    return r;
+  }
+  // structEq is == on two structs of the same type, whose fields are all
+  // comparable: numbers (NaN equals nothing), strings, bools, chars, and
+  // structs.
+  function structEq(a, b) {
+    for (const k in a) {
+      const x = a[k], y = b[k];
+      if (typeof x === "object" ? !structEq(x, y) : x !== y) return false;
+    }
+    return true;
+  }
+
   // ---- calls ----
 
   // enter runs at the start of every function body; site is where it was
@@ -1655,7 +1677,7 @@ const $rt = (() => {
     addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU, arN, arW, shift,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
-    enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop,
+    enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop, withField, structEq,
     //@section extern
     ext,
     //@end

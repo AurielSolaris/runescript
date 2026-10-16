@@ -61,6 +61,7 @@ int8 int16 int32 int64                [2026-10-17]
 uint8 uint16 uint32 uint64            [2026-10-17]
 try catch finally throw new           [v0.3]
 extern                                [2026-10-16]
+struct                                [2026-10-17]
 ```
 
 `as` is a keyword only after a `use` path (§4.2). `Error`, `RangeError`,
@@ -73,7 +74,7 @@ Reserved for planned features **[v0.1, provisional]**. They are rejected
 with `ASX-PARSE-002`:
 
 ```
-class struct array matrix
+class array matrix
 ```
 
 `trace` is not a keyword. It is a built-in function name and can't be
@@ -457,8 +458,39 @@ another array (not `Element` or `Signal`).
   widths are numbers. **[provisional]** Explicit widths cannot cross the
   `extern` boundary yet (`ASX-TYPE-023`).
 
+### 5.1e Structs **[decided 2026-10-17, details provisional]**
+```ebnf
+StructDecl = Visibility "struct" Ident "{" { Type Ident ";" } "}" ;
+StructLit  = [ Ident "." ] Ident "{" [ Ident ":" Expr { "," Ident ":" Expr } ] "}" ;
+```
+- A struct is a **value type**: assigning, passing, returning, or storing
+  one copies it, so a change through one name is never seen through
+  another. (Implementations share unchanged structs and copy on write;
+  that is not observable.)
+- It is declared at the top level with an access modifier, like a
+  function: `private` (this file), `protected` (this package), `public`.
+  Another package's struct is named with its qualifier: `geom.Point`.
+- Each struct declaration is its own type, even if another has the same
+  fields. Field types are any value type; a struct may not contain itself
+  by value, directly or through other structs (`ASX-TYPE-027`), but may
+  through an `Array`.
+- A literal gives **every field exactly once**, in any order; there are
+  no default values (`ASX-TYPE-026`). Fields are evaluated in the order
+  written.
+- `p.x` reads a field. `p.x = v` and `p.x op= v` write one where `p` is a
+  variable, an array element, or a field of either (`shapes[i].origin.x`).
+  A field of a parameter is read-only, like the parameter
+  (`ASX-NAME-006`), and so is a field of a temporary value such as `f().x`.
+- `==` and `!=` compare every field; a struct with an array, function, or
+  error field cannot be compared. `trace` shows `Point{x: 1, name: "a"}`,
+  with strings and chars quoted.
+- Arrays held in a struct stay references: copying the struct shares the
+  array.
+- **[undecided]** Methods, constructors, field visibility, and passing
+  structs across the JavaScript boundary.
+
 ### 5.2 Planned types **[planned/undecided]**
-`matrix`, `struct`, and `class`.
+`matrix` and `class`.
 None of these are implemented. Their names are reserved.
 
 ### 5.3 Integer constants **[v0.1, provisional]**

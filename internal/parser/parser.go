@@ -131,9 +131,57 @@ func (p *parser) file() *ast.File {
 			f.Externs = append(f.Externs, p.externDecl())
 			continue
 		}
+		if p.isStructDecl() {
+			f.Structs = append(f.Structs, p.structDecl())
+			continue
+		}
 		f.Funcs = append(f.Funcs, p.funcDecl())
 	}
 	return f
+}
+
+// isStructDecl reports whether a struct declaration starts here:
+// `visibility struct`, or `struct` without the required modifier.
+func (p *parser) isStructDecl() bool {
+	if p.isKeyword("struct") {
+		return true
+	}
+	_, vis := visibilities[p.tok().Text]
+	t := p.peekTok(1)
+	return vis && p.tok().Kind == lexer.Keyword && t.Kind == lexer.Keyword && t.Text == "struct"
+}
+
+// structDecl parses `visibility struct Name { Type field; ... }`.
+func (p *parser) structDecl() *ast.StructDecl {
+	start := p.tok().Span
+	d := &ast.StructDecl{}
+	if p.isKeyword("struct") {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+			"write `public|private|protected struct Name { ... }`, e.g. `public struct Point { int x; int y; }`",
+			"a struct declaration needs an access modifier")
+	}
+	d.Visibility = visibilities[p.next().Text]
+	p.expectKeyword("struct")
+	d.Name = p.ident("struct name")
+	p.noTypeParams()
+	p.expect(lexer.LBrace, "'{' to begin the struct's fields")
+	for !p.is(lexer.RBrace, "") {
+		if p.is(lexer.EOF, "") {
+			p.unexpected("'}' to end the struct")
+		}
+		fd := &ast.FieldDecl{Type: p.typeRef("field type")}
+		fd.Name = p.ident("field name")
+		if p.is(lexer.Assign, "") {
+			p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+				"every field's value is given by the struct literal, e.g. Point{x: 1, y: 2}",
+				"struct fields have no default values")
+		}
+		p.expect(lexer.Semicolon, "';' after the field")
+		d.Fields = append(d.Fields, fd)
+	}
+	end := p.next()
+	d.Span = span(start, end.Span)
+	return d
 }
 
 // externDecl parses `extern "module" Type name(Type p, ...);`.
@@ -303,7 +351,9 @@ func (p *parser) isTypeStart() bool {
 	return (t.Kind == lexer.Keyword && typeKeywords[t.Text] && p.peekTok(1).Kind != lexer.Dot) ||
 		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Ident) ||
 		(t.Kind == lexer.Ident && p.isNamedFuncType()) ||
-		(t.Kind == lexer.Ident && p.genericEnd(1) > 0 && p.peekTok(p.genericEnd(1)).Kind == lexer.Ident)
+		(t.Kind == lexer.Ident && p.genericEnd(1) > 0 && p.peekTok(p.genericEnd(1)).Kind == lexer.Ident) ||
+		// a type of another package: geom.Point p
+		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Dot && p.peekTok(2).Kind == lexer.Ident && p.peekTok(3).Kind == lexer.Ident)
 }
 
 // genericEnd returns the index, relative to the current token, of the
@@ -328,7 +378,7 @@ func (p *parser) genericEnd(i int) int {
 			if depth < 0 {
 				return 0
 			}
-		case t.Kind == lexer.Ident, t.Kind == lexer.Comma, t.Kind == lexer.LParen, t.Kind == lexer.RParen,
+		case t.Kind == lexer.Ident, t.Kind == lexer.Comma, t.Kind == lexer.LParen, t.Kind == lexer.RParen, t.Kind == lexer.Dot,
 			t.Kind == lexer.Keyword && typeKeywords[t.Text]:
 		default:
 			return 0
@@ -386,6 +436,12 @@ func (p *parser) typeRef(what string) *ast.TypeRef {
 	}
 	p.next()
 	ref := &ast.TypeRef{Name: t.Text, Span: t.Span}
+	if t.Kind == lexer.Ident && p.is(lexer.Dot, "") && p.peekTok(1).Kind == lexer.Ident {
+		// A type of another package: geom.Point.
+		p.next()
+		name := p.next()
+		ref = &ast.TypeRef{Pkg: &ast.Ident{Name: t.Text, Span: t.Span}, Name: name.Text, Span: span(t.Span, name.Span)}
+	}
 	if t.Kind == lexer.Ident && p.is(lexer.Op, "<") {
 		p.next()
 		for {
@@ -510,6 +566,9 @@ func (p *parser) stmt() ast.Stmt {
 			"unexpected '{'")
 	case t.Kind == lexer.Reserved:
 		p.notImplemented(t)
+	case t.Kind == lexer.Keyword && visibilities[t.Text] != ast.VisNone && p.isStructDecl():
+		p.failHelp(diagnostics.ParseUnexpected, t.Span, "declare structs at the top level of the file, outside any function",
+			"struct declarations are not allowed inside a function")
 	case t.Kind == lexer.Keyword && visibilities[t.Text] != ast.VisNone:
 		return p.funcDecl() // nested function or prototype
 	}
@@ -528,7 +587,7 @@ func setEnd(s ast.Stmt, end diagnostics.Span) {
 		s.Span.End = end.End
 	case *ast.IncDecStmt:
 		s.Span.End = end.End
-	case *ast.IndexAssignStmt:
+	case *ast.SetStmt:
 		s.Span.End = end.End
 	}
 }
@@ -561,11 +620,7 @@ func (p *parser) simpleStmt(allowDecl bool) ast.Stmt {
 		return &ast.VarDecl{Type: typ, Name: name, Init: init, Span: span(typ.Span, init.NodeSpan())}
 	}
 	if p.isQualifiedStart() || t.Kind == lexer.LParen {
-		e := p.expr()
-		if call, ok := e.(*ast.CallExpr); ok {
-			return &ast.ExprStmt{Call: call}
-		}
-		p.fail(diagnostics.ParseUnexpected, e.NodeSpan(), "only function calls can be used as statements")
+		return p.exprOrSet()
 	}
 	if t.Kind != lexer.Ident {
 		p.unexpected("statement")
@@ -573,19 +628,8 @@ func (p *parser) simpleStmt(allowDecl bool) ast.Stmt {
 	next := p.peekTok(1)
 	switch {
 	case next.Kind == lexer.LBracket:
-		// a[i] = v; a[i] += v; or a call such as a[i].push(v);
-		e := p.expr()
-		if call, ok := e.(*ast.CallExpr); ok {
-			return &ast.ExprStmt{Call: call}
-		}
-		ix, ok := e.(*ast.IndexExpr)
-		op := p.tok()
-		if !ok || !(op.Kind == lexer.Assign || (op.Kind == lexer.Op && assignOps[op.Text])) {
-			p.fail(diagnostics.ParseUnexpected, e.NodeSpan(), "only assignments to an element and calls can be used as statements")
-		}
-		p.next()
-		val := p.expr()
-		return &ast.IndexAssignStmt{Target: ix, Op: op.Text, Value: val, Span: span(ix.Span, val.NodeSpan())}
+		// a[i] = v; a[i].x += v; or a call such as a[i].push(v);
+		return p.exprOrSet()
 	case next.Kind == lexer.Assign || (next.Kind == lexer.Op && assignOps[next.Text]):
 		target := p.ident("variable name")
 		op := p.next().Text
@@ -596,13 +640,33 @@ func (p *parser) simpleStmt(allowDecl bool) ast.Stmt {
 		op := p.next()
 		return &ast.IncDecStmt{Target: target, Op: op.Text, Span: span(target.Span, op.Span)}
 	case next.Kind == lexer.LParen:
-		e := p.expr()
-		if call, ok := e.(*ast.CallExpr); ok {
-			return &ast.ExprStmt{Call: call}
-		}
-		p.fail(diagnostics.ParseUnexpected, e.NodeSpan(), "only function calls can be used as statements")
+		return p.exprOrSet() // a call, or f().x = v (rejected by the checker)
 	}
 	p.fail(diagnostics.ParseUnexpected, t.Span, "expected statement, found %s", t.Describe())
+	return nil
+}
+
+// exprOrSet parses a call statement, or an assignment to an element or a
+// field: a[i] = v, p.x += 1, shapes[i].origin.x = 0.
+func (p *parser) exprOrSet() ast.Stmt {
+	e := p.expr()
+	if call, ok := e.(*ast.CallExpr); ok {
+		return &ast.ExprStmt{Call: call}
+	}
+	op := p.tok()
+	switch e.(type) {
+	case *ast.IndexExpr, *ast.SelectorExpr:
+		if op.Kind == lexer.Assign || (op.Kind == lexer.Op && assignOps[op.Text]) {
+			p.next()
+			val := p.expr()
+			return &ast.SetStmt{Target: e, Op: op.Text, Value: val, Span: span(e.NodeSpan(), val.NodeSpan())}
+		}
+		if op.Kind == lexer.Op && (op.Text == "++" || op.Text == "--") {
+			p.failHelp(diagnostics.ParseUnexpected, op.Span, "write x += 1 or x -= 1 instead",
+				"%s works on variables only", op.Text)
+		}
+	}
+	p.fail(diagnostics.ParseUnexpected, e.NodeSpan(), "only calls and assignments can be used as statements")
 	return nil
 }
 
@@ -778,7 +842,8 @@ func (p *parser) isLambdaStart() bool {
 	case t1.Kind == lexer.Keyword && typeKeywords[t1.Text]:
 		return t2.Kind != lexer.Dot // `(string.trim(x))` is a parenthesized call
 	case t1.Kind == lexer.Ident:
-		return t2.Kind == lexer.Ident || p.genericEnd(2) > 0 && p.peekTok(p.genericEnd(2)).Kind == lexer.Ident
+		return t2.Kind == lexer.Ident || p.genericEnd(2) > 0 && p.peekTok(p.genericEnd(2)).Kind == lexer.Ident ||
+			t2.Kind == lexer.Dot && p.peekTok(3).Kind == lexer.Ident && p.peekTok(4).Kind == lexer.Ident // (geom.Point p)
 	}
 	return false
 }
@@ -819,6 +884,9 @@ func (p *parser) primary() ast.Expr {
 		pkg := &ast.Ident{Name: p.next().Text, Span: t.Span}
 		p.next() // '.'
 		name := p.ident("name after '" + pkg.Name + ".'")
+		if p.isStructLitStart() {
+			return p.structLit(pkg, name)
+		}
 		if !p.is(lexer.LParen, "") {
 			// A field, such as e.message; the checker rejects a package
 			// function used without a call.
@@ -888,6 +956,9 @@ func (p *parser) primary() ast.Expr {
 		return &ast.ParenExpr{X: x, Span: span(t.Span, end.Span)}
 	case lexer.Ident:
 		id := p.ident("name")
+		if p.isStructLitStart() {
+			return p.structLit(nil, id)
+		}
 		if !p.is(lexer.LParen, "") {
 			return id
 		}
@@ -915,6 +986,40 @@ func (p *parser) interpString() *ast.InterpString {
 			return e
 		}
 	}
+}
+
+// isStructLitStart reports whether `{` after a name begins a struct
+// literal: `{}` or `{name:`. A name followed by a block never occurs in
+// an expression, so this cannot be confused with one.
+func (p *parser) isStructLitStart() bool {
+	if !p.is(lexer.LBrace, "") {
+		return false
+	}
+	t1, t2 := p.peekTok(1), p.peekTok(2)
+	return t1.Kind == lexer.RBrace || (t1.Kind == lexer.Ident && t2.Kind == lexer.Colon)
+}
+
+// structLit parses `{field: value, ...}` after the struct's name.
+func (p *parser) structLit(pkg, name *ast.Ident) *ast.StructLit {
+	lit := &ast.StructLit{Pkg: pkg, Name: name}
+	p.expect(lexer.LBrace, "'{'")
+	for !p.is(lexer.RBrace, "") {
+		fi := &ast.FieldInit{Name: p.ident("field name")}
+		p.expect(lexer.Colon, "':' after the field name")
+		fi.Value = p.expr()
+		lit.Fields = append(lit.Fields, fi)
+		if !p.is(lexer.Comma, "") {
+			break
+		}
+		p.next()
+	}
+	end := p.expect(lexer.RBrace, "'}' to end the struct literal")
+	start := name.Span
+	if pkg != nil {
+		start = pkg.Span
+	}
+	lit.Span = span(start, end.Span)
+	return lit
 }
 
 // callArgs parses `(args)` after a callee. fn is nil when the caller sets

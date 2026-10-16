@@ -1,0 +1,9 @@
+package shapes;
+
+protected struct Grid {
+    int step;
+}
+
+private struct Secret {
+    int v;
+}

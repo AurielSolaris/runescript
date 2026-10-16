@@ -15,7 +15,25 @@ type File struct {
 	Uses    []*UseDecl
 	Funcs   []*FuncDecl
 	Externs []*ExternDecl
+	Structs []*StructDecl
 }
+
+// StructDecl is `visibility struct Name { Type field; ... }` at the top
+// level of a file (OQ-STRUCT-01).
+type StructDecl struct {
+	Visibility Visibility
+	Name       *Ident
+	Fields     []*FieldDecl
+	Span       Span
+}
+
+// FieldDecl is one field of a struct: `Type name;`.
+type FieldDecl struct {
+	Type *TypeRef
+	Name *Ident
+}
+
+func (d *StructDecl) NodeSpan() Span { return d.Span }
 
 // ExternDecl is `extern "module" Type name(Type p, ...);`: a function
 // implemented in JavaScript by the named module. It is visible only in
@@ -83,8 +101,10 @@ type Param struct {
 }
 
 // TypeRef is a type as written in source: a named type (Name) or a function
-// type (Func), e.g. `int(int, int)`.
+// type (Func), e.g. `int(int, int)`. Pkg is set for a type of another
+// package, e.g. geom in geom.Point.
 type TypeRef struct {
+	Pkg  *Ident
 	Name string
 	Func *FuncTypeRef
 	// Args are the type arguments of a named type, e.g. int in Signal<int>.
@@ -100,6 +120,9 @@ type FuncTypeRef struct {
 
 // String renders the type as written, e.g. "int(int, int)".
 func (t *TypeRef) String() string {
+	if t.Func == nil && t.Pkg != nil {
+		return t.Pkg.Name + "." + t.Name
+	}
 	if t.Func == nil {
 		if len(t.Args) == 0 {
 			return t.Name
@@ -159,9 +182,11 @@ type AssignStmt struct {
 	Span   Span
 }
 
-// IndexAssignStmt is `a[i] op value;` where op is one of = += -= *= /= %=.
-type IndexAssignStmt struct {
-	Target *IndexExpr
+// SetStmt is `place op value;` for a place other than a variable: an
+// element `a[i]`, a struct field `p.x`, or a chain of them such as
+// `shapes[i].origin.x`. op is = or a compound assignment operator.
+type SetStmt struct {
+	Target Expr // *IndexExpr or *SelectorExpr
 	Op     string
 	Value  Expr
 	Span   Span
@@ -239,35 +264,35 @@ type CatchClause struct {
 	Span Span
 }
 
-func (s *FuncDecl) NodeSpan() Span        { return s.Span }
-func (s *Block) NodeSpan() Span           { return s.Span }
-func (s *VarDecl) NodeSpan() Span         { return s.Span }
-func (s *AssignStmt) NodeSpan() Span      { return s.Span }
-func (s *IncDecStmt) NodeSpan() Span      { return s.Span }
-func (s *IndexAssignStmt) NodeSpan() Span { return s.Span }
-func (s *ExprStmt) NodeSpan() Span        { return s.Call.Span }
-func (s *ReturnStmt) NodeSpan() Span      { return s.Span }
-func (s *IfStmt) NodeSpan() Span          { return s.Span }
-func (s *WhileStmt) NodeSpan() Span       { return s.Span }
-func (s *ForStmt) NodeSpan() Span         { return s.Span }
-func (s *BranchStmt) NodeSpan() Span      { return s.Span }
-func (s *ThrowStmt) NodeSpan() Span       { return s.Span }
-func (s *TryStmt) NodeSpan() Span         { return s.Span }
+func (s *FuncDecl) NodeSpan() Span   { return s.Span }
+func (s *Block) NodeSpan() Span      { return s.Span }
+func (s *VarDecl) NodeSpan() Span    { return s.Span }
+func (s *AssignStmt) NodeSpan() Span { return s.Span }
+func (s *IncDecStmt) NodeSpan() Span { return s.Span }
+func (s *SetStmt) NodeSpan() Span    { return s.Span }
+func (s *ExprStmt) NodeSpan() Span   { return s.Call.Span }
+func (s *ReturnStmt) NodeSpan() Span { return s.Span }
+func (s *IfStmt) NodeSpan() Span     { return s.Span }
+func (s *WhileStmt) NodeSpan() Span  { return s.Span }
+func (s *ForStmt) NodeSpan() Span    { return s.Span }
+func (s *BranchStmt) NodeSpan() Span { return s.Span }
+func (s *ThrowStmt) NodeSpan() Span  { return s.Span }
+func (s *TryStmt) NodeSpan() Span    { return s.Span }
 
-func (*FuncDecl) stmt()        {}
-func (*Block) stmt()           {}
-func (*VarDecl) stmt()         {}
-func (*AssignStmt) stmt()      {}
-func (*IncDecStmt) stmt()      {}
-func (*IndexAssignStmt) stmt() {}
-func (*ExprStmt) stmt()        {}
-func (*ReturnStmt) stmt()      {}
-func (*IfStmt) stmt()          {}
-func (*WhileStmt) stmt()       {}
-func (*ForStmt) stmt()         {}
-func (*BranchStmt) stmt()      {}
-func (*ThrowStmt) stmt()       {}
-func (*TryStmt) stmt()         {}
+func (*FuncDecl) stmt()   {}
+func (*Block) stmt()      {}
+func (*VarDecl) stmt()    {}
+func (*AssignStmt) stmt() {}
+func (*IncDecStmt) stmt() {}
+func (*SetStmt) stmt()    {}
+func (*ExprStmt) stmt()   {}
+func (*ReturnStmt) stmt() {}
+func (*IfStmt) stmt()     {}
+func (*WhileStmt) stmt()  {}
+func (*ForStmt) stmt()    {}
+func (*BranchStmt) stmt() {}
+func (*ThrowStmt) stmt()  {}
+func (*TryStmt) stmt()    {}
 
 // ---- expressions ----
 
@@ -388,6 +413,22 @@ type ArrayLit struct {
 	Span  Span
 }
 
+// StructLit is `Name{field: value, ...}` or `pkg.Name{...}`: a struct
+// value. Fields are in source order, which is the order they are
+// evaluated in.
+type StructLit struct {
+	Pkg    *Ident // nil for a struct of this package
+	Name   *Ident
+	Fields []*FieldInit
+	Span   Span
+}
+
+// FieldInit is `name: value` in a struct literal.
+type FieldInit struct {
+	Name  *Ident
+	Value Expr
+}
+
 // SelectorExpr is `x.name`, a field of a value such as e.message.
 type SelectorExpr struct {
 	X    Expr
@@ -411,6 +452,7 @@ func (e *NewExpr) NodeSpan() Span      { return e.Span }
 func (e *SelectorExpr) NodeSpan() Span { return e.Span }
 func (e *IndexExpr) NodeSpan() Span    { return e.Span }
 func (e *ArrayLit) NodeSpan() Span     { return e.Span }
+func (e *StructLit) NodeSpan() Span    { return e.Span }
 func (e *LambdaExpr) NodeSpan() Span   { return e.Span }
 
 func (*IntLit) expr()       {}
@@ -429,6 +471,7 @@ func (*NewExpr) expr()      {}
 func (*SelectorExpr) expr() {}
 func (*IndexExpr) expr()    {}
 func (*ArrayLit) expr()     {}
+func (*StructLit) expr()    {}
 func (*LambdaExpr) expr()   {}
 
 // ---- templates (rune:dom) ----

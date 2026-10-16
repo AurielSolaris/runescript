@@ -47,6 +47,9 @@ const (
 	// Array is Array<Elem>: a growable list, held by reference
 	// (OQ-TYPE-02a).
 	Array
+	// Struct is a user-defined struct: a value type with named Fields
+	// (OQ-STRUCT-01). Each declaration is its own type.
+	Struct
 )
 
 // Type is a semantic type. Name preserves the spelling used in source so
@@ -64,8 +67,66 @@ type Type struct {
 	Bits int
 	// Super is the supertype of an error type other than Error.
 	Super *Type
-	// Elem is the value type of a Signal.
+	// Elem is the value type of a Signal or an Array.
 	Elem *Type
+	// Fields are the fields of a Struct, in declaration order.
+	Fields []*Field
+}
+
+// Field is a field of a struct type.
+type Field struct {
+	Name string
+	Type *Type
+}
+
+// NewStruct returns a new struct type named name. Its fields are set once
+// the declaration's field types are resolved.
+func NewStruct(name string) *Type { return &Type{Kind: Struct, Name: name} }
+
+// FieldIndex returns the index of the field named name in struct type t,
+// or -1.
+func FieldIndex(t *Type, name string) int {
+	for i, f := range t.Fields {
+		if f.Name == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// Comparable reports whether == and != apply to values of type t: numbers,
+// bools, strings, chars, and structs whose fields are all comparable.
+func Comparable(t *Type) bool {
+	switch t.Kind {
+	case Signed, Unsigned, Float, Bool, String, Char:
+		return true
+	case Struct:
+		for _, f := range t.Fields {
+			if !Comparable(f.Type) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// Traceable reports whether trace can print values of type t: anything
+// but void, functions, arrays, the rune:dom types, and structs holding
+// one of those.
+func Traceable(t *Type) bool {
+	switch t.Kind {
+	case Signed, Unsigned, Float, Bool, String, Char, Error:
+		return true
+	case Struct:
+		for _, f := range t.Fields {
+			if !Traceable(f.Type) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // NewSignal returns the type Signal<elem>.
@@ -82,7 +143,7 @@ func NewArray(elem *Type) *Type {
 // value type except the rune:dom types, which belong to the web layer.
 func IsElemType(t *Type) bool {
 	switch t.Kind {
-	case Signed, Unsigned, Float, Bool, String, Char, Func, Error, Array:
+	case Signed, Unsigned, Float, Bool, String, Char, Func, Error, Array, Struct:
 		return true
 	}
 	return false
@@ -214,7 +275,7 @@ func Identical(a, b *Type) bool {
 	switch a.Kind {
 	case Float, Signed, Unsigned:
 		return a.Bits == b.Bits
-	case Error:
+	case Error, Struct:
 		return a == b
 	case Signal, Array:
 		return Identical(a.Elem, b.Elem)

@@ -57,7 +57,8 @@ func Generate(p *ir.Program, opts Options) (out []byte, diags []*diagnostics.Dia
 		return nil, nil, err
 	}
 	g := &gen{indent: 1, sites: map[diagnostics.Pos]int{}, files: map[*diagnostics.Source]int{},
-		helpers: map[string]bool{}, tables: map[string]bool{}, stdPkgs: map[string]bool{}}
+		helpers: map[string]bool{}, tables: map[string]bool{}, stdPkgs: map[string]bool{},
+		formatters: map[*types.Type]string{}}
 	pkgs := map[string]bool{}
 	for _, f := range p.Funcs {
 		pkgs[f.Pkg] = true
@@ -133,8 +134,11 @@ type gen struct {
 	helpers map[string]bool             // runtime members used, e.g. "addI"
 	tables  map[string]bool             // Unicode tables used, e.g. "upper"
 	stdPkgs map[string]bool             // standard library packages called, e.g. "string"
-	tmps    int                         // template node variables so far
-	diags   []*diagnostics.Diagnostic
+	// formatters are the trace formatters of struct types, defined in fmts.
+	formatters map[*types.Type]string
+	fmts       strings.Builder
+	tmps       int // template node variables so far
+	diags      []*diagnostics.Diagnostic
 
 	// imports are the JavaScript modules the program imports, in order,
 	// with the namespace each is imported as. externs maps each extern to
@@ -256,6 +260,7 @@ func (g *gen) module(p *ir.Program, opts Options, entrySite int) string {
 		m.WriteString("  };\n")
 	}
 	m.WriteString("\n")
+	m.WriteString(g.fmts.String())
 	m.WriteString(g.b.String())
 	m.WriteString("\n  return {\n")
 	quoted := make([]string, len(g.names))
@@ -573,6 +578,18 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		return quote(e.Value), precCall
 	case *ir.BoolConst:
 		return strconv.FormatBool(e.Value), precCall
+	case *ir.StructLit:
+		// Keys in source order, so the values are evaluated in that order.
+		parts := make([]string, len(e.Inits))
+		for i, in := range e.Inits {
+			parts[i] = fieldKey(e.T.Fields[in.Index].Name) + ": " + g.expr(in.Value, precAssign)
+		}
+		return "({" + strings.Join(parts, ", ") + "})", precCall
+	case *ir.GetField:
+		return g.expr(e.X, precCall) + "." + fieldKey(e.X.Type().Fields[e.Index].Name), precCall
+	case *ir.WithField:
+		return fmt.Sprintf("%s(%s, %s, %s)", g.use("withField"), g.expr(e.X, precAssign),
+			quote(fieldKey(e.X.Type().Fields[e.Index].Name)), g.expr(e.Value, precAssign)), precCall
 	case *ir.ArrayLit:
 		parts := make([]string, len(e.Elems))
 		for i, x := range e.Elems {
@@ -696,6 +713,13 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		}
 		return "(" + strings.Join(parts, " + ") + ")", precCall
 	case *ir.Compare:
+		if e.X.Type().Kind == types.Struct {
+			eq := g.use("structEq") + "(" + g.expr(e.X, precAssign) + ", " + g.expr(e.Y, precAssign) + ")"
+			if e.Op == "!=" {
+				return "!" + eq, precUnary
+			}
+			return eq, precCall
+		}
 		op := compareOps[e.Op]
 		// Both sides use op.prec+1, so a chain such as a == b == c keeps
 		// explicit parentheses.
@@ -769,6 +793,8 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 				parts[i] = g.use("f32str") + "(" + parts[i] + ")"
 			} else if t.Kind == types.Char {
 				parts[i] = "String.fromCodePoint(" + g.expr(a, precAssign) + ")"
+			} else if t.Kind == types.Struct {
+				parts[i] = g.formatter(t) + "(" + parts[i] + ")"
 			}
 		}
 		return g.use("trace") + "(" + strings.Join(parts, ", ") + ")", precCall
@@ -860,6 +886,53 @@ func kindCode(t *types.Type) string {
 		return "c"
 	}
 	panic("jsgen: conversion of " + t.Name)
+}
+
+// fieldKey is the property name of a struct field in JavaScript. A field
+// named __proto__ would set the object's prototype, so it is renamed.
+func fieldKey(name string) string {
+	if name == "__proto__" {
+		return "$__proto__"
+	}
+	return name
+}
+
+// formatter returns the name of a function that shows a struct of type t
+// as trace does, Point{x: 1, name: "a"}, defining it on first use.
+func (g *gen) formatter(t *types.Type) string {
+	if name, ok := g.formatters[t]; ok {
+		return name
+	}
+	name := "$show" + strconv.Itoa(len(g.formatters)) + "_" + t.Name
+	g.formatters[t] = name
+	var parts []string
+	for i, f := range t.Fields {
+		v := "v." + fieldKey(f.Name)
+		switch ft := f.Type; {
+		case ft.Kind == types.String:
+			v = `'"' + ` + v + ` + '"'`
+		case ft.Kind == types.Char:
+			v = `"'" + String.fromCodePoint(` + v + `) + "'"`
+		case ft.Kind == types.Float && ft.Bits == 32:
+			v = g.use("f32str") + "(" + v + ")"
+		case ft.Kind == types.Struct:
+			v = g.formatter(ft) + "(" + v + ")"
+		default:
+			v = "String(" + v + ")"
+		}
+		sep := ", "
+		if i == 0 {
+			sep = ""
+		}
+		parts = append(parts, quote(sep+f.Name+": ")+" + "+v)
+	}
+	body := quote(t.Name + "{")
+	for _, p := range parts {
+		body += " + " + p
+	}
+	body += ` + "}"`
+	fmt.Fprintf(&g.fmts, "  const %s = (v) => %s;\n", name, body)
+	return name
 }
 
 // charComment renders a char constant for a comment: the character
