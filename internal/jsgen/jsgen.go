@@ -57,7 +57,7 @@ func Generate(p *ir.Program, opts Options) (out []byte, diags []*diagnostics.Dia
 		return nil, nil, err
 	}
 	g := &gen{indent: 1, sites: map[diagnostics.Pos]int{}, files: map[*diagnostics.Source]int{},
-		helpers: map[string]bool{}, tables: map[string]bool{}}
+		helpers: map[string]bool{}, tables: map[string]bool{}, stdPkgs: map[string]bool{}}
 	pkgs := map[string]bool{}
 	for _, f := range p.Funcs {
 		pkgs[f.Pkg] = true
@@ -78,7 +78,7 @@ func Generate(p *ir.Program, opts Options) (out []byte, diags []*diagnostics.Dia
 // used to test the runtime directly.
 func Runtime() string {
 	return fillRuntime(map[string]bool{"upper": true, "lower": true, "title": true, "fold": true},
-		map[string]bool{"extern": true, "dom": true, "string": true})
+		map[string]bool{"extern": true, "dom": true, "string": true, "math": true})
 }
 
 // helperSections names the optional runtime section (runtime.js,
@@ -86,7 +86,7 @@ func Runtime() string {
 // uses one of its helpers, so scripts carry no DOM or extern code: the web
 // support is a layer on top of the scripting language, not part of it.
 var helperSections = map[string]string{
-	"ext": "extern", "std": "string",
+	"ext":    "extern",
 	"signal": "dom", "el": "dom", "text": "dom", "attr": "dom", "bindText": "dom",
 	"bindNode": "dom", "bindAttr": "dom", "on": "dom", "when": "dom", "renderApp": "dom",
 }
@@ -120,7 +120,7 @@ func sections(src string, keep map[string]bool) string {
 	return out.String()
 }
 
-var sectionNames = map[string]bool{"extern": true, "dom": true, "string": true}
+var sectionNames = map[string]bool{"extern": true, "dom": true, "string": true, "math": true}
 
 type gen struct {
 	b       strings.Builder
@@ -132,6 +132,7 @@ type gen struct {
 	fnames  map[*ir.Func]string         // JavaScript names of top-level functions
 	helpers map[string]bool             // runtime members used, e.g. "addI"
 	tables  map[string]bool             // Unicode tables used, e.g. "upper"
+	stdPkgs map[string]bool             // standard library packages called, e.g. "string"
 	tmps    int                         // template node variables so far
 	diags   []*diagnostics.Diagnostic
 
@@ -226,6 +227,9 @@ func (g *gen) module(p *ir.Program, opts Options, entrySite int) string {
 		m.WriteString("\n")
 	}
 	keep := map[string]bool{}
+	for pkg := range g.stdPkgs { // each std package has a section
+		keep[pkg] = true
+	}
 	for h := range g.helpers {
 		if sec, ok := helperSections[h]; ok {
 			keep[sec] = true
@@ -718,7 +722,8 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 			result = `"uint"`
 		}
 		parts := []string{strconv.Itoa(g.site(e.Site)), quote(e.Pkg + "." + e.Func.Name), result,
-			g.use("std") + "." + e.Func.Package + "." + e.Func.Name}
+			g.use("std") + "." + e.Func.Package + "." + e.Func.JSName}
+		g.stdPkgs[e.Func.Package] = true
 		site := g.site(e.Site)
 		for _, a := range e.Args {
 			if a.Type().Kind == types.Func {

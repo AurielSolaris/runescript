@@ -830,6 +830,8 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 			goArgs[i] = a.Bool
 		case types.Char:
 			goArgs[i] = rune(a.Int)
+		case types.Float:
+			goArgs[i] = a.F
 		case types.Func:
 			goArgs[i] = in.goFunc(a, f.Params[i], e.Site)
 		default:
@@ -858,6 +860,8 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 		return boolean(out.(bool))
 	case types.Char:
 		return Value{Kind: types.Char, Int: int64(out.(rune))}
+	case types.Float:
+		return Value{Kind: types.Float, F: out.(float64), Bits: f.Result.Bits}
 	case types.Array: // Array<string>
 		strs := out.([]string)
 		arr := &ArrayValue{Elems: make([]Value, len(strs))}

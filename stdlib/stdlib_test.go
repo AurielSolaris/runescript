@@ -11,10 +11,8 @@ import (
 // runtime's conversion.
 func TestSignaturesMatchImplementations(t *testing.T) {
 	for _, path := range Paths() {
-		for name, f := range Lookup(path).Funcs {
-			if name != f.Name {
-				t.Errorf("std:%s: registered as %q but named %q", path, name, f.Name)
-			}
+		for _, f := range Lookup(path).All() {
+			name := f.Name
 			args := make([]any, len(f.Params))
 			for i, p := range f.Params {
 				switch p.Kind {
@@ -26,6 +24,8 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 					args[i] = int64(0)
 				case types.Char:
 					args[i] = rune('a')
+				case types.Float:
+					args[i] = 0.0
 				case types.Array:
 					args[i] = []string{}
 				case types.Func:
@@ -49,6 +49,8 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 				_, ok = out.(int64)
 			case types.Char:
 				_, ok = out.(rune)
+			case types.Float:
+				_, ok = out.(float64)
 			case types.Array:
 				_, ok = out.([]string)
 			case types.Void:

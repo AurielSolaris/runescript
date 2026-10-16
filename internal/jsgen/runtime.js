@@ -335,6 +335,10 @@ const $rt = (() => {
     constructor(type, message) { this.type = type; this.message = message; }
   }
 
+  // std holds the standard library packages a program uses; each one's
+  // section adds itself.
+  const std = {};
+
   // native calls a standard library function. Its failures become runtime
   // errors, and integer results are range-checked like the interpreter's.
   function native(site, name, result, impl, ...args) {
@@ -887,6 +891,127 @@ const $rt = (() => {
     trimRightFunc: (s, f) => trimRight(s, f),
     trimSuffix: (s, p) => (p !== "" && s.endsWith(p) ? s.slice(0, s.length - p.length) : s),
   };
+  std.string = string;
+
+  //@end
+
+  //@section math
+  // ---- std:math (OQ-MATH-01) ----
+  //
+  // Each function computes exactly what Go's math package computes, so
+  // results are bit-identical with the interpreter. Host functions are
+  // used only where IEEE 754 defines the result exactly (sqrt, floor, ...);
+  // the others follow Go's code. A NaN's sign is never observable.
+
+  const F64 = new Float64Array(1), U32 = new Uint32Array(F64.buffer);
+  const LO = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? 0 : 1, HI = 1 - LO;
+
+  function signbit(x) {
+    if (x !== x) return false;
+    F64[0] = x;
+    return U32[HI] >>> 31 === 1;
+  }
+
+  // nextafter follows Go's Nextafter: the next float64 after x toward y.
+  function nextafter(x, y) {
+    if (x !== x || y !== y) return NaN;
+    if (x === y) return x;
+    if (x === 0) {
+      U32[LO] = 1;
+      U32[HI] = 0;
+      return y < 0 ? -F64[0] : F64[0];
+    }
+    F64[0] = x;
+    if ((y > x) === (x > 0)) { // away from zero: the bits grow
+      U32[LO] = (U32[LO] + 1) >>> 0;
+      if (U32[LO] === 0) U32[HI] = (U32[HI] + 1) >>> 0;
+    } else {
+      if (U32[LO] === 0) U32[HI] = (U32[HI] - 1) >>> 0;
+      U32[LO] = (U32[LO] - 1) >>> 0;
+    }
+    return F64[0];
+  }
+
+  // remainder follows Go's Remainder (IEEE 754 remainder).
+  function remainder(x, y) {
+    const Tiny = 4.45014771701440276618e-308, HalfMax = Number.MAX_VALUE / 2;
+    if (x !== x || y !== y || x === Infinity || x === -Infinity || y === 0) return NaN;
+    if (y === Infinity || y === -Infinity) return x;
+    let sign = false;
+    if (x < 0) {
+      x = -x;
+      sign = true;
+    }
+    if (y < 0) y = -y;
+    if (x === y) return sign ? -0 : 0;
+    if (y <= HalfMax) x = x % (y + y); // Go's Mod, which is exact like %
+    if (y < Tiny) {
+      if (x + x > y) {
+        x -= y;
+        if (x + x >= y) x -= y;
+      }
+    } else {
+      const yHalf = 0.5 * y;
+      if (x > yHalf) {
+        x -= y;
+        if (x >= yHalf) x -= y;
+      }
+    }
+    return sign ? -x : x;
+  }
+
+  const math = {
+    absInt: (x) => (x < 0 ? -x : x),
+    minInt: (x, y) => Math.min(x, y),
+    maxInt: (x, y) => Math.max(x, y),
+    clampInt(x, lo, hi) {
+      if (lo > hi) throw new Fault("ArgumentError", "lo is greater than hi");
+      return Math.min(Math.max(x, lo), hi);
+    },
+    abs: Math.abs,
+    ceil: Math.ceil,
+    floor: Math.floor,
+    trunc: Math.trunc,
+    sqrt: Math.sqrt,
+    // round: half away from zero. x - trunc(x) is exact.
+    round(x) {
+      const t = Math.trunc(x);
+      return Math.abs(x - t) >= 0.5 ? t + Math.sign(x) : t;
+    },
+    roundToEven(x) {
+      const t = Math.trunc(x), d = Math.abs(x - t);
+      return d > 0.5 || (d === 0.5 && t % 2 !== 0) ? t + Math.sign(x) : t;
+    },
+    // Go's Max and Min: an infinity wins over NaN, and +0 > -0.
+    max(x, y) {
+      if (x === Infinity || y === Infinity) return Infinity;
+      if (x !== x || y !== y) return NaN;
+      if (x === 0 && x === y) return signbit(x) ? y : x;
+      return x > y ? x : y;
+    },
+    min(x, y) {
+      if (x === -Infinity || y === -Infinity) return -Infinity;
+      if (x !== x || y !== y) return NaN;
+      if (x === 0 && x === y) return signbit(x) ? x : y;
+      return x < y ? x : y;
+    },
+    mod: (x, y) => x % y, // exact, with Go's special cases
+    remainder,
+    dim(x, y) {
+      const v = x - y;
+      return v <= 0 ? 0 : v;
+    },
+    nextafter,
+    copysign(x, s) {
+      if (s !== s) s = 1;
+      return signbit(s) ? -Math.abs(x) : Math.abs(x);
+    },
+    signbit,
+    isInf: (x, sign) => (sign >= 0 && x === Infinity) || (sign <= 0 && x === -Infinity),
+    inf: (sign) => (sign >= 0 ? Infinity : -Infinity),
+    nan: () => NaN,
+  };
+  std.math = math;
 
   //@end
 
@@ -917,9 +1042,7 @@ const $rt = (() => {
     //@section extern
     ext,
     //@end
-    //@section string
-    std: { string },
-    //@end
+    std,
     //@section dom
     signal, el, text, attr, bindText, bindNode, bindAttr, on, when, renderApp,
     //@end

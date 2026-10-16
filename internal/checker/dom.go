@@ -160,6 +160,10 @@ func (c *checker) domCall(e *ast.CallExpr) *types.Type {
 // app.App passed to dom.renderApp.
 func (c *checker) packageFuncValue(e *ast.SelectorExpr, b *binding) *types.Type {
 	q := e.X.(*ast.Ident).Name
+	if b.std != nil && b.std.Funcs[e.Name.Name] == nil {
+		c.errorf(diagnostics.NameNotInPackage, e.Name.Span, "package std:%s has no function or constant '%s'", b.std.Path, e.Name.Name)
+		return types.InvalidT
+	}
 	if b.pkg == nil {
 		c.errorf(diagnostics.NameNotAValue, e.Span, "'%s.%s' can only be called; library functions cannot be used as values yet", q, e.Name.Name).
 			WithHelp(fmt.Sprintf("wrap it in a lambda, e.g. (int x) => %s.%s(x)", q, e.Name.Name))

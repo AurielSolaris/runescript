@@ -279,7 +279,7 @@ func TestStdStringRejected(t *testing.T) {
 	}{
 		{"missing file", "package p;\nuse \"lib/x.rsc\";\npublic void main() { }", diagnostics.UseNotFound, "2:5"},
 		{"go use", "package p;\nuse \"go:strings\";\npublic void main() { }", diagnostics.UseUnsupported, "2:5"},
-		{"unknown std package", "package p;\nuse \"std:math\";\npublic void main() { }", diagnostics.UseUnknownPackage, "2:5"},
+		{"unknown std package", "package p;\nuse \"std:symrs\";\npublic void main() { }", diagnostics.UseUnknownPackage, "2:5"},
 		{"duplicate use", "package p;\nuse \"std:string\";\nuse \"std:string\";\npublic void main() { }", diagnostics.UseDuplicate, "3:1"},
 		{"missing use", "package p;\npublic void main() { trace(string.toUpper(\"a\")); }", diagnostics.NamePackageNotUsed, "2:28"},
 		{"unknown qualifier", "package p;\npublic void main() { foo.bar(); }", diagnostics.NamePackageNotUsed, "2:22"},
@@ -387,5 +387,43 @@ func TestFunctionsRejected(t *testing.T) {
 				t.Errorf("got %s at %s (%s), want %s at %s", d.Code, d.Span.Start, d.Message, c.code, c.pos)
 			}
 		})
+	}
+}
+
+func withMath(body string) string {
+	return "package p;\nuse \"std:math\";\npublic int main() {\n" + body + "\n    return 0;\n}\n"
+}
+
+func TestStdMath(t *testing.T) {
+	accepted := []string{
+		"    int a = math.max(3, 7);\n    int b = math.abs(-2);\n    int c = math.clamp(a, 0, b);",
+		"    float64 f = math.max(1.5, 2);\n    float64 g = math.sqrt(2);\n    float64 h = math.abs(f);",
+		"    float64 x = 2.0;\n    float64 y = math.min(x, 1);",
+		"    float64 p = math.pi;\n    float q = math.pi * 2;\n    float32 r = (float32) math.e;",
+		"    int64 big = math.maxInt64;\n    uint8 top = math.maxUint8;\n    int8 lo = math.minInt8;",
+		"    bool b = math.isInf(math.inf(-1), -1) && !math.signbit(math.nan());",
+	}
+	for _, body := range accepted {
+		if diags := check(t, withMath(body)); len(diags) != 0 {
+			t.Errorf("%s: %v", body, diags)
+		}
+	}
+	rejected := []struct {
+		body string
+		code diagnostics.Code
+		pos  string
+	}{
+		{"    float f = 2.0;\n    trace(math.sqrt(f));", diagnostics.TypeMismatch, "5:21"},                     // generic float needs (float64)
+		{"    int8 b = 1;\n    trace(math.max(b, b));", diagnostics.TypeMismatch, "5:11"},                      // no int8 version
+		{"    float64 x = 1.0;\n    int n = 2;\n    trace(math.max(x, n));", diagnostics.TypeMismatch, "6:11"}, // mixed
+		{"    float32 p = math.pi;", diagnostics.TypeInexactFloat, "4:17"},                                     // pi is not a float32
+		{"    int m = math.maxInt64;", diagnostics.TypeConstOutOfRange, "4:13"},
+		{"    trace(math.tau);", diagnostics.NameNotInPackage, "4:16"},
+	}
+	for _, c := range rejected {
+		diags := check(t, withMath(c.body))
+		if len(diags) == 0 || diags[0].Code != c.code || diags[0].Span.Start.String() != c.pos {
+			t.Errorf("%s: got %v, want %s at %s", c.body, diags, c.code, c.pos)
+		}
 	}
 }

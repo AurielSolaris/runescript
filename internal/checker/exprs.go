@@ -217,6 +217,9 @@ func (c *checker) exprInner(e ast.Expr) operand {
 	case *ast.NewExpr:
 		return operand{typ: c.newExpr(e)}
 	case *ast.SelectorExpr:
+		if k, ok := c.stdConst(e); ok {
+			return k
+		}
 		return operand{typ: c.selector(e)}
 	case *ast.StringLit:
 		return operand{typ: types.StringT}
@@ -780,8 +783,82 @@ func (c *checker) packageCall(e *ast.CallExpr, pkg *loader.Package) *types.Type 
 	return c.checkArgs(sym.fn.Type, e, fmt.Sprintf("function '%s.%s'", e.Pkg.Name, e.Fn.Name))
 }
 
+// stdConst returns the value of a standard library constant such as
+// math.pi: an untyped constant, like a literal.
+func (c *checker) stdConst(e *ast.SelectorExpr) (operand, bool) {
+	id, ok := e.X.(*ast.Ident)
+	if !ok || c.isVariable(id.Name) || c.quals[id.Name] == nil || c.quals[id.Name].std == nil {
+		return operand{}, false
+	}
+	k, ok := c.quals[id.Name].std.Consts[e.Name.Name]
+	if !ok {
+		return operand{}, false
+	}
+	c.quals[id.Name].used = true
+	if k.Int != nil {
+		return operand{typ: types.UntypedConst, konst: new(big.Int).Set(k.Int)}, true
+	}
+	v := k.Float
+	return operand{typ: types.UntypedFloatConst, fconst: &v}, true
+}
+
+// overloadCall checks a call of an overloaded library function (such as
+// math.max, on ints or on float64s). The first signature whose parameters
+// accept every argument is called: an integer constant fits an integer or
+// a float parameter, a float constant only a float one, and a typed value
+// only a parameter of its exact type.
+func (c *checker) overloadCall(e *ast.CallExpr, fs []*stdlib.Func) *types.Type {
+	ops := make([]operand, len(e.Args))
+	for i, a := range e.Args {
+		ops[i] = c.expr(a)
+		if ops[i].typ.Kind == types.Invalid {
+			c.exprs(e.Args[i+1:])
+			return types.InvalidT
+		}
+	}
+	accepts := func(p *types.Type, o operand) bool {
+		switch o.typ.Kind {
+		case types.UntypedInt:
+			return types.IsNumeric(p)
+		case types.UntypedFloat:
+			return p.Kind == types.Float
+		}
+		return types.Identical(p, o.typ)
+	}
+	for _, f := range fs {
+		ok := len(f.Params) == len(e.Args)
+		for i := 0; ok && i < len(f.Params); i++ {
+			ok = accepts(f.Params[i], ops[i])
+		}
+		if !ok {
+			continue
+		}
+		for i, p := range f.Params {
+			if isUntyped(ops[i].typ) {
+				c.convertNum(e.Args[i], ops[i], p)
+			}
+		}
+		c.info.Natives[e] = f
+		return f.Result
+	}
+	sigs := make([]string, len(fs))
+	for i, f := range fs {
+		sigs[i] = types.NewFunc(f.Params, f.Result).String()
+	}
+	found := make([]string, len(ops))
+	for i, o := range ops {
+		found[i] = describe(o.typ)
+	}
+	c.errorf(diagnostics.TypeMismatch, e.Span, "no version of %s.%s takes (%s)", e.Pkg.Name, e.Fn.Name, strings.Join(found, ", ")).
+		WithHelp(fmt.Sprintf("its versions are %s; convert the arguments, e.g. (float64) x", strings.Join(sigs, " and ")))
+	return types.InvalidT
+}
+
 // nativeCall checks a call of a standard library function.
 func (c *checker) nativeCall(e *ast.CallExpr, pkg *stdlib.Package) *types.Type {
+	if fs := pkg.Overloads[e.Fn.Name]; len(fs) > 1 {
+		return c.overloadCall(e, fs)
+	}
 	f := pkg.Funcs[e.Fn.Name]
 	if f == nil {
 		d := c.errorf(diagnostics.NameNotInPackage, e.Fn.Span, "package std:%s has no function '%s'", pkg.Path, e.Fn.Name)

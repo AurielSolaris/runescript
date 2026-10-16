@@ -1,0 +1,6 @@
+7 -4 12 10 1.4142135623730951
+2 -3 2 1.5 -0.5
+3.141592653589793 2.718281828459045 3.1415927 9223372036854775807 255 true -3
+1.0000000000000002 true -2 -1 -1
+math.abs returned 2147483648, which does not fit in 'int'
+ArgumentError math.clamp: lo is greater than hi
