@@ -252,7 +252,7 @@ func buildElements() map[string]*Element {
 		if m[d.name] != nil {
 			panic("dom: element " + d.name + " listed twice")
 		}
-		e := &Element{Name: d.name, HTML4: d.html4, HTML5: d.html5, Void: voids[d.name],
+		e := &Element{Name: d.name, Namespace: HTML, HTML4: d.html4, HTML5: d.html5, Void: voids[d.name],
 			Obsolete: !d.html5, Hint: d.hint, Attrs: mustAttrs(d.attrs), Events: eventAttrs(d.events)}
 		if e.Obsolete != (e.Hint != "") {
 			panic("dom: element " + d.name + ": an obsolete element needs a hint, and only it")

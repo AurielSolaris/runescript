@@ -178,7 +178,7 @@ func TestEnumValues(t *testing.T) {
 }
 
 func TestParseAttrs(t *testing.T) {
-	a, err := parseAttrs("href:url; !align(left|right)~use CSS; type(|a|b); x-y")
+	a, err := parseAttrs("href:url; !align(left|right)~use CSS; type(|a|b); x-y", HTML)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,8 +187,145 @@ func TestParseAttrs(t *testing.T) {
 		t.Errorf("%+v", a)
 	}
 	for _, bad := range []string{"x:nope", "x(a|b", "!x", "x~hint", "x; x", "X", "x:bool(a)", "x:enum"} {
-		if _, err := parseAttrs(bad); err == nil {
+		if _, err := parseAttrs(bad, HTML); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+// Written independently of svg.go, from the element indexes of SVG 1.1
+// (second edition) and SVG 2 (without the HTML elements SVG 2 allows, the
+// unknown element, and the draft-only ones), plus feDropShadow.
+const (
+	svg11 = `a altGlyph altGlyphDef altGlyphItem animate animateColor animateMotion animateTransform
+		circle clipPath color-profile cursor defs desc ellipse feBlend feColorMatrix feComponentTransfer
+		feComposite feConvolveMatrix feDiffuseLighting feDisplacementMap feDistantLight feFlood feFuncA
+		feFuncB feFuncG feFuncR feGaussianBlur feImage feMerge feMergeNode feMorphology feOffset
+		fePointLight feSpecularLighting feSpotLight feTile feTurbulence filter font font-face
+		font-face-format font-face-name font-face-src font-face-uri foreignObject g glyph glyphRef hkern
+		image line linearGradient marker mask metadata missing-glyph mpath path pattern polygon polyline
+		radialGradient rect script set stop style svg switch symbol text textPath title tref tspan use
+		view vkern`
+	svg2 = `a animate animateMotion animateTransform circle clipPath defs desc ellipse feBlend
+		feColorMatrix feComponentTransfer feComposite feConvolveMatrix feDiffuseLighting
+		feDisplacementMap feDistantLight feDropShadow feFlood feFuncA feFuncB feFuncG feFuncR
+		feGaussianBlur feImage feMerge feMergeNode feMorphology feOffset fePointLight
+		feSpecularLighting feSpotLight feTile feTurbulence filter foreignObject g image line
+		linearGradient marker mask metadata mpath path pattern polygon polyline radialGradient rect
+		script set stop style svg switch symbol text textPath title tspan use view`
+)
+
+func TestSVGElementLists(t *testing.T) {
+	v11, v2, obsolete := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	for _, e := range SVGElements() {
+		if e.Namespace != SVG || e.HTML4 || e.HTML5 || e.Void {
+			t.Errorf("%s: %+v", e.Name, e)
+		}
+		if e.SVG11 {
+			v11[e.Name] = true
+		}
+		if e.SVG2 {
+			v2[e.Name] = true
+		}
+		if e.Obsolete {
+			obsolete[e.Name] = true
+			if e.Hint == "" {
+				t.Errorf("%s: no hint", e.Name)
+			}
+		}
+		if LookupSVG(e.Name) != e {
+			t.Errorf("LookupSVG(%s)", e.Name)
+		}
+	}
+	diff(t, "SVG 1.1", v11, set(svg11))
+	diff(t, "SVG 2", v2, set(svg2))
+	removedSet := map[string]bool{}
+	for n := range set(svg11) {
+		if !set(svg2)[n] {
+			removedSet[n] = true
+		}
+	}
+	diff(t, "SVG obsolete", obsolete, removedSet)
+}
+
+// HTML and SVG are separate namespaces: names they share are different
+// elements, and SVG names are case-sensitive.
+func TestNamespaces(t *testing.T) {
+	for _, n := range []string{"a", "script", "style", "title"} {
+		h, s := Lookup(n), LookupSVG(n)
+		if h == nil || s == nil || h == s || h.Namespace != HTML || s.Namespace != SVG {
+			t.Errorf("%s: %v %v", n, h, s)
+		}
+	}
+	if Lookup("circle") != nil || LookupSVG("div") != nil || LookupSVG("lineargradient") != nil || LookupSVG("linearGradient") == nil {
+		t.Error("namespace leak or case-insensitive lookup")
+	}
+	if Lookup("a").Attr("viewBox") != nil || Lookup("div").Attr("fill") != nil {
+		t.Error("SVG attributes on HTML elements")
+	}
+}
+
+func TestSVGAttributes(t *testing.T) {
+	cases := []struct {
+		elem, attr string
+		kind       Kind
+		obsolete   bool
+	}{
+		{"circle", "r", Length, false},
+		{"circle", "fill", String, false},
+		{"circle", "fill-rule", Enum, false},
+		{"rect", "rx", Length, false},
+		{"svg", "viewBox", String, false},
+		{"svg", "version", String, true},
+		{"use", "href", URL, false},
+		{"use", "xlink:href", URL, true},
+		{"g", "xml:space", Enum, true},
+		{"g", "class", Tokens, false},
+		{"g", "onclick", Event, false},
+		{"g", "data-id", String, false},
+		{"g", "aria-hidden", String, false},
+		{"g", "kerning", String, true},
+		{"linearGradient", "gradientUnits", Enum, false},
+		{"feTurbulence", "numOctaves", UInt, false},
+		{"feComposite", "k1", Float, false},
+		{"animate", "fill", Enum, false}, // freeze|remove, not the paint
+		{"path", "d", String, false},
+		{"text", "lengthAdjust", Enum, false},
+		{"font", "horiz-adv-x", String, false}, // the element is obsolete, not its attributes
+	}
+	for _, c := range cases {
+		a := LookupSVG(c.elem).Attr(c.attr)
+		if a == nil || a.Kind != c.kind || a.Obsolete != c.obsolete {
+			t.Errorf("%s.%s = %+v, want kind %v obsolete %v", c.elem, c.attr, a, c.kind, c.obsolete)
+		}
+	}
+	if a := LookupSVG("animate").Attr("fill"); strings.Join(a.Values, "|") != "freeze|remove" {
+		t.Errorf("animate fill = %v", a.Values)
+	}
+	if a := LookupSVG("path").Attr("stroke-linecap"); a == nil || !strings.Contains(strings.Join(a.Values, "|"), "round|square|inherit") {
+		t.Errorf("stroke-linecap = %+v", a)
+	}
+	for _, c := range [][2]string{{"circle", "href"}, {"circle", "viewbox"}, {"g", "width"}, {"rect", "colspan"}, {"svg", "xlink:foo"}} {
+		if a := LookupSVG(c[0]).Attr(c[1]); a != nil {
+			t.Errorf("%s.%s accepted: %+v", c[0], c[1], a)
+		}
+	}
+}
+
+func TestParseSVGAttrs(t *testing.T) {
+	a, err := parseAttrs("viewBox; xlink:href:url; !xml:space(default|preserve)~use CSS", SVG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a["viewBox"] == nil || a["xlink:href"].Kind != URL || a["xml:space"].Kind != Enum || !a["xml:space"].Obsolete {
+		t.Errorf("%+v", a)
+	}
+	for _, bad := range []string{"foo:href", "xlink:", "viewBox; viewBox"} {
+		if _, err := parseAttrs(bad, SVG); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	if _, err := parseAttrs("viewBox", HTML); err == nil {
+		t.Error("camelCase accepted in HTML")
 	}
 }
