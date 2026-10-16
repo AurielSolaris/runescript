@@ -34,7 +34,6 @@ import (
 
 	"github.com/AurielSolaris/runescript/internal/conv"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
-	"github.com/AurielSolaris/runescript/internal/dom"
 	"github.com/AurielSolaris/runescript/internal/ir"
 	"github.com/AurielSolaris/runescript/internal/jshost"
 	"github.com/AurielSolaris/runescript/internal/runtime"
@@ -926,7 +925,7 @@ func (g *gen) telement(b *strings.Builder, e *ir.TElement, parent, pad string) s
 	for _, a := range e.Attrs {
 		site := strconv.Itoa(g.site(a.Site))
 		switch {
-		case a.Kind == dom.Event:
+		case a.Mode == ir.AttrEvent:
 			fmt.Fprintf(b, "%s%s(%s, %s, %s, %s);\n", pad, g.use("on"), v, quote(strings.TrimPrefix(a.Name, "on")), g.expr(a.Value, precAssign), site)
 		case a.Value != nil:
 			values := "null"
@@ -955,9 +954,9 @@ func (g *gen) telement(b *strings.Builder, e *ir.TElement, parent, pad string) s
 // attrKind tells the runtime how to show a bound attribute's value.
 func attrKind(a *ir.TAttr) string {
 	switch {
-	case a.Kind == dom.Bool:
+	case a.Mode == ir.AttrBool:
 		return "bool"
-	case a.Kind == dom.URL:
+	case a.Mode == ir.AttrURL:
 		return "url"
 	case a.Value.Type().Kind == types.Float && a.Value.Type().Bits == 32:
 		return "f32"

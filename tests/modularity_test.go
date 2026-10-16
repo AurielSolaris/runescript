@@ -23,17 +23,20 @@ const module = "github.com/AurielSolaris/runescript/"
 // webPackages are the packages that exist only for web support.
 var webPackages = []string{"internal/dom", "internal/devserver"}
 
-// webImporters are the only files allowed to import a web package. Each is
-// the rune:dom part of its stage, or the CLI wiring of `runescript dev`.
+// webImporters are the only files allowed to import a web package.
+//
+// The HTML/SVG metadata (internal/dom) is language tooling: the parser and
+// checker validate templates against it, and lowering translates it into
+// the IR's own target-neutral attribute modes (ir.AttrMode). The IR, its
+// verifier, and the back ends never see it, so template validation and
+// code generation can change independently. Browser behaviour lives in the
+// target's runtime (jsgen's runtime.js).
 var webImporters = map[string]bool{
 	"internal/parser/markup.go":       true,
 	"internal/checker/checker.go":     true, // Info's template tables
 	"internal/checker/dom.go":         true,
 	"internal/checker/template.go":    true,
-	"internal/ir/ir.go":               true, // template IR nodes
-	"internal/ir/lower.go":            true,
-	"internal/ir/verify.go":           true,
-	"internal/jsgen/jsgen.go":         true,
+	"internal/ir/lower.go":            true, // dom.Kind -> ir.AttrMode, nowhere else
 	"internal/devserver/devserver.go": true,
 	"cmd/runescript/watch.go":         true, // runescript dev
 }

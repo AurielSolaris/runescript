@@ -13,7 +13,6 @@ package ir
 
 import (
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
-	"github.com/AurielSolaris/runescript/internal/dom"
 	"github.com/AurielSolaris/runescript/internal/jshost"
 	"github.com/AurielSolaris/runescript/internal/types"
 	"github.com/AurielSolaris/runescript/stdlib"
@@ -364,6 +363,27 @@ type Template struct{ Root *TElement }
 
 func (e *Template) Type() *types.Type { return types.ElementT }
 
+// AttrMode is how a target sets an attribute at run time. It is all a
+// back end needs to know about an attribute: the HTML/SVG metadata that
+// the checker validates templates against (internal/dom) stays in the
+// language tooling, and Lower translates it into a mode.
+type AttrMode int
+
+const (
+	// AttrText sets the attribute to its value shown as text (a number or
+	// a string).
+	AttrText AttrMode = iota
+	// AttrBool adds the attribute when its bool value is true and removes
+	// it when false.
+	AttrBool
+	// AttrURL sets a string that must not run script (javascript: and
+	// similar URLs are a runtime error).
+	AttrURL
+	// AttrEvent listens for the event named by the attribute (without its
+	// "on" prefix); the value is a void() handler.
+	AttrEvent
+)
+
 // TNode is a node of a template.
 type TNode interface{ tnode() }
 
@@ -380,14 +400,14 @@ type (
 	// For an event, Value is the handler, a void() function value.
 	TAttr struct {
 		Name string
-		Kind dom.Kind
+		Mode AttrMode
 		// Static is the value of a static attribute; Present marks a
 		// static boolean attribute.
 		Static  string
 		Present bool
 		Value   Expr
-		// Values are the keywords an Enum attribute allows, checked when
-		// a binding sets it.
+		// Values, when not nil, are the only keywords a binding may set;
+		// any other value is a runtime error.
 		Values []string
 		Site   Span
 	}

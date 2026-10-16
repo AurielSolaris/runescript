@@ -490,6 +490,20 @@ func (l *lowerer) runeOf(e *ast.CallExpr) Expr {
 
 // ---- templates ----
 
+// attrMode is the runtime behaviour of an attribute of the given kind:
+// the one place where DOM metadata becomes IR.
+func attrMode(k dom.Kind) AttrMode {
+	switch k {
+	case dom.Bool:
+		return AttrBool
+	case dom.URL:
+		return AttrURL
+	case dom.Event:
+		return AttrEvent
+	}
+	return AttrText
+}
+
 func (l *lowerer) telement(e *ast.MElement) *TElement {
 	el := l.info.TemplateElems[e]
 	if el == nil {
@@ -501,7 +515,7 @@ func (l *lowerer) telement(e *ast.MElement) *TElement {
 		if at == nil {
 			l.ice("attribute %s of <%s> was not resolved", a.Name, e.Name)
 		}
-		ta := &TAttr{Name: a.Name, Kind: at.Kind, Site: a.Span}
+		ta := &TAttr{Name: a.Name, Mode: attrMode(at.Kind), Site: a.Span}
 		switch {
 		case a.Expr != nil:
 			ta.Value = l.expr(a.Expr)

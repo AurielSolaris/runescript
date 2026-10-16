@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/AurielSolaris/runescript/internal/dom"
 	"github.com/AurielSolaris/runescript/internal/types"
 )
 
@@ -392,23 +391,22 @@ func (v *verifier) telement(e *TElement) {
 		if a.Value == nil {
 			continue
 		}
+		// The checker applies each attribute's exact rules (internal/dom);
+		// here, only what a back end relies on for the mode.
 		t := v.expr(a.Value)
 		ok := false
-		switch a.Kind {
-		case dom.Event:
+		switch a.Mode {
+		case AttrEvent:
 			ok = types.Identical(t, types.NewFunc(nil, types.VoidT))
-		case dom.Bool:
+		case AttrBool:
 			ok = t.Kind == types.Bool
-		case dom.Int:
-			ok = t.Kind == types.Signed
-		case dom.UInt:
-			ok = t.Kind == types.Unsigned
-		case dom.Float:
-			ok = t.Kind == types.Float
-		case dom.Length:
-			ok = types.IsNumeric(t) || t.Kind == types.String
-		default:
+		case AttrURL:
 			ok = t.Kind == types.String
+		default:
+			ok = t.Kind == types.String || t.Kind == types.Signed || t.Kind == types.Unsigned || t.Kind == types.Float
+		}
+		if a.Values != nil && t.Kind != types.String {
+			ok = false
 		}
 		if !ok {
 			v.fail("attribute %s of <%s> bound to a %s", a.Name, e.Tag, t)
