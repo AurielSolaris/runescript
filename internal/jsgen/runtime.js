@@ -4,8 +4,9 @@
 // JavaScript target and the interpreter share one definition of diagnostic
 // codes and Unicode tables.
 //
-// Values: int and uint are JavaScript numbers that are always integers in
-// their 32-bit range; float and float64 are finite JavaScript numbers;
+// Values: int and uint, and the explicit widths up to 32 bits, are
+// JavaScript numbers that are always integers in their type's range;
+// int64 and uint64 are BigInts in their range; float and float64 are finite JavaScript numbers;
 // float32 values are numbers that are exact float32 values (or NaN or
 // infinite); floats follow IEEE 754, as in ActionScript 3; bool is
 // a boolean; string is a well-formed string; errors are RSError objects;
@@ -126,6 +127,44 @@ const $rt = (() => {
   const divU = (x, y, s) => (divisor(y, s), Math.trunc(x / y) >>> 0);
   const modU = (x, y, s) => (divisor(y, s), (x % y) >>> 0);
 
+  // The explicit widths (OQ-NUM-07). NARROW types are numbers; WIDE ones
+  // (64-bit) are BigInts, whose arithmetic is exact. Both trap instead of
+  // wrapping, with the interpreter's messages.
+  const NARROW = {
+    i8: [-128, 127, "int8"], i16: [-32768, 32767, "int16"], i32: [INT_MIN, INT_MAX, "int32"],
+    u8: [0, 255, "uint8"], u16: [0, 65535, "uint16"], u32: [0, UINT_MAX, "uint32"],
+  };
+  const WIDE = {
+    i64: [-9223372036854775808n, 9223372036854775807n, "int64"],
+    u64: [0n, 18446744073709551615n, "uint64"],
+  };
+  function arN(op, x, y, k, site) {
+    const [lo, hi, name] = NARROW[k];
+    let r;
+    switch (op) {
+      case "+": r = x + y; break;
+      case "-": r = x - y; break;
+      case "*": r = x * y; break;
+      case "/": divisor(y, site); r = Math.trunc(x / y); break;
+      default: divisor(y, site); r = x % y;
+    }
+    return r >= lo && r <= hi ? r + 0 : overflow(x, op, y, name, site); // + 0 turns -0 into 0
+  }
+  function arW(op, x, y, k, site) {
+    const [lo, hi, name] = WIDE[k];
+    let r;
+    switch (op) {
+      case "+": r = x + y; break;
+      case "-": r = x - y; break;
+      case "*": r = x * y; break;
+      default:
+        if (y === 0n) fail(CODES.divideByZero, site, "integer division by zero");
+        r = op === "/" ? x / y : x % y; // BigInt division truncates toward zero
+    }
+    if (r < lo || r > hi) fail(CODES.overflow, site, `integer overflow: ${x} ${op} ${y} = ${r} does not fit in '${name}'`);
+    return r;
+  }
+
   // ---- floats ----
   //
   // Float arithmetic is JavaScript's own (IEEE 754, as in ActionScript 3),
@@ -159,14 +198,39 @@ const $rt = (() => {
         if (!(v >= 0 && v <= 0x10FFFF && (v < 0xD800 || v > 0xDFFF))) {
           fail(CODES.conversion, site, `cannot convert ${show(v, from)} to 'char': not a Unicode scalar value`, "RangeError");
         }
-        return v;
+        return Number(v);
       }
       case "b":
         if (from === "b") return v;
         if (v === "true" || v === "false") return v === "true";
         return notValid("'true' or 'false'");
+      case "i64":
+      case "u64": {
+        // To a BigInt, from the exact value of v.
+        let n;
+        if (from === "s") {
+          if (!INT_RE.test(v)) notValid("an integer");
+          n = BigInt(v.replace("+", ""));
+        } else if (typeof v === "bigint") {
+          n = v;
+        } else {
+          const t = Math.trunc(v);
+          if (!Number.isFinite(t)) outOfRange();
+          n = BigInt(t);
+        }
+        const [lo, hi] = WIDE[to];
+        if (n < lo || n > hi) outOfRange();
+        return n;
+      }
       case "i":
-      case "u": {
+      case "u":
+      case "i8": case "i16": case "i32":
+      case "u8": case "u16": case "u32": {
+        const [lo, hi] = to === "i" ? [INT_MIN, INT_MAX] : to === "u" ? [0, UINT_MAX] : NARROW[to];
+        if (typeof v === "bigint") {
+          if (v < lo || v > hi) outOfRange();
+          return Number(v);
+        }
         let n;
         if (from === "s") {
           if (!INT_RE.test(v)) notValid("an integer");
@@ -174,7 +238,7 @@ const $rt = (() => {
         } else {
           n = Math.trunc(v);
         }
-        if (to === "i" ? !(n >= INT_MIN && n <= INT_MAX) : !(n >= 0 && n <= UINT_MAX)) outOfRange();
+        if (!(n >= lo && n <= hi)) outOfRange();
         return n === 0 ? 0 : n;
       }
       default: {
@@ -182,6 +246,8 @@ const $rt = (() => {
         if (from === "s") {
           if (!FLOAT_RE.test(v)) notValid("a number");
           f = Number(v);
+        } else if (typeof v === "bigint") {
+          f = Number(v); // the nearest float64, as in the interpreter
         }
         return to === "f32" ? Math.fround(f) : f;
       }
@@ -195,7 +261,7 @@ const $rt = (() => {
 
   function checkIndex(a, i, site) {
     if (!(i >= 0 && i < a.length)) fail(CODES.index, site, `index ${i} is out of range for an array of length ${a.length}`);
-    return i;
+    return Number(i); // a 64-bit index is a BigInt
   }
   const aget = (a, i, site) => a[checkIndex(a, i, site)];
   function aset(a, i, v, site) {
@@ -826,7 +892,7 @@ const $rt = (() => {
   }
 
   return {
-    addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU,
+    addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU, arN, arW,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
     enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop,

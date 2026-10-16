@@ -281,6 +281,8 @@ func (p *parser) funcDecl() *ast.FuncDecl {
 var typeKeywords = map[string]bool{
 	"int": true, "sint": true, "uint": true, "string": true, "bool": true, "void": true,
 	"float": true, "float32": true, "float64": true, "char": true,
+	"int8": true, "int16": true, "int32": true, "int64": true,
+	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
 }
 
 // errorTypes are the built-in error type names.
@@ -290,6 +292,8 @@ var errorTypes = map[string]bool{"Error": true, "RangeError": true, "TypeError":
 var castTypes = map[string]bool{
 	"int": true, "sint": true, "uint": true, "string": true, "bool": true,
 	"float": true, "float32": true, "float64": true, "char": true,
+	"int8": true, "int16": true, "int32": true, "int64": true,
+	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
 }
 
 func (p *parser) isTypeStart() bool {

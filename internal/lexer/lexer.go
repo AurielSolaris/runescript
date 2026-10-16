@@ -59,6 +59,8 @@ var keywords = map[string]bool{
 	"public": true, "protected": true, "private": true,
 	"int": true, "sint": true, "uint": true, "string": true, "void": true,
 	"float": true, "float32": true, "float64": true, "char": true,
+	"int8": true, "int16": true, "int32": true, "int64": true,
+	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
 	"try": true, "catch": true, "finally": true, "throw": true, "new": true,
 	"extern": true,
 }
@@ -68,8 +70,6 @@ var keywords = map[string]bool{
 var reserved = map[string]bool{
 	"class": true, "struct": true,
 	"array": true, "matrix": true,
-	"int8": true, "int16": true, "int32": true, "int64": true,
-	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
 }
 
 // Token is a lexical token with its source span.

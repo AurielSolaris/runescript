@@ -551,10 +551,14 @@ func (g *gen) expr(e ir.Expr, min int) string {
 func (g *gen) exprPrec(e ir.Expr) (string, int) {
 	switch e := e.(type) {
 	case *ir.IntConst:
-		if e.Value < 0 {
-			return strconv.FormatInt(e.Value, 10), precUnary
+		s := types.Big(e.T, e.Value).String()
+		if types.IsWide(e.T) {
+			s += "n" // a BigInt
 		}
-		return strconv.FormatInt(e.Value, 10), precCall
+		if strings.HasPrefix(s, "-") {
+			return s, precUnary
+		}
+		return s, precCall
 	case *ir.StringConst:
 		if !utf8.ValidString(e.Value) {
 			// The lexer accepts only UTF-8 source, and no operation makes
@@ -636,6 +640,14 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 				return "Math.fround(" + op + ")", precCall
 			}
 			return "(" + op + ")", precCall
+		}
+		if e.T.Bits != 0 { // an explicit width: numbers, or BigInts for 64 bits
+			h := "arN"
+			if types.IsWide(e.T) {
+				h = "arW"
+			}
+			return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use(h), quote(e.Op), g.expr(e.X, precAssign), g.expr(e.Y, precAssign),
+				quote(kindCode(e.T)), g.site(e.Site)), precCall
 		}
 		suffix := "I"
 		if e.T.Kind == types.Unsigned {
@@ -795,8 +807,14 @@ func init() {
 func kindCode(t *types.Type) string {
 	switch t.Kind {
 	case types.Signed:
+		if t.Bits != 0 {
+			return "i" + strconv.Itoa(t.Bits)
+		}
 		return "i"
 	case types.Unsigned:
+		if t.Bits != 0 {
+			return "u" + strconv.Itoa(t.Bits)
+		}
 		return "u"
 	case types.Float:
 		if t.Bits == 32 {

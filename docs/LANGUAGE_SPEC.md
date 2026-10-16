@@ -57,6 +57,8 @@ public protected private
 int sint uint bool string void
 float float32 float64                 [v0.3]
 char                                  [2026-10-16]
+int8 int16 int32 int64                [2026-10-17]
+uint8 uint16 uint32 uint64            [2026-10-17]
 try catch finally throw new           [v0.3]
 extern                                [2026-10-16]
 ```
@@ -72,7 +74,6 @@ with `ASX-PARSE-002`:
 
 ```
 class struct array matrix
-int8 int16 int32 int64 uint8 uint16 uint32 uint64
 ```
 
 `trace` is not a keyword. It is a built-in function name and can't be
@@ -167,7 +168,9 @@ AddExpr      = MulExpr { ( "+" | "-" ) MulExpr } ;
 MulExpr      = Unary   { ( "*" | "/" | "%" ) Unary } ;
 Unary        = ( "-" | "!" ) Unary | Cast | Postfix ;
 Cast         = "(" CastType ")" Unary ;
-CastType     = "int" | "sint" | "uint" | "float" | "float32" | "float64" | "string" | "bool" | "char" ;
+CastType     = "int" | "sint" | "uint" | "int8" | "int16" | "int32" | "int64"
+             | "uint8" | "uint16" | "uint32" | "uint64"
+             | "float" | "float32" | "float64" | "string" | "bool" | "char" ;
 Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" | "." Ident | "[" Expr "]" } ;   (* calls, fields, elements *)
 Primary      = IntLit | FloatLit | StringLit | InterpString | CharLit | "true" | "false"
              | Ident | Call | Lambda | New | "(" Expr ")"
@@ -344,6 +347,8 @@ three is accepted.
 | `int` | [v0.1] | Signed integer. v0.1 representation: 32-bit (−2147483648 … 2147483647). |
 | `sint` | [v0.1] | **The same type as `int`**, written differently. It has no separate representation. |
 | `uint` | [v0.1, provisional width] | Unsigned integer. v0.1 representation: 32-bit (0 … 4294967295). |
+| `int8`, `int16`, `int32`, `int64` | [2026-10-17] | Signed integers of exactly that many bits, e.g. `int8` is −128 … 127. They never widen. |
+| `uint8`, `uint16`, `uint32`, `uint64` | [2026-10-17] | Unsigned integers of exactly that many bits, e.g. `uint64` is 0 … 18446744073709551615. |
 | `bool` | [v0.1] | `true`, `false`. |
 | `char` | [2026-10-16] | One Unicode scalar value: U+0000 … U+10FFFF except the surrogates U+D800 … U+DFFF. Not a number: `==`, `!=`, `<`, `<=`, `>`, `>=` compare code points; there is no arithmetic. **[provisional]** chars cannot cross the JavaScript boundary or be held in a rune. |
 | `string` | [v0.1] | Immutable UTF-8 text. **[v0.2, decided]** Positions and lengths are byte offsets, as in Go. |
@@ -424,9 +429,25 @@ another array (not `Element` or `Signal`).
 - **[undecided]** for-each loops, slicing, sorting, `a[i]++`, `Array<T>`
   for user generic types, and whether `array` (reserved) means the same.
 
+### 5.1d Explicit-width integers **[decided 2026-10-17, details provisional]**
+- Every integer type is a distinct type. `int32` is **not** `int`: the
+  generic `int` may widen one day (CLAUDE.md §4.4), an `int32` never does.
+  `sint` remains a spelling of `int`.
+- Nothing converts implicitly between integer types, not even to a wider
+  one: `int16 b = a;` with `a` an `int8` is `ASX-TYPE-001`, and `a + b` with
+  different integer types is `ASX-TYPE-012` (`ASX-TYPE-011` if the
+  signedness differs). Write `(int16) a`. **[provisional]** Implicit
+  lossless widening could be allowed later without breaking programs.
+- Integer constants take the destination's type when they fit
+  (`uint64 h = 18446744073709551615;`), as in §5.3.
+- Arithmetic is exact and checked in every width: a result outside the
+  type's range is `ASX-RUN-002`, never a wrapped value.
+- On the JavaScript target, `int64` and `uint64` are `BigInt`s; the other
+  widths are numbers. **[provisional]** Explicit widths cannot cross the
+  `extern` boundary yet (`ASX-TYPE-023`).
+
 ### 5.2 Planned types **[planned/undecided]**
-`int8 int16 int32`, plus probably `int64` and `uint8 … uint64`.
-Also `matrix`, `struct`, `class`, and generic type parameters.
+`matrix`, `struct`, `class`, and generic type parameters.
 None of these are implemented. Their names are reserved.
 
 ### 5.3 Integer constants **[v0.1, provisional]**
@@ -472,8 +493,9 @@ There are no implicit conversions between numbers, `bool`, and `string`.
 
 ### 5.6 Conversions **[v0.3, decided syntax]**
 `(T) x` converts `x` to `T`, C style (owner decision; this settles
-OQ-CONV-01). `T` is `int`, `sint`, `uint`, `float`, `float32`, `float64`,
-`string`, `bool`, or `char`. Conversions are **checked**: they never wrap, and a
+OQ-CONV-01). `T` is any number type (`int`, `sint`, `uint`, the explicit
+widths `int8` … `uint64`, `float`, `float32`, `float64`), `string`, `bool`,
+or `char`. Conversions are **checked**: they never wrap, and a
 value that can't be converted throws instead (`ASX-RUN-006` if nothing
 catches it).
 

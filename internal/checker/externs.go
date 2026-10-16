@@ -68,6 +68,14 @@ func (c *checker) externType(d *ast.ExternDecl) *types.Type {
 
 func (c *checker) boundaryType(ref *ast.TypeRef, result bool) *types.Type {
 	t := c.resolveType(ref)
+	switch {
+	case (t.Kind == types.Signed || t.Kind == types.Unsigned) && t.Bits != 0:
+		// The explicit widths, and 64-bit BigInts in particular, have no
+		// checked JavaScript representation yet (OQ-NUM-07).
+		c.errorf(diagnostics.TypeExternType, ref.Span, "type '%s' cannot cross the JavaScript boundary yet", t).
+			WithHelp("use int or uint at the boundary and convert, e.g. (int16) n")
+		return types.InvalidT
+	}
 	switch t.Kind {
 	case types.Invalid, types.Signed, types.Unsigned, types.Float, types.Bool, types.String, types.Error:
 		return t

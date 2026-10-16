@@ -118,21 +118,22 @@ func (c *checker) convertConst(e ast.Expr, v *big.Int, dst *types.Type) bool {
 			WithHelp("An unsigned integer cannot hold a negative value; change the destination type.")
 		return false
 	}
-	if !v.IsInt64() || !types.InRange(dst, v.Int64()) {
+	if !types.Fits(dst, v) {
 		c.errorf(diagnostics.TypeConstOutOfRange, span, "constant %s does not fit in '%s'", v, dst).
 			WithHelp(rangeHelp(dst))
 		return false
 	}
 	c.info.Types[e] = dst
-	c.info.Consts[e] = v.Int64()
+	c.info.Consts[e] = types.FromBig(dst, v)
 	return true
 }
 
 func rangeHelp(t *types.Type) string {
-	if t.Kind == types.Unsigned {
-		return "'uint' is currently 32 bits (0 to 4294967295); widening is not yet implemented"
+	lo, hi := types.IntRange(t)
+	if t.Bits == 0 {
+		return fmt.Sprintf("'%s' is currently %d bits (%s to %s); widening is not yet implemented", t, types.IntBits(t), lo, hi)
 	}
-	return "'int' is currently 32 bits (-2147483648 to 2147483647); widening is not yet implemented"
+	return fmt.Sprintf("'%s' holds %s to %s", t, lo, hi)
 }
 
 // convertFloatConst gives an untyped float constant (or an integer
@@ -392,6 +393,10 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 		c.errorf(diagnostics.TypeMixedSignedness, opSpan, "operator '%s' mixes signed '%s' and unsigned '%s'", op, signedOf(x.typ, y.typ), unsignedOf(x.typ, y.typ)).
 			WithHelp("mixed-signedness arithmetic and comparison are not yet specified")
 		return invalid
+	case !types.Identical(x.typ, y.typ):
+		c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' mixes '%s' and '%s'", op, x.typ, y.typ).
+			WithHelp(fmt.Sprintf("integers of different types are not converted implicitly; convert one side, e.g. (%s) x", wider(x.typ, y.typ)))
+		return invalid
 	}
 	if comparison {
 		return operand{typ: types.BoolT}
@@ -458,6 +463,15 @@ func floatOf(a, b *types.Type) string {
 		}
 	}
 	return "float"
+}
+
+// wider names the wider of two integer types of the same signedness, to
+// suggest a conversion that cannot lose the value.
+func wider(a, b *types.Type) *types.Type {
+	if types.IntBits(b) > types.IntBits(a) {
+		return b
+	}
+	return a
 }
 
 func signedOf(a, b *types.Type) *types.Type {
@@ -737,18 +751,22 @@ func (c *checker) cast(e *ast.CastExpr) *types.Type {
 	case x.typ.Kind == types.UntypedFloat && types.IsInteger(to):
 		v := math.Trunc(*x.fconst)
 		text := conv.FormatFloat(*x.fconst, 64)
+		var exact *big.Int
+		if !math.IsNaN(v) && !math.IsInf(v, 0) {
+			exact, _ = big.NewFloat(v).Int(nil)
+		}
 		switch {
 		case to.Kind == types.Unsigned && v < 0:
 			c.errorf(diagnostics.TypeNegativeToUnsigned, span, "Cannot convert negative constant %s to unsigned integer '%s'.", text, to).
 				WithHelp("An unsigned integer cannot hold a negative value; change the destination type.")
 			return types.InvalidT
-		case math.IsNaN(v) || v < math.MinInt64 || v > math.MaxInt64 || !types.InRange(to, int64(v)):
+		case exact == nil || !types.Fits(to, exact):
 			c.errorf(diagnostics.TypeConstOutOfRange, span, "constant %s does not fit in '%s'", text, to).
 				WithHelp(rangeHelp(to))
 			return types.InvalidT
 		}
 		c.info.Types[e] = to
-		c.info.Consts[e] = int64(v)
+		c.info.Consts[e] = types.FromBig(to, exact)
 		return to
 	case x.typ.Kind == types.UntypedFloat && to.Kind == types.Float:
 		return c.floatConstCast(e, *x.fconst, to, conv.FormatFloat(*x.fconst, 64))

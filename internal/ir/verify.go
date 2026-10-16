@@ -180,7 +180,7 @@ func (v *verifier) loop(b *Block) {
 func (v *verifier) expr(e Expr) *types.Type {
 	switch e := e.(type) {
 	case *IntConst:
-		if !types.InRange(e.T, e.Value) {
+		if !types.InRange(e.T, e.Value) && !(e.T.Kind == types.Unsigned && types.IntBits(e.T) == 64) {
 			v.fail("constant %d does not fit in %s", e.Value, e.T)
 		}
 	case *FloatConst:

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -28,8 +29,9 @@ import (
 // semantics.
 const MaxCallDepth = 10000
 
-// Value is a runtime value. Integers of every current type, and chars,
-// fit in Int. A float is held as a float64; Bits is 32 for float32 values,
+// Value is a runtime value. Integers and chars are held in Int, a uint64
+// as its bit pattern (see types.Big), with Bits set to the integer type's
+// Bits. A float is held as a float64; Bits is 32 for float32 values,
 // which are always exact float32 values, and 0 otherwise (see
 // types.FloatT).
 type Value struct {
@@ -63,8 +65,20 @@ func (v Value) String() string {
 		return v.Err.String()
 	case types.Char:
 		return string(rune(v.Int))
+	case types.Unsigned:
+		if v.Bits == 64 {
+			return strconv.FormatUint(uint64(v.Int), 10)
+		}
 	}
 	return strconv.FormatInt(v.Int, 10)
+}
+
+// big returns the exact value of v, an integer or a char.
+func (v Value) big() *big.Int {
+	if v.Kind == types.Unsigned && v.Bits == 64 {
+		return new(big.Int).SetUint64(uint64(v.Int))
+	}
+	return big.NewInt(v.Int)
 }
 
 // ErrorValue is a RuneScript error: one created with `new`, or one the
@@ -383,7 +397,7 @@ func (in *interp) tryCatch(f *frame, s *ir.Try) control {
 func (in *interp) expr(f *frame, e ir.Expr) Value {
 	switch e := e.(type) {
 	case *ir.IntConst:
-		return Value{Kind: e.T.Kind, Int: e.Value}
+		return Value{Kind: e.T.Kind, Int: e.Value, Bits: e.T.Bits}
 	case *ir.FloatConst:
 		return Value{Kind: types.Float, F: e.Value, Bits: e.T.Bits}
 	case *ir.StringConst:
@@ -472,7 +486,7 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 		return Value{Kind: types.Array, Arr: &ArrayValue{Elems: in.exprs(f, e.Elems)}}
 	case *ir.Index:
 		a := in.expr(f, e.X).Arr
-		i := in.expr(f, e.I).Int
+		i := in.expr(f, e.I)
 		return a.Elems[in.checkIndex(a, i, e.Site)]
 	case *ir.IndexOld:
 		return in.olds[len(in.olds)-1]
@@ -528,7 +542,14 @@ func compare(op string, x, y Value) bool {
 		if x.Bool != y.Bool {
 			c = 1
 		}
-	default: // integers and chars
+	case types.Unsigned:
+		switch a, b := uint64(x.Int), uint64(y.Int); { // exact for every width
+		case a < b:
+			c = -1
+		case a > b:
+			c = 1
+		}
+	default: // signed integers and chars
 		switch {
 		case x.Int < y.Int:
 			c = -1
@@ -552,9 +573,15 @@ func compare(op string, x, y Value) bool {
 }
 
 // arith performs integer arithmetic of type t. Operands are within t's
-// range, so int64 arithmetic is exact; a result outside the range is a
-// runtime error because widening is not yet specified (OQ-NUM-01).
+// range, so for types up to 32 bits int64 arithmetic is exact, and 64-bit
+// types are computed exactly with big.Int. A result outside the range is a
+// runtime error: integers never wrap (OQ-NUM-01).
 func (in *interp) arith(op string, t *types.Type, x, y Value, span diagnostics.Span) Value {
+	if types.IntBits(t) == 64 || (op == "*" && t.Kind == types.Unsigned) {
+		// Exact with big.Int: 64-bit operands, and products of two 32-bit
+		// unsigned values, which can exceed int64.
+		return in.wideArith(op, t, x, y, span)
+	}
 	var r int64
 	switch op {
 	case "+":
@@ -574,13 +601,47 @@ func (in *interp) arith(op string, t *types.Type, x, y Value, span diagnostics.S
 		}
 	}
 	if !types.InRange(t, r) {
-		name := types.Int // messages name the generic type, e.g. 'int' for sint
-		if t.Kind == types.Unsigned {
-			name = types.Uint
-		}
-		in.fail(diagnostics.RunOverflow, span, "integer overflow: %d %s %d = %d does not fit in '%s'", x.Int, op, y.Int, r, name)
+		in.fail(diagnostics.RunOverflow, span, "integer overflow: %d %s %d = %d does not fit in '%s'", x.Int, op, y.Int, r, typeName(t))
 	}
-	return Value{Kind: t.Kind, Int: r}
+	return Value{Kind: t.Kind, Int: r, Bits: t.Bits}
+}
+
+// wideArith is arith computed exactly with big.Int, for any integer type.
+func (in *interp) wideArith(op string, t *types.Type, x, y Value, span diagnostics.Span) Value {
+	a, b, r := x.big(), y.big(), new(big.Int)
+	switch op {
+	case "+":
+		r.Add(a, b)
+	case "-":
+		r.Sub(a, b)
+	case "*":
+		r.Mul(a, b)
+	case "/", "%":
+		if b.Sign() == 0 {
+			in.fail(diagnostics.RunDivideByZero, span, "integer division by zero")
+		}
+		if op == "/" {
+			r.Quo(a, b) // truncates toward zero
+		} else {
+			r.Rem(a, b) // takes the dividend's sign
+		}
+	}
+	if !types.Fits(t, r) {
+		in.fail(diagnostics.RunOverflow, span, "integer overflow: %s %s %s = %s does not fit in '%s'", a, op, b, r, typeName(t))
+	}
+	return Value{Kind: t.Kind, Int: types.FromBig(t, r), Bits: t.Bits}
+}
+
+// typeName names an integer type in a message: the generic types by
+// their main spelling ('int' for sint too).
+func typeName(t *types.Type) *types.Type {
+	switch {
+	case t.Bits != 0:
+		return t
+	case t.Kind == types.Unsigned:
+		return types.Uint
+	}
+	return types.Int
 }
 
 // floatArith performs + - * / on floats of type t, with IEEE 754
@@ -642,35 +703,33 @@ func (in *interp) convert(v Value, to *types.Type, span diagnostics.Span) Value 
 		}
 		notValid("'true' or 'false'")
 	case types.Signed, types.Unsigned:
-		var n int64
+		var n *big.Int // the exact value
 		switch v.Kind {
 		case types.Signed, types.Unsigned, types.Char:
-			n = v.Int
+			n = v.big()
 		case types.Float:
 			t := math.Trunc(v.F)
-			if math.IsNaN(t) || t < math.MinInt64 || t >= math.MaxInt64 {
+			if math.IsNaN(t) || math.IsInf(t, 0) {
 				outOfRange()
 			}
-			n = int64(t)
+			n, _ = big.NewFloat(t).Int(nil)
 		case types.String:
-			parsed, fits, ok := conv.ParseInt(v.Str)
-			if !ok {
+			if _, _, ok := conv.ParseInt(v.Str); !ok {
 				notValid("an integer")
 			}
-			if !fits {
-				outOfRange()
-			}
-			n = parsed
+			n, _ = new(big.Int).SetString(strings.TrimPrefix(v.Str, "+"), 10)
 		}
-		if !types.InRange(to, n) {
+		if !types.Fits(to, n) {
 			outOfRange()
 		}
-		return Value{Kind: to.Kind, Int: n}
+		return Value{Kind: to.Kind, Int: types.FromBig(to, n), Bits: to.Bits}
 	case types.Float:
 		var f float64
 		switch v.Kind {
-		case types.Signed, types.Unsigned:
+		case types.Signed:
 			f = float64(v.Int)
+		case types.Unsigned:
+			f = float64(uint64(v.Int)) // exact for uint64 bit patterns too
 		case types.Float:
 			f = v.F
 		case types.String:
@@ -787,11 +846,11 @@ func (in *interp) goFunc(v Value, t *types.Type, site diagnostics.Span) any {
 
 // checkIndex returns i if it is an index of a, and throws a RangeError
 // otherwise.
-func (in *interp) checkIndex(a *ArrayValue, i int64, span diagnostics.Span) int64 {
-	if i < 0 || i >= int64(len(a.Elems)) {
-		in.fail(diagnostics.RunIndex, span, "index %d is out of range for an array of length %d", i, len(a.Elems))
+func (in *interp) checkIndex(a *ArrayValue, i Value, span diagnostics.Span) int64 {
+	if n := i.big(); !n.IsInt64() || n.Int64() < 0 || n.Int64() >= int64(len(a.Elems)) {
+		in.fail(diagnostics.RunIndex, span, "index %s is out of range for an array of length %d", n, len(a.Elems))
 	}
-	return i
+	return i.Int
 }
 
 // indexSet runs a[i] = v or a[i] op= v (ir.IndexSet): the array, then the
@@ -801,7 +860,7 @@ func (in *interp) checkIndex(a *ArrayValue, i int64, span diagnostics.Span) int6
 // shortened the array.
 func (in *interp) indexSet(f *frame, s *ir.IndexSet) {
 	a := in.expr(f, s.X).Arr
-	i := in.expr(f, s.I).Int
+	i := in.expr(f, s.I)
 	var v Value
 	if s.Compound {
 		in.olds = append(in.olds, a.Elems[in.checkIndex(a, i, s.Site)])

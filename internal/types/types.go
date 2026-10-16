@@ -8,7 +8,10 @@
 // uint32); integer widening is not implemented (OQ-NUM-01, OQ-NUM-02).
 package types
 
-import "math"
+import (
+	"math"
+	"math/big"
+)
 
 // Kind is the semantic identity of a type.
 type Kind int
@@ -55,7 +58,9 @@ type Type struct {
 	Params []*Type
 	Result *Type
 	// Bits is set for Float types: 0 for the generic 'float', which starts
-	// as float32 and widens (see Float), or 32 or 64.
+	// as float32 and widens (see Float), or 32 or 64. For integer types it
+	// is 0 for the generic 'int'/'sint' and 'uint' (32-bit for now,
+	// OQ-NUM-01), or 8, 16, 32, or 64 for the explicit-width types.
 	Bits int
 	// Super is the supertype of an error type other than Error.
 	Super *Type
@@ -111,9 +116,22 @@ func NewFunc(params []*Type, result *Type) *Type {
 func (t *Type) String() string { return t.Name }
 
 var (
-	Int          = &Type{Kind: Signed, Name: "int"}
-	Sint         = &Type{Kind: Signed, Name: "sint"}
-	Uint         = &Type{Kind: Unsigned, Name: "uint"}
+	Int  = &Type{Kind: Signed, Name: "int"}
+	Sint = &Type{Kind: Signed, Name: "sint"}
+	Uint = &Type{Kind: Unsigned, Name: "uint"}
+
+	// The explicit-width integers (OQ-NUM-07). They never widen, and each
+	// is a type of its own: an int32 is not an int, because the generic
+	// int may widen one day (CLAUDE.md §4.4), so moving a value between
+	// them needs a conversion.
+	Int8         = &Type{Kind: Signed, Name: "int8", Bits: 8}
+	Int16        = &Type{Kind: Signed, Name: "int16", Bits: 16}
+	Int32        = &Type{Kind: Signed, Name: "int32", Bits: 32}
+	Int64        = &Type{Kind: Signed, Name: "int64", Bits: 64}
+	Uint8        = &Type{Kind: Unsigned, Name: "uint8", Bits: 8}
+	Uint16       = &Type{Kind: Unsigned, Name: "uint16", Bits: 16}
+	Uint32       = &Type{Kind: Unsigned, Name: "uint32", Bits: 32}
+	Uint64       = &Type{Kind: Unsigned, Name: "uint64", Bits: 64}
 	BoolT        = &Type{Kind: Bool, Name: "bool"}
 	StringT      = &Type{Kind: String, Name: "string"}
 	CharT        = &Type{Kind: Char, Name: "char"}
@@ -149,6 +167,8 @@ var (
 var byName = map[string]*Type{
 	"int": Int, "sint": Sint, "uint": Uint, "bool": BoolT, "string": StringT, "char": CharT, "void": VoidT,
 	"float": FloatT, "float32": Float32, "float64": Float64,
+	"int8": Int8, "int16": Int16, "int32": Int32, "int64": Int64,
+	"uint8": Uint8, "uint16": Uint16, "uint32": Uint32, "uint64": Uint64,
 	"Error": ErrorT, "RangeError": RangeErrorT, "TypeError": TypeErrorT, "ArgumentError": ArgumentErrorT,
 }
 
@@ -192,7 +212,7 @@ func Identical(a, b *Type) bool {
 		return false
 	}
 	switch a.Kind {
-	case Float:
+	case Float, Signed, Unsigned:
 		return a.Bits == b.Bits
 	case Error:
 		return a == b
@@ -231,13 +251,66 @@ const (
 	UnsignedMax int64 = math.MaxUint32
 )
 
-// InRange reports whether v is representable in integer type t.
+// IntBits is the width of integer type t: 32 for the generic int and uint.
+func IntBits(t *Type) int {
+	if t.Bits == 0 {
+		return 32
+	}
+	return t.Bits
+}
+
+// IsWide reports whether t is a 64-bit integer type, whose values do not
+// all fit in a float64 (on the JavaScript target they are BigInts).
+func IsWide(t *Type) bool { return IntBits(t) == 64 && (t.Kind == Signed || t.Kind == Unsigned) }
+
+// IntRange returns the smallest and largest values of integer type t.
+func IntRange(t *Type) (lo, hi *big.Int) {
+	bits := uint(IntBits(t))
+	if t.Kind == Unsigned {
+		hi = new(big.Int).Lsh(big.NewInt(1), bits)
+		return big.NewInt(0), hi.Sub(hi, big.NewInt(1))
+	}
+	hi = new(big.Int).Lsh(big.NewInt(1), bits-1)
+	lo = new(big.Int).Neg(hi)
+	return lo, hi.Sub(hi, big.NewInt(1))
+}
+
+// Fits reports whether the exact value v is representable in integer type t.
+func Fits(t *Type, v *big.Int) bool {
+	lo, hi := IntRange(t)
+	return v.Cmp(lo) >= 0 && v.Cmp(hi) <= 0
+}
+
+// An integer value of any type is held in an int64: its value for every
+// type but uint64, whose values above math.MaxInt64 are held as their
+// two's-complement bit pattern. Big and FromBig convert between that
+// representation and the exact value.
+
+// Big returns the exact value of v, an integer of type t.
+func Big(t *Type, v int64) *big.Int {
+	if t.Kind == Unsigned && IntBits(t) == 64 {
+		return new(big.Int).SetUint64(uint64(v))
+	}
+	return big.NewInt(v)
+}
+
+// FromBig returns the int64 representation of v, which fits in t.
+func FromBig(t *Type, v *big.Int) int64 {
+	if t.Kind == Unsigned && IntBits(t) == 64 {
+		return int64(v.Uint64())
+	}
+	return v.Int64()
+}
+
+// InRange reports whether v, an exact value (never a uint64 bit pattern),
+// is representable in integer type t.
 func InRange(t *Type, v int64) bool {
+	bits := IntBits(t)
 	switch t.Kind {
 	case Signed:
-		return v >= SignedMin && v <= SignedMax
+		return bits == 64 || (v >= -(1<<(bits-1)) && v <= 1<<(bits-1)-1)
 	case Unsigned:
-		return v >= 0 && v <= UnsignedMax
+		return v >= 0 && (bits == 64 || v <= 1<<bits-1)
 	}
 	return false
 }
