@@ -83,7 +83,11 @@ redeclared.
   leading zeros (`007`) are rejected **[provisional]**. Hex, binary, digit
   separators, and suffixes are **[undecided]**. Literals are non-negative;
   `-5` is unary minus applied to `5`.
-- **String [v0.1]**: `"…"` on one line. Escapes: `\n \t \r \\ \"`. Any other
+- **String [v0.1]**: `"…"` on one line. Escapes: `\n \t \r \\ \" \'`, `\0`
+  (U+0000), and **[2026-10-17]** `\u{X…}`: 1 to 6 hex digits naming a
+  Unicode scalar value, e.g. `\u{E9}` or `\u{1F600}`. A surrogate
+  (`\u{D800}`–`\u{DFFF}`) or a value above `\u{10FFFF}` is `ASX-LEX-003`, so
+  every string is valid UTF-8. There are no byte escapes (`\x41`). Any other
   escape is an error **[provisional]**.
 - **Interpolated string [decided 2026-10-16]**: `$"text {expr} text"` on one
   line. Each `{expr}` hole holds one expression, which may contain strings
@@ -100,7 +104,7 @@ redeclared.
   nearest float64 to its decimal value; one too large for float64, or so
   small it would round to zero, is `ASX-LEX-005`.
 - **Char [decided 2026-10-16]**: exactly one character between single
-  quotes: `'a'`, `'é'`, `'😀'`. Escapes are those of strings plus `\'`.
+  quotes: `'a'`, `'é'`, `'😀'`. Escapes are those of strings.
   Anything other than one character (`''`, `'ab'`) is `ASX-LEX-006`.
 
 ### 2.5 Operators and punctuation **[v0.1]**

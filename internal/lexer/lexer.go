@@ -421,15 +421,78 @@ func (l *lexer) escape(b *strings.Builder) {
 		b.WriteByte('\\')
 	case '"':
 		b.WriteByte('"')
+	case '\'':
+		b.WriteByte('\'')
+	case '0':
+		b.WriteByte(0)
+	case 'u':
+		l.advance()
+		l.unicodeEscape(b, escStart)
+		return
 	default:
 		if e != '\n' && e != 0 {
 			l.advance()
 		}
 		l.errorf(diagnostics.LexInvalidEscape, escStart, "invalid escape sequence in string literal").
-			WithHelp(`supported escapes are \n \t \r \\ \"`)
+			WithHelp(`supported escapes are \n \t \r \0 \\ \" \' and \u{1F600}`)
 		return
 	}
 	l.advance()
+}
+
+// unicodeEscape decodes the rest of \u{X…}: 1 to 6 hex digits naming a
+// Unicode scalar value (OQ-STR-02). The input is just after the 'u'.
+func (l *lexer) unicodeEscape(b *strings.Builder, escStart diagnostics.Pos) {
+	bad := func(msg string) {
+		l.errorf(diagnostics.LexInvalidEscape, escStart, "%s", msg).
+			WithHelp(`write a Unicode escape as \u{...} with 1 to 6 hex digits, e.g. \u{E9} or \u{1F600}`)
+	}
+	if l.off >= len(l.src) || l.src[l.off] != '{' {
+		bad(`\u must be followed by {`)
+		return
+	}
+	l.advance()
+	var v int64
+	n := 0
+	for l.off < len(l.src) && isHex(l.src[l.off]) {
+		v = v*16 + hexVal(l.src[l.off])
+		n++
+		l.advance()
+		if n > 6 {
+			for l.off < len(l.src) && isHex(l.src[l.off]) {
+				l.advance()
+			}
+			bad(`a \u{...} escape has at most 6 hex digits`)
+			return
+		}
+	}
+	if n == 0 || l.off >= len(l.src) || l.src[l.off] != '}' {
+		bad(`a \u{...} escape needs 1 to 6 hex digits and a closing }`)
+		return
+	}
+	l.advance()
+	switch {
+	case v >= 0xD800 && v <= 0xDFFF:
+		bad(fmt.Sprintf(`\u{%X} is a surrogate, which is not a character`, v))
+	case v > 0x10FFFF:
+		bad(fmt.Sprintf(`\u{%X} is beyond U+10FFFF, the last Unicode code point`, v))
+	default:
+		b.WriteRune(rune(v))
+	}
+}
+
+func isHex(c byte) bool {
+	return isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+func hexVal(c byte) int64 {
+	switch {
+	case c >= 'a':
+		return int64(c-'a') + 10
+	case c >= 'A':
+		return int64(c-'A') + 10
+	}
+	return int64(c - '0')
 }
 
 // interpString lexes $"…{x}…" (OQ-STR-01): the text pieces become StrHead,
