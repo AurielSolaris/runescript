@@ -303,4 +303,4 @@ prog.rsc:8:10: error ASX-TMPL-002: unknown element <dvi>
 - কাঁচা HTML ঢোকানো, MathML, কাস্টম এলিমেন্ট, এবং সার্ভার-সাইড রেন্ডারিং।
 - হট মডিউল রিপ্লেসমেন্ট: `runescript dev` পেজটি রিলোড করে।
 
-পরবর্তী: [গাইডের সূচিপত্রে](README.md) ফিরে যান
+পরবর্তী: [লেখা ও তালিকা](16-text-and-arrays.md)

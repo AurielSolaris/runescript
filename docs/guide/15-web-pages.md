@@ -314,4 +314,4 @@ prog.rsc:8:10: error ASX-TMPL-002: unknown element <dvi>
 - Raw HTML insertion, MathML, custom elements, and server-side rendering.
 - Hot module replacement: `runescript dev` reloads the page.
 
-Next: back to the [guide index](README.md)
+Next: [Text and lists](16-text-and-arrays.md)

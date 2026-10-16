@@ -128,7 +128,7 @@ public void main() {
 <div dir="rtl">
 
 פונקציות התווים של `std:string` מקבלות תווים: ראו
-[תווים ו-callbacks](10-std-string.md#characters-and-callbacks).
+[תווים ו-callbacks](10-std-string.md).
 
 ## מערכים: `Array<T>`
 
@@ -236,7 +236,7 @@ public void main() {
 <div dir="rtl">
 
 אי אפשר להעביר מערכים ישירות ל-trace. חברו אותם למחרוזת אחת עם `string.join`
-([פרק 10](10-std-string.md#splitting-and-joining)):
+([פרק 10](10-std-string.md)):
 
 </div>
 

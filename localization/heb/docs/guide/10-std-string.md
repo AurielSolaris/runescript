@@ -182,7 +182,7 @@ public void main() {
 
 ### תווים ו-callbacks
 
-הפונקציות האלה מקבלות [`char`](16-text-and-arrays.md#characters-char), או פונקציה
+הפונקציות האלה מקבלות [`char`](16-text-and-arrays.md), או פונקציה
 שבודקת תו אחד בכל פעם. כל callback נקרא באותו סדר כמו ב-Go: משמאל לימין, מלבד
 `lastIndexFunc` והצד הימני של החיתוכים, שעובדים מהסוף.
 
@@ -231,7 +231,7 @@ public void main() {
 
 ### פיצול וחיבור
 
-הפונקציות האלה מחזירות או מקבלות [`Array<string>`](16-text-and-arrays.md#arrays-arrayt):
+הפונקציות האלה מחזירות או מקבלות [`Array<string>`](16-text-and-arrays.md):
 
 | פונקציה | מחזירה | תיאור |
 |---|---|---|

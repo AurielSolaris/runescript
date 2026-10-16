@@ -321,6 +321,6 @@ prog.rsc:8:10: error ASX-TMPL-002: unknown element <dvi>
 - הכנסת HTML גולמי, MathML, אלמנטים מותאמים אישית ורינדור בצד השרת.
 - החלפת מודולים חמה: `runescript dev` טוענת את הדף מחדש.
 
-הבא: חזרה ל[תוכן העניינים של המדריך](README.md)
+הבא: [טקסט ורשימות](16-text-and-arrays.md)
 
 </div>

@@ -114,7 +114,7 @@ public void main() {
 ```
 
 `std:string`-এর অক্ষর-ফাংশনগুলো char নেয়: দেখুন
-[অক্ষর ও কলব্যাক](10-std-string.md#characters-and-callbacks)।
+[অক্ষর ও কলব্যাক](10-std-string.md)।
 
 ## অ্যারে: `Array<T>`
 
@@ -207,7 +207,7 @@ public void main() {
 ```
 
 অ্যারে সরাসরি trace করা যায় না। `string.join` দিয়ে সেগুলোকে একটি স্ট্রিংয়ে জোড়া
-লাগান ([অধ্যায় ১০](10-std-string.md#splitting-and-joining)):
+লাগান ([অধ্যায় ১০](10-std-string.md)):
 
 ```actionscript
 package main;
