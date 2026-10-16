@@ -329,3 +329,17 @@ func TestParseSVGAttrs(t *testing.T) {
 		t.Error("camelCase accepted in HTML")
 	}
 }
+
+func TestIsIDSelector(t *testing.T) {
+	for _, s := range []string{"#app", "#App", "#main-view", "#_x", "#-x", "#--x", "#r2d2", "#ᚱune"} {
+		if !IsIDSelector(s) {
+			t.Errorf("%q is an id selector", s)
+		}
+	}
+	for _, s := range []string{"", "#", "app", ".app", "#app .x", "#a,#b", "div#app", "#1app", "#-1", "#-",
+		"#a:hover", `#a\.b`, "#a b", " #app", "#app ", "#a\xffb", "[id=app]", "body > div"} {
+		if IsIDSelector(s) {
+			t.Errorf("%q is not a single id selector", s)
+		}
+	}
+}

@@ -96,7 +96,8 @@ conditionals, loops, and basic functions.
 - [ ] Templates in `.rsc` files, in the style of Vue/Svelte components and Laravel Blade: `$if` and `$foreach` directives, `{{ }}` interpolation that escapes HTML by default; `Element` is a type imported with `use "rune:dom";`
 - [ ] Reactivity through explicit SolidJS-style signals, called runes: `Signal<int> count = signal(0);`, read `count()`, written `count.set(n)`; setting one updates only the DOM nodes that read it
 - [ ] Elements: HTML4 (obsolete ones warn), HTML5, and SVG; attributes typed per element
-- [ ] Mounting without a router: `dom.renderApp(App, "#app");` renders one component into the element the user names
+- [ ] Mounting without a router: `use "./App.rsc";` then `dom.renderApp(app.App, "#app");` renders one component into the element the selector names; any CSS selector works, with a warning unless it is an id selector
+- [ ] Templates switch to SVG inside `<svg>` (and back to HTML inside `foreignObject`)
 - [ ] Needs first: a signal type (generics or opaque types), arrays, and callbacks across the JavaScript boundary; classes are not required
 
 ### Bundled JavaScript runtime (planned, not started)
