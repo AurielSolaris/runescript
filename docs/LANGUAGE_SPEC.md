@@ -84,6 +84,14 @@ redeclared.
   `-5` is unary minus applied to `5`.
 - **String [v0.1]**: `"…"` on one line. Escapes: `\n \t \r \\ \"`. Any other
   escape is an error **[provisional]**.
+- **Interpolated string [decided 2026-10-16]**: `$"text {expr} text"` on one
+  line. Each `{expr}` hole holds one expression, which may contain strings
+  and other interpolated strings; braces inside a hole nest. In the text,
+  `{{` and `}}` stand for `{` and `}`, a single `}` is `ASX-LEX-003`, and
+  escapes are those of strings. A hole's value is converted to text as
+  `(string) x` converts it (§5.6), so it must be a number, `bool`, or
+  `string` (`ASX-TYPE-017`). Without holes, `$"…"` is an ordinary string.
+  Format specifiers (`{x:5}`) are **[undecided]**.
 - **Boolean [v0.1]**: `true`, `false`.
 - **Float [v0.3]**: digits, then optionally `.` and digits, then
   optionally an exponent: `64.3`, `1e10`, `2.5E-3`. Both sides of the `.`
@@ -150,8 +158,9 @@ Unary        = ( "-" | "!" ) Unary | Cast | Postfix ;
 Cast         = "(" CastType ")" Unary ;
 CastType     = "int" | "sint" | "uint" | "float" | "float32" | "float64" | "string" | "bool" ;
 Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" | "." Ident } ;   (* calls, fields *)
-Primary      = IntLit | FloatLit | StringLit | "true" | "false"
+Primary      = IntLit | FloatLit | StringLit | InterpString | "true" | "false"
              | Ident | Call | Lambda | New | "(" Expr ")" ;
+InterpString = '$"' { Text | "{" Expr "}" } '"' ;   (* §2.4 *)
 New          = "new" Ident "(" [ Expr { "," Expr } ] ")" ;
 Lambda       = "(" [ Type Ident { "," Type Ident } ] ")" "=>" ( Expr | Block ) ;
 Call         = [ Qualifier "." ] Ident "(" [ Expr { "," Expr } ] ")" ;
@@ -455,6 +464,7 @@ compile-time error: `(uint) -2.5` is `ASX-TYPE-007`, `(int) 3e10` is
 |---|---|---|
 | `+ - * / %` | two integers of the same signedness | the same integer type |
 | `+ - * /` [v0.3] | two floats of the same type | that type (§5.1b) |
+| `+` [2026-10-16] | two `string`s | `string`: the two joined |
 | unary `-` | a signed integer or a float | the same type (`uint` is rejected) |
 | `< <= > >=` | two integers of the same signedness, or two floats of the same type | `bool` |
 | `== !=` | two numbers as above, two `bool`s, or two `string`s | `bool` |
@@ -465,8 +475,10 @@ compile-time error: `(uint) -2.5` is `ASX-TYPE-007`, `(int) 3e10` is
   (`ASX-TYPE-011`).
 - **[v0.1, provisional]** `/` truncates toward zero. `%` takes the sign of
   the dividend. Division by zero is a runtime error (`ASX-RUN-003`).
-- **[undecided]** String concatenation (`"a" + "b"` is rejected), bitwise
-  operators, shifts, `?:`, `?.`, `??`.
+- **[decided 2026-10-16]** `+` joins two strings and converts nothing:
+  `"n=" + 5` is `ASX-TYPE-012`; write `"n=" + (string) 5` or `$"n={5}"`.
+  `s += t` works on a `string` variable.
+- **[undecided]** Bitwise operators, shifts, `?:`, `?.`, `??`.
 - Operands are evaluated left to right.
 
 ### 6.2 Calls **[v0.1]**

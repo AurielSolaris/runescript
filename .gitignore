@@ -8,3 +8,6 @@ docs/OPEN_QUESTIONS.md
 /runescript
 /runescript.exe
 *.test
+
+# Internal map of the codebase, kept local by the project owner.
+MAP.md

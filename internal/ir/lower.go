@@ -192,6 +192,9 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 	case *ast.AssignStmt:
 		v := l.lookup(s.Target.Name)
 		value := l.expr(s.Value)
+		if s.Op == "+=" && v.Type.Kind == types.String {
+			return &Assign{Var: v, Value: concat(&Load{Var: v}, value)}
+		}
 		if s.Op != "=" {
 			value = &Arith{Op: s.Op[:1], T: v.Type, X: &Load{Var: v}, Y: value, Site: s.Span}
 		}
@@ -305,6 +308,22 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		return l.expr(e.X)
 	case *ast.StringLit:
 		return &StringConst{Value: e.Value, Span: e.Span}
+	case *ast.InterpString:
+		var parts []Expr
+		for i, x := range e.Exprs {
+			if e.Parts[i] != "" {
+				parts = append(parts, &StringConst{Value: e.Parts[i], Span: e.Span})
+			}
+			v := l.expr(x)
+			if v.Type().Kind != types.String {
+				v = &Convert{X: v, To: types.StringT, Site: x.NodeSpan()}
+			}
+			parts = append(parts, v)
+		}
+		if last := e.Parts[len(e.Exprs)]; last != "" {
+			parts = append(parts, &StringConst{Value: last, Span: e.Span})
+		}
+		return concat(parts...)
 	case *ast.BoolLit:
 		return &BoolConst{Value: e.Value}
 	case *ast.IntLit:
@@ -335,11 +354,28 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 			return &Logic{Op: e.Op, X: x, Y: y}
 		case "==", "!=", "<", "<=", ">", ">=":
 			return &Compare{Op: e.Op, X: x, Y: y}
+		case "+":
+			if x.Type().Kind == types.String {
+				return concat(x, y)
+			}
 		}
 		return &Arith{Op: e.Op, T: l.concrete(e, l.info.Types[e]), X: x, Y: y, Site: e.OpPos}
 	}
 	l.ice("unexpected expression %T", e)
 	return nil
+}
+
+// concat joins string expressions, flattening nested joins.
+func concat(parts ...Expr) *Concat {
+	out := &Concat{}
+	for _, p := range parts {
+		if c, ok := p.(*Concat); ok {
+			out.Parts = append(out.Parts, c.Parts...)
+		} else {
+			out.Parts = append(out.Parts, p)
+		}
+	}
+	return out
 }
 
 func (l *lowerer) call(e *ast.CallExpr) Expr {

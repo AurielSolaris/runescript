@@ -146,3 +146,50 @@ func TestInvalidUTF8(t *testing.T) {
 		t.Errorf("tokens: %v", toks)
 	}
 }
+
+func TestInterpolatedStrings(t *testing.T) {
+	toks, diags := Lex([]byte(`$"a{x}b{{c}}{f("}")}\t" $"plain"`))
+	if len(diags) != 0 {
+		t.Fatal(diags)
+	}
+	want := []struct {
+		kind Kind
+		text string
+		col  int
+	}{
+		{StrHead, "a", 1}, {Ident, "x", 5}, {StrMid, "b{c}", 6}, {Ident, "f", 14}, {LParen, "(", 15},
+		{String, "}", 16}, {RParen, ")", 19}, {StrTail, "\t", 20}, {String, "plain", 25}, {EOF, "", 33},
+	}
+	if len(toks) != len(want) {
+		t.Fatalf("got %d tokens, want %d: %v", len(toks), len(want), toks)
+	}
+	for i, w := range want {
+		if g := toks[i]; g.Kind != w.kind || g.Text != w.text || g.Span.Start.Col != w.col {
+			t.Errorf("token %d: got %v %q at col %d, want %v %q at col %d", i, g.Kind, g.Text, g.Span.Start.Col, w.kind, w.text, w.col)
+		}
+	}
+}
+
+func TestInterpolatedStringErrors(t *testing.T) {
+	cases := []struct {
+		src  string
+		code diagnostics.Code
+		pos  string
+	}{
+		{`$"abc`, diagnostics.LexUnterminatedString, "1:1"},
+		{`x = $"a{b`, diagnostics.LexUnterminatedString, "1:5"},
+		{`$"a } b"`, diagnostics.LexInvalidEscape, "1:5"},
+		{`$"a\q"`, diagnostics.LexInvalidEscape, "1:4"},
+		{"$\"a{b}\nc\"", diagnostics.LexUnterminatedString, "1:1"},
+	}
+	for _, c := range cases {
+		_, diags := Lex([]byte(c.src))
+		if len(diags) == 0 {
+			t.Errorf("%q: expected %s, got no diagnostics", c.src, c.code)
+			continue
+		}
+		if d := diags[0]; d.Code != c.code || d.Span.Start.String() != c.pos {
+			t.Errorf("%q: got %s at %s, want %s at %s", c.src, d.Code, d.Span.Start, c.code, c.pos)
+		}
+	}
+}

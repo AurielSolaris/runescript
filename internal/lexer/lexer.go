@@ -20,6 +20,12 @@ const (
 	Int    // integer literal; Token.Text holds the digits
 	Float  // floating-point literal; Token.Text holds it as written
 	String // string literal; Token.Text holds the decoded value
+	// An interpolated string $"a{x}b{y}c" is StrHead "a", the tokens of x,
+	// StrMid "b", the tokens of y, and StrTail "c". One without holes is a
+	// String.
+	StrHead
+	StrMid
+	StrTail
 	Keyword
 	Reserved // reserved for a future feature; not usable as an identifier
 	LParen
@@ -35,7 +41,7 @@ const (
 
 var kindNames = map[Kind]string{
 	EOF: "end of file", Ident: "identifier", Int: "integer literal", Float: "floating-point literal",
-	String: "string literal", Keyword: "keyword", Reserved: "reserved word",
+	String: "string literal", StrHead: "interpolated string", StrMid: "'}'", StrTail: "'}'", Keyword: "keyword", Reserved: "reserved word",
 	LParen: "'('", RParen: "')'", LBrace: "'{'", RBrace: "'}'", Comma: "','",
 	Semicolon: "';'", Dot: "'.'", Assign: "'='", Op: "operator",
 }
@@ -192,6 +198,8 @@ func (l *lexer) token() {
 		l.number(start)
 	case c == '"':
 		l.string(start)
+	case c == '$' && l.peek(1) == '"':
+		l.interpString(start)
 	case c == '\'':
 		l.advance()
 		l.errorf(diagnostics.LexUnsupportedLiteral, start, "character literals are not supported yet").
@@ -348,37 +356,132 @@ func (l *lexer) string(start diagnostics.Pos) {
 			return
 		}
 		if c == '\\' {
-			escStart := l.pos()
-			l.advance()
-			var e byte
-			if l.off < len(l.src) {
-				e = l.src[l.off]
-			}
-			switch e {
-			case 'n':
-				b.WriteByte('\n')
-			case 't':
-				b.WriteByte('\t')
-			case 'r':
-				b.WriteByte('\r')
-			case '\\':
-				b.WriteByte('\\')
-			case '"':
-				b.WriteByte('"')
-			default:
-				if e != '\n' && e != 0 {
-					l.advance()
-				}
-				l.errorf(diagnostics.LexInvalidEscape, escStart, "invalid escape sequence in string literal").
-					WithHelp(`supported escapes are \n \t \r \\ \"`)
-				continue
-			}
-			l.advance()
+			l.escape(&b)
 			continue
 		}
 		_, size := utf8.DecodeRune(l.src[l.off:])
 		b.Write(l.src[l.off : l.off+size])
 		l.advance()
+	}
+}
+
+// escape decodes the escape sequence at the input into b.
+func (l *lexer) escape(b *strings.Builder) {
+	escStart := l.pos()
+	l.advance()
+	var e byte
+	if l.off < len(l.src) {
+		e = l.src[l.off]
+	}
+	switch e {
+	case 'n':
+		b.WriteByte('\n')
+	case 't':
+		b.WriteByte('\t')
+	case 'r':
+		b.WriteByte('\r')
+	case '\\':
+		b.WriteByte('\\')
+	case '"':
+		b.WriteByte('"')
+	default:
+		if e != '\n' && e != 0 {
+			l.advance()
+		}
+		l.errorf(diagnostics.LexInvalidEscape, escStart, "invalid escape sequence in string literal").
+			WithHelp(`supported escapes are \n \t \r \\ \"`)
+		return
+	}
+	l.advance()
+}
+
+// interpString lexes $"…{x}…" (OQ-STR-01): the text pieces become StrHead,
+// StrMid, and StrTail tokens, with each hole's tokens between them. In the
+// text, {{ and }} are literal braces, and escapes work as in strings.
+func (l *lexer) interpString(start diagnostics.Pos) {
+	l.advance() // $
+	l.advance() // "
+	kind, piece := StrHead, start
+	for {
+		text, closed, ok := l.interpText(start)
+		if !ok {
+			return
+		}
+		if closed {
+			if kind == StrHead {
+				kind = String // no holes: an ordinary string
+			} else {
+				kind = StrTail
+			}
+			l.emit(kind, text, piece)
+			return
+		}
+		l.emit(kind, text, piece)
+		if !l.hole(start) {
+			return
+		}
+		piece = l.pos()
+		l.advance() // }
+		kind = StrMid
+	}
+}
+
+// interpText reads text up to and including the '{' that opens a hole or
+// the closing quote; closed reports which. ok is false after an error that
+// ends the string.
+func (l *lexer) interpText(start diagnostics.Pos) (text string, closed, ok bool) {
+	var b strings.Builder
+	for {
+		if l.off >= len(l.src) || l.src[l.off] == '\n' {
+			l.errorf(diagnostics.LexUnterminatedString, start, "unterminated string literal")
+			return "", false, false
+		}
+		switch c := l.src[l.off]; {
+		case c == '"':
+			l.advance()
+			return b.String(), true, true
+		case c == '{' && l.peek(1) == '{', c == '}' && l.peek(1) == '}':
+			b.WriteByte(c)
+			l.advance()
+			l.advance()
+		case c == '{':
+			l.advance()
+			return b.String(), false, true
+		case c == '}':
+			brace := l.pos()
+			l.advance()
+			l.errorf(diagnostics.LexInvalidEscape, brace, "single '}' in an interpolated string").
+				WithHelp("write }} for a literal '}'")
+		case c == '\\':
+			l.escape(&b)
+		default:
+			_, size := utf8.DecodeRune(l.src[l.off:])
+			b.Write(l.src[l.off : l.off+size])
+			l.advance()
+		}
+	}
+}
+
+// hole lexes the tokens of an interpolation hole, up to its closing '}',
+// which is not consumed. Braces inside the hole nest.
+func (l *lexer) hole(start diagnostics.Pos) bool {
+	depth := 0
+	for {
+		l.skipSpaceAndComments()
+		if l.off >= len(l.src) {
+			l.errorf(diagnostics.LexUnterminatedString, start, "unterminated interpolated string: a '{' has no closing '}'")
+			return false
+		}
+		switch l.src[l.off] {
+		case '}':
+			if depth == 0 {
+				return true
+			}
+			depth--
+		case '{':
+			depth++
+		}
+		l.token()
 	}
 }
 

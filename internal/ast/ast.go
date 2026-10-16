@@ -289,6 +289,14 @@ type StringLit struct {
 	Span  Span
 }
 
+// InterpString is `$"text {x} text"`. Parts are the decoded text pieces
+// around the holes, so len(Parts) == len(Exprs)+1.
+type InterpString struct {
+	Parts []string
+	Exprs []Expr
+	Span  Span
+}
+
 // BoolLit is `true` or `false`.
 type BoolLit struct {
 	Value bool
@@ -359,6 +367,7 @@ type SelectorExpr struct {
 
 func (e *IntLit) NodeSpan() Span       { return e.Span }
 func (e *StringLit) NodeSpan() Span    { return e.Span }
+func (e *InterpString) NodeSpan() Span { return e.Span }
 func (e *BoolLit) NodeSpan() Span      { return e.Span }
 func (e *Ident) NodeSpan() Span        { return e.Span }
 func (e *CallExpr) NodeSpan() Span     { return e.Span }
@@ -373,6 +382,7 @@ func (e *LambdaExpr) NodeSpan() Span   { return e.Span }
 
 func (*IntLit) expr()       {}
 func (*StringLit) expr()    {}
+func (*InterpString) expr() {}
 func (*BoolLit) expr()      {}
 func (*Ident) expr()        {}
 func (*CallExpr) expr()     {}

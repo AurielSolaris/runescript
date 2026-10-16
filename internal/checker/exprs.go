@@ -216,6 +216,9 @@ func (c *checker) exprInner(e ast.Expr) operand {
 		return operand{typ: c.selector(e)}
 	case *ast.StringLit:
 		return operand{typ: types.StringT}
+	case *ast.InterpString:
+		c.interpString(e)
+		return operand{typ: types.StringT}
 	case *ast.BoolLit:
 		return operand{typ: types.BoolT}
 	case *ast.ParenExpr:
@@ -316,6 +319,12 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 		if x.typ.Kind == y.typ.Kind && (x.typ.Kind == types.Bool || x.typ.Kind == types.String) {
 			return operand{typ: types.BoolT}
 		}
+	case "+":
+		// Concatenation joins two strings; nothing is converted implicitly
+		// (OQ-STR-01).
+		if x.typ.Kind == types.String && y.typ.Kind == types.String {
+			return operand{typ: types.StringT}
+		}
 	}
 	if isFloat(x.typ) || isFloat(y.typ) {
 		if types.IsNumeric(x.typ) && types.IsNumeric(y.typ) {
@@ -326,7 +335,7 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 		help := ""
 		switch {
 		case op == "+" && (x.typ.Kind == types.String || y.typ.Kind == types.String):
-			help = "string concatenation is not yet specified; pass several arguments to trace instead"
+			help = `'+' joins two strings and converts nothing; write (string) x, or use an interpolated string such as $"n={x}"`
 		case x.typ.Kind == types.Func || y.typ.Kind == types.Func:
 			help = "function values cannot be compared or used in arithmetic"
 		}
@@ -524,6 +533,23 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	}
 	c.exprs(e.Args)
 	return types.InvalidT
+}
+
+// interpString checks the holes of $"…{x}…". Each value is converted to
+// text as (string) x converts it, so it must be a type that conversion
+// accepts.
+func (c *checker) interpString(e *ast.InterpString) {
+	for _, x := range e.Exprs {
+		t := c.defaulted(x).typ
+		switch {
+		case t.Kind == types.Invalid || convertible(t, types.StringT):
+		case t.Kind == types.Void:
+			c.errorf(diagnostics.TypeVoidValue, x.NodeSpan(), "expression has type 'void' and cannot be shown in a string")
+		default:
+			c.errorf(diagnostics.TypeBadConversion, x.NodeSpan(), "a value of type '%s' cannot be shown in a string", t).
+				WithHelp("interpolation shows numbers, bools, and strings, as (string) x converts them")
+		}
+	}
 }
 
 // floatTest checks isNaN(x) or isFinite(x), the built-in tests of a float

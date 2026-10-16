@@ -566,6 +566,16 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		}
 		h := g.use(arithHelpers[e.Op] + suffix)
 		return fmt.Sprintf("%s(%s, %s, %d)", h, g.expr(e.X, precAssign), g.expr(e.Y, precAssign), g.site(e.Site)), precCall
+	case *ir.Concat:
+		// Every part is a string, so JavaScript's + concatenates.
+		parts := make([]string, len(e.Parts))
+		for i, p := range e.Parts {
+			parts[i] = g.expr(p, precUnary)
+		}
+		if len(parts) == 1 {
+			return parts[0], precUnary
+		}
+		return "(" + strings.Join(parts, " + ") + ")", precCall
 	case *ir.Compare:
 		op := compareOps[e.Op]
 		// Both sides use op.prec+1, so a chain such as a == b == c keeps

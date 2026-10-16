@@ -220,6 +220,9 @@ type (
 		X, Y Expr
 		Site Span
 	}
+	// Concat joins strings: string + string, += on a string, and
+	// interpolated strings (whose holes are lowered to conversions).
+	Concat struct{ Parts []Expr }
 	// Compare is == != < <= > >=. Its operands have identical types.
 	Compare struct {
 		Op   string
@@ -289,6 +292,7 @@ func (e *FuncRef) Type() *types.Type     { return e.Func.Type }
 func (e *Lambda) Type() *types.Type      { return e.Func.Type }
 func (e *Arith) Type() *types.Type       { return e.T }
 func (e *Compare) Type() *types.Type     { return types.BoolT }
+func (e *Concat) Type() *types.Type      { return types.StringT }
 func (e *Logic) Type() *types.Type       { return types.BoolT }
 func (e *Not) Type() *types.Type         { return types.BoolT }
 func (e *CallFunc) Type() *types.Type    { return e.Func.Type.Result }

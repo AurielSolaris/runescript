@@ -227,6 +227,13 @@ func (v *verifier) expr(e Expr) *types.Type {
 		}
 		v.same(e.T, e.X, "left operand of "+e.Op)
 		v.same(e.T, e.Y, "right operand of "+e.Op)
+	case *Concat:
+		if len(e.Parts) == 0 {
+			v.fail("empty string join")
+		}
+		for _, p := range e.Parts {
+			v.same(types.StringT, p, "part of a string join")
+		}
 	case *Compare:
 		x, y := v.expr(e.X), v.expr(e.Y)
 		if !types.Identical(x, y) {

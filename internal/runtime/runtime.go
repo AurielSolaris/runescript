@@ -261,6 +261,8 @@ func (in *interp) stmt(f *frame, s ast.Stmt) control {
 		v := in.expr(f, s.Value)
 		switch {
 		case s.Op == "=":
+		case dst.Kind == types.String:
+			v.Str = dst.Str + v.Str
 		case dst.Kind == types.Float:
 			v = in.floatArith(s.Op[:1], *dst, v, floatType(dst.Bits))
 		default:
@@ -432,6 +434,14 @@ func (in *interp) expr(f *frame, e ast.Expr) Value {
 		return Value{Kind: types.Signed, Int: err.ID}
 	case *ast.StringLit:
 		return Value{Kind: types.String, Str: e.Value}
+	case *ast.InterpString:
+		var b strings.Builder
+		for i, x := range e.Exprs {
+			b.WriteString(e.Parts[i])
+			b.WriteString(in.expr(f, x).String()) // as (string) x converts it
+		}
+		b.WriteString(e.Parts[len(e.Exprs)])
+		return Value{Kind: types.String, Str: b.String()}
 	case *ast.BoolLit:
 		return Value{Kind: types.Bool, Bool: e.Value}
 	case *ast.ParenExpr:
@@ -513,6 +523,10 @@ func (in *interp) binary(f *frame, e *ast.BinaryExpr) Value {
 	}
 	y := in.expr(f, e.Y)
 	switch e.Op {
+	case "+":
+		if x.Kind == types.String {
+			return Value{Kind: types.String, Str: x.Str + y.Str}
+		}
 	case "==":
 		return boolean(x == y)
 	case "!=":

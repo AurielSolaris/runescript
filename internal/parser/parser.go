@@ -779,6 +779,8 @@ func (p *parser) primary() ast.Expr {
 	case lexer.String:
 		p.next()
 		return &ast.StringLit{Value: t.Text, Span: t.Span}
+	case lexer.StrHead:
+		return p.interpString()
 	case lexer.Keyword:
 		if t.Text == "true" || t.Text == "false" {
 			p.next()
@@ -814,6 +816,26 @@ func (p *parser) primary() ast.Expr {
 	}
 	p.unexpected("expression")
 	return nil
+}
+
+// interpString parses `$"text {x} text"`: a StrHead token, then each
+// hole's expression followed by a StrMid or, after the last, a StrTail.
+func (p *parser) interpString() *ast.InterpString {
+	head := p.next()
+	e := &ast.InterpString{Parts: []string{head.Text}}
+	for {
+		e.Exprs = append(e.Exprs, p.expr())
+		t := p.tok()
+		if t.Kind != lexer.StrMid && t.Kind != lexer.StrTail {
+			p.unexpected("'}' to close the interpolation")
+		}
+		p.next()
+		e.Parts = append(e.Parts, t.Text)
+		if t.Kind == lexer.StrTail {
+			e.Span = span(head.Span, t.Span)
+			return e
+		}
+	}
 }
 
 // callArgs parses `(args)` after a callee. fn is nil when the caller sets

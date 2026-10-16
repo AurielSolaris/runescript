@@ -126,6 +126,8 @@ func TestParseErrors(t *testing.T) {
 		{"use without string", "package p;\nuse std;", diagnostics.ParseUnexpected, "2:5"},
 		{"catch without name", "package p;\npublic void f() {\n    try { } catch (Error) { }\n}", diagnostics.ParseUnexpected, "3:25"},
 		{"try alone", "package p;\npublic void f() {\n    try { }\n}", diagnostics.ParseUnexpected, "4:1"},
+		{"empty hole", "package p;\npublic void f() {\n    trace($\"a{}\");\n}", diagnostics.ParseUnexpected, "3:15"},
+		{"two values in a hole", "package p;\npublic void f() {\n    trace($\"{a b}\");\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"cast of nothing", "package p;\npublic void f() {\n    trace((int));\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"reserved type in body", "package p;\npublic void f() {\n    char x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
 		{"uninitialized var", "package p;\npublic void f() {\n    int x;\n}", diagnostics.ParseUnexpected, "3:10"},
