@@ -1,0 +1,7 @@
+12 8 0
+h é 🎉 ! true
+RangeError string.slice: byte offset 2 is inside a character 4
+string.slice: bounds [2:1] are out of range for a string of 12 bytes
+string.slice: bounds [-1:2] are out of range for a string of 12 bytes
+string.slice: bounds [0:99] are out of range for a string of 12 bytes
+string.slice: byte offset 8 is inside a character

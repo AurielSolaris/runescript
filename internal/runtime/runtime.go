@@ -720,9 +720,11 @@ func (in *interp) native(f *stdlib.Func, args []Value, e *ast.CallExpr) (result 
 	name := e.Pkg.Name + "." + f.Name
 	defer func() {
 		if r := recover(); r != nil {
-			switch r.(type) {
+			switch r := r.(type) {
 			case *Error, thrown:
 				panic(r)
+			case stdlib.Fault:
+				in.raise(types.Lookup(r.Type), diagnostics.RunNativeFailed, e.Span, name+": "+r.Message)
 			}
 			in.fail(diagnostics.RunNativeFailed, e.Span, "%s failed: %v", name, r)
 		}

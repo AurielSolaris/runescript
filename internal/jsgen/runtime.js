@@ -204,6 +204,12 @@ const $rt = (() => {
     sink(args.map(String).join(" "));
   }
 
+  // Fault is a deliberate failure of a standard library function: it
+  // becomes a RuneScript error of the given type (stdlib.Fault in Go).
+  class Fault {
+    constructor(type, message) { this.type = type; this.message = message; }
+  }
+
   // native calls a standard library function. Its failures become runtime
   // errors, and integer results are range-checked like the interpreter's.
   function native(site, name, result, impl, ...args) {
@@ -212,6 +218,7 @@ const $rt = (() => {
       r = impl(...args);
     } catch (e) {
       if (e instanceof RuneScriptError || e instanceof RSError) throw e;
+      if (e instanceof Fault) fail(CODES.nativeFailed, site, `${name}: ${e.message}`, e.type);
       fail(CODES.nativeFailed, site, `${name} failed: ${e.message}`);
     }
     if ((result === "int" && !(r >= INT_MIN && r <= INT_MAX)) ||
@@ -594,6 +601,30 @@ const $rt = (() => {
     return out + s.slice(start);
   }
 
+  // unitIndex converts byte offset b of s to a UTF-16 index, or -1 if b
+  // is inside a character.
+  function unitIndex(s, b) {
+    let n = 0, i = 0;
+    while (n < b && i < s.length) {
+      const cp = s.codePointAt(i);
+      n += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+      i += width(cp);
+    }
+    return n === b ? i : -1;
+  }
+
+  // slice is s[start:end] in UTF-8 bytes; it never cuts a character.
+  function slice(s, start, end) {
+    const len = utf8Len(s);
+    if (start < 0 || end > len || start > end) {
+      throw new Fault("RangeError", `bounds [${start}:${end}] are out of range for a string of ${len} bytes`);
+    }
+    const i = unitIndex(s, start), j = unitIndex(s, end);
+    if (i < 0) throw new Fault("RangeError", `byte offset ${start} is inside a character`);
+    if (j < 0) throw new Fault("RangeError", `byte offset ${end} is inside a character`);
+    return s.slice(i, j);
+  }
+
   const string = {
     clone: (s) => s,
     compare(a, b) {
@@ -619,12 +650,15 @@ const $rt = (() => {
     indexAny: (s, chars) => indexAny(s, chars, false),
     lastIndex: (s, sub) => byteIndex(s, s.lastIndexOf(sub)),
     lastIndexAny: (s, chars) => indexAny(s, chars, true),
+    len: (s) => utf8Len(s),
     repeat(s, n) {
       if (n < 0) throw new Error("strings: negative Repeat count");
       return s.repeat(n);
     },
     replace,
     replaceAll: (s, old, nw) => replace(s, old, nw, -1),
+    runeCount: (s) => codePoints(s).length,
+    slice,
     toLower: (s) => mapCase(s, lower),
     toTitle: (s) => mapCase(s, title),
     toUpper: (s) => mapCase(s, upper),

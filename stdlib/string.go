@@ -2,6 +2,7 @@ package stdlib
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/AurielSolaris/runescript/internal/types"
 )
@@ -29,6 +30,9 @@ func init() {
 		fn("index", I, func(a []any) any { return int64(strings.Index(str(a[0]), str(a[1]))) }, S, S),
 		fn("indexAny", I, func(a []any) any { return int64(strings.IndexAny(str(a[0]), str(a[1]))) }, S, S),
 		fn("lastIndex", I, func(a []any) any { return int64(strings.LastIndex(str(a[0]), str(a[1]))) }, S, S),
+		fn("len", I, func(a []any) any { return int64(len(str(a[0]))) }, S),
+		fn("runeCount", I, func(a []any) any { return int64(utf8.RuneCountInString(str(a[0]))) }, S),
+		fn("slice", S, func(a []any) any { return slice(str(a[0]), num(a[1]), num(a[2])) }, S, I, I),
 		fn("lastIndexAny", I, func(a []any) any { return int64(strings.LastIndexAny(str(a[0]), str(a[1]))) }, S, S),
 		fn("repeat", S, func(a []any) any { return strings.Repeat(str(a[0]), num(a[1])) }, S, I),
 		fn("replace", S, func(a []any) any { return strings.Replace(str(a[0]), str(a[1]), str(a[2]), num(a[3])) }, S, S, S, I),
@@ -50,3 +54,19 @@ func init() {
 	}
 	register(p)
 }
+
+// slice is s[start:end] in bytes (OQ-STR-03). Unlike Go, it never cuts a
+// character in two, so the result stays valid UTF-8.
+func slice(s string, start, end int) string {
+	switch {
+	case start < 0 || end > len(s) || start > end:
+		rangeFault("bounds [%d:%d] are out of range for a string of %d bytes", start, end, len(s))
+	case !boundary(s, start):
+		rangeFault("byte offset %d is inside a character", start)
+	case !boundary(s, end):
+		rangeFault("byte offset %d is inside a character", end)
+	}
+	return s[start:end]
+}
+
+func boundary(s string, i int) bool { return i == len(s) || utf8.RuneStart(s[i]) }

@@ -48,8 +48,11 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 }
 
 func TestStringPackageIsComplete(t *testing.T) {
-	// The 25 functions of Go's strings package expressible in v0.1.
+	// The functions of Go's strings package expressible so far, plus len,
+	// runeCount, and slice, which stand in for Go's len(s),
+	// utf8.RuneCountInString, and s[i:j] (OQ-STR-03).
 	want := []string{
+		"len", "runeCount", "slice",
 		"clone", "compare", "contains", "containsAny", "count", "equalFold",
 		"hasPrefix", "hasSuffix", "index", "indexAny", "lastIndex", "lastIndexAny",
 		"repeat", "replace", "replaceAll", "toLower", "toTitle", "toUpper",

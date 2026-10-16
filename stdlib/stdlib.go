@@ -6,7 +6,11 @@
 // arguments and range-checks integer results against the declared types.
 package stdlib
 
-import "github.com/AurielSolaris/runescript/internal/types"
+import (
+	"fmt"
+
+	"github.com/AurielSolaris/runescript/internal/types"
+)
 
 // Func is a natively implemented function.
 type Func struct {
@@ -50,6 +54,20 @@ func Paths() []string {
 		out = append(out, p)
 	}
 	return out
+}
+
+// Fault is a deliberate failure of a native function: Impl panics with a
+// Fault to throw a RuneScript error of type Type (RangeError, TypeError,
+// ArgumentError, or Error) with the message "<qualifier>.<name>: Message".
+// Any other panic becomes an Error. The JavaScript runtime has the same
+// mechanism (Fault in runtime.js).
+type Fault struct {
+	Type    string
+	Message string
+}
+
+func rangeFault(format string, args ...any) {
+	panic(Fault{Type: "RangeError", Message: fmt.Sprintf(format, args...)})
 }
 
 // fn builds a Func; it is a small helper for package tables.
