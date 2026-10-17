@@ -279,11 +279,20 @@ type (
 	// have type T. For integers, a result outside T's range or a zero
 	// divisor is a runtime error reported at Site. Integer unary minus is
 	// Arith{"-", 0, x}.
+	//
+	// Wide marks an intermediate result of the generic int or uint
+	// (OQ-NUM-01, option A): the operand of another generic integer Arith,
+	// of a Compare, or of an explicit Convert. A wide result is exact
+	// within int64's range instead of T's; only the outermost operation's
+	// result must fit T. Values stay within int64, so a wide result beyond
+	// it is an overflow too. The operands of any generic integer Arith may
+	// be wide.
 	Arith struct {
 		Op   string
 		T    *types.Type
 		X, Y Expr
 		Site Span
+		Wide bool
 	}
 	// Bits is the bitwise & | or ^ of X and Y, integers of type T. It
 	// cannot overflow.

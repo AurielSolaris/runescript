@@ -700,6 +700,15 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 			return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use(h), quote(e.Op), g.expr(e.X, precAssign), g.expr(e.Y, precAssign),
 				quote(kindCode(e.T)), g.site(e.Site)), precCall
 		}
+		if e.Wide || isWide(e.X) || isWide(e.Y) {
+			// An intermediate result, or an operation on one (OQ-NUM-01).
+			k := "w"
+			if !e.Wide {
+				k = kindCode(e.T)
+			}
+			return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use("ga"), quote(e.Op), g.expr(e.X, precAssign), g.expr(e.Y, precAssign),
+				quote(k), g.site(e.Site)), precCall
+		}
 		suffix := "I"
 		if e.T.Kind == types.Unsigned {
 			suffix = "U"
@@ -1156,4 +1165,11 @@ func (g *gen) tnodes(b *strings.Builder, nodes []ir.TNode, parent, pad string) {
 			fmt.Fprintf(b, "%s});\n", pad)
 		}
 	}
+}
+
+// isWide reports whether e is a wide intermediate (ir.Arith.Wide), which
+// may be a BigInt or a number outside its type's range.
+func isWide(e ir.Expr) bool {
+	a, ok := e.(*ir.Arith)
+	return ok && a.Wide
 }

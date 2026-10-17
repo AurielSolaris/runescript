@@ -360,7 +360,7 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 	case *ast.FloatLit:
 		l.ice("float literal at %s was not given a type", e.Span.Start)
 	case *ast.CastExpr:
-		return &Convert{X: l.expr(e.X), To: l.concrete(e, l.info.Types[e]), Site: e.Span}
+		return &Convert{X: widen(l.expr(e.X)), To: l.concrete(e, l.info.Types[e]), Site: e.Span}
 	case *ast.NewExpr:
 		n := &NewError{T: l.concrete(e, l.info.Types[e])}
 		if len(e.Args) > 0 {
@@ -443,14 +443,14 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		if t.Kind == types.Float {
 			return &Neg{X: x}
 		}
-		return &Arith{Op: "-", T: t, X: &IntConst{T: t}, Y: x, Site: e.Span}
+		return binary("-", t, &IntConst{T: t}, x, e.Span)
 	case *ast.BinaryExpr:
 		x, y := l.expr(e.X), l.expr(e.Y)
 		switch e.Op {
 		case "&&", "||":
 			return &Logic{Op: e.Op, X: x, Y: y}
 		case "==", "!=", "<", "<=", ">", ">=":
-			return &Compare{Op: e.Op, X: x, Y: y}
+			return &Compare{Op: e.Op, X: widen(x), Y: widen(y)}
 		}
 		return binary(e.Op, l.concrete(e, l.info.Types[e]), x, y, e.OpPos)
 	}
@@ -471,7 +471,27 @@ func binary(op string, t *types.Type, x, y Expr, site Span) Expr {
 			return concat(x, y)
 		}
 	}
+	if generic(t) {
+		x, y = widen(x), widen(y)
+	}
 	return &Arith{Op: op, T: t, X: x, Y: y, Site: site}
+}
+
+// generic reports whether t is the generic int or uint, whose
+// intermediate results widen (OQ-NUM-01, option A).
+func generic(t *types.Type) bool {
+	return (t.Kind == types.Signed || t.Kind == types.Unsigned) && t.Bits == 0
+}
+
+// widen marks e as an intermediate result if it is generic integer
+// arithmetic (Arith.Wide). It is called on the operands of the operations
+// that accept one: generic integer arithmetic, comparisons, and explicit
+// conversions.
+func widen(e Expr) Expr {
+	if a, ok := e.(*Arith); ok && generic(a.T) {
+		a.Wide = true
+	}
+	return e
 }
 
 // concat joins string expressions, flattening nested joins.

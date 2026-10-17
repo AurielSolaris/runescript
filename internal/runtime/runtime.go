@@ -9,6 +9,7 @@
 package runtime
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"math"
@@ -450,8 +451,11 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 		return boolean(!in.expr(f, e.X).Bool)
 	case *ir.Arith:
 		x, y := in.expr(f, e.X), in.expr(f, e.Y)
-		if e.T.Kind == types.Float {
+		switch {
+		case e.T.Kind == types.Float:
 			return floatArith(e.Op, x, y, e.T)
+		case e.T.Bits == 0:
+			return in.genericArith(e, x, y)
 		}
 		return in.arith(e.Op, e.T, x, y, e.Site)
 	case *ir.Bits:
@@ -615,12 +619,13 @@ func compare(op string, x, y Value) bool {
 			c = 1
 		}
 	case types.Unsigned:
-		switch a, b := uint64(x.Int), uint64(y.Int); { // exact for every width
-		case a < b:
-			c = -1
-		case a > b:
-			c = 1
+		if x.Bits != 64 {
+			// Narrower values, and wide uint intermediates (which may be
+			// negative), compare as int64s.
+			c = cmp.Compare(x.Int, y.Int)
+			break
 		}
+		c = cmp.Compare(uint64(x.Int), uint64(y.Int)) // uint64 bit patterns
 	default: // signed integers and chars
 		switch {
 		case x.Int < y.Int:
@@ -676,6 +681,57 @@ func (in *interp) arith(op string, t *types.Type, x, y Value, span diagnostics.S
 		in.fail(diagnostics.RunOverflow, span, "integer overflow: %d %s %d = %d does not fit in '%s'", x.Int, op, y.Int, r, typeName(t))
 	}
 	return Value{Kind: t.Kind, Int: r, Bits: t.Bits}
+}
+
+// genericArith is arithmetic on the generic int or uint (OQ-NUM-01,
+// option A). Its operands may be wide intermediates (ir.Arith.Wide), any
+// int64; the result is exact, and must fit int64 if it is itself wide, or
+// e.T otherwise. A wide value keeps e.T's kind: a uint intermediate may be
+// negative, as in `a - b + c`.
+func (in *interp) genericArith(e *ir.Arith, x, y Value) Value {
+	a, b := x.Int, y.Int
+	const small = 1 << 31
+	if a > -small && a < small && b > -small && b < small && e.Op != "/" && e.Op != "%" {
+		// Both operands below 2^31 in magnitude: exact in int64.
+		var r int64
+		switch e.Op {
+		case "+":
+			r = a + b
+		case "-":
+			r = a - b
+		default:
+			r = a * b
+		}
+		if e.Wide || types.InRange(e.T, r) {
+			return Value{Kind: e.T.Kind, Int: r}
+		}
+		in.fail(diagnostics.RunOverflow, e.Site, "integer overflow: %d %s %d = %d does not fit in '%s'", a, e.Op, b, r, typeName(e.T))
+	}
+	ba, bb, r := big.NewInt(a), big.NewInt(b), new(big.Int)
+	switch e.Op {
+	case "+":
+		r.Add(ba, bb)
+	case "-":
+		r.Sub(ba, bb)
+	case "*":
+		r.Mul(ba, bb)
+	default:
+		if b == 0 {
+			in.fail(diagnostics.RunDivideByZero, e.Site, "integer division by zero")
+		}
+		if e.Op == "/" {
+			r.Quo(ba, bb) // truncates toward zero
+		} else {
+			r.Rem(ba, bb) // takes the dividend's sign
+		}
+	}
+	switch {
+	case e.Wide && !r.IsInt64():
+		in.fail(diagnostics.RunOverflow, e.Site, "integer overflow: %d %s %d = %s is beyond the int64 range of intermediate results", a, e.Op, b, r)
+	case !e.Wide && !types.Fits(e.T, r):
+		in.fail(diagnostics.RunOverflow, e.Site, "integer overflow: %d %s %d = %s does not fit in '%s'", a, e.Op, b, r, typeName(e.T))
+	}
+	return Value{Kind: e.T.Kind, Int: r.Int64()}
 }
 
 // wideArith is arith computed exactly with big.Int, for any integer type.
@@ -826,7 +882,10 @@ func (in *interp) convert(v Value, to *types.Type, span diagnostics.Span) Value 
 		case types.Signed:
 			f = float64(v.Int)
 		case types.Unsigned:
-			f = float64(uint64(v.Int)) // exact for uint64 bit patterns too
+			f = float64(v.Int) // a wide uint intermediate may be negative
+			if v.Bits == 64 {
+				f = float64(uint64(v.Int)) // a uint64 bit pattern
+			}
 		case types.Float:
 			f = v.F
 		case types.String:

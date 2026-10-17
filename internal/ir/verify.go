@@ -41,6 +41,9 @@ type verifier struct {
 	seen   map[*Func]bool
 	result *types.Type // result type of the function being verified
 	loops  int
+	// wideOK is set while verifying an operand that may be a wide
+	// intermediate (Arith.Wide).
+	wideOK bool
 }
 
 func (v *verifier) fail(format string, args ...any) {
@@ -178,6 +181,10 @@ func (v *verifier) loop(b *Block) {
 }
 
 func (v *verifier) expr(e Expr) *types.Type {
+	if a, ok := e.(*Arith); ok && a.Wide && !v.wideOK {
+		v.fail("wide intermediate %s used outside integer arithmetic, a comparison, or a conversion", a.Op)
+	}
+	v.wideOK = false
 	switch e := e.(type) {
 	case *IntConst:
 		if !types.InRange(e.T, e.Value) && !(e.T.Kind == types.Unsigned && types.IntBits(e.T) == 64) {
@@ -192,6 +199,7 @@ func (v *verifier) expr(e Expr) *types.Type {
 			v.fail("float negation of %s", t)
 		}
 	case *Convert:
+		v.wideOK = true
 		if from := v.expr(e.X); !Convertible(from, e.To) {
 			v.fail("conversion from %s to %s", from, e.To)
 		}
@@ -266,8 +274,12 @@ func (v *verifier) expr(e Expr) *types.Type {
 			v.fail("%% on %s", e.T)
 		case e.T.Kind != types.Signed && e.T.Kind != types.Unsigned && e.T.Kind != types.Float:
 			v.fail("arithmetic on %s", e.T)
+		case e.Wide && !generic(e.T):
+			v.fail("wide arithmetic on %s", e.T)
 		}
+		v.wideOK = generic(e.T)
 		v.same(e.T, e.X, "left operand of "+e.Op)
+		v.wideOK = generic(e.T)
 		v.same(e.T, e.Y, "right operand of "+e.Op)
 	case *Bits:
 		if e.T.Kind != types.Signed && e.T.Kind != types.Unsigned {
@@ -292,7 +304,10 @@ func (v *verifier) expr(e Expr) *types.Type {
 			v.same(types.StringT, p, "part of a string join")
 		}
 	case *Compare:
-		x, y := v.expr(e.X), v.expr(e.Y)
+		v.wideOK = true
+		x := v.expr(e.X)
+		v.wideOK = true
+		y := v.expr(e.Y)
 		if !types.Identical(x, y) {
 			v.fail("comparison %s of %s and %s", e.Op, x, y)
 		}

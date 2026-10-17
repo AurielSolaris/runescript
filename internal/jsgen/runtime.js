@@ -183,6 +183,40 @@ const $rt = (() => {
     return r;
   }
 
+  // ga is generic int or uint arithmetic whose operands or result are
+  // wide intermediates (OQ-NUM-01, option A; ir.Arith.Wide). Operands are
+  // integers within int64, held as numbers when they are safe integers and
+  // as BigInts otherwise, so === still compares them correctly. k is "w"
+  // for a wide result, which must fit int64, or "i"/"u" for the outermost
+  // operation, whose result must fit int or uint.
+  const I64_MIN = -9223372036854775808n, I64_MAX = 9223372036854775807n;
+  function ga(op, x, y, k, site) {
+    let r = null;
+    if (typeof x === "number" && typeof y === "number" && op !== "/" && op !== "%") {
+      r = op === "+" ? x + y : op === "-" ? x - y : x * y;
+      if (!Number.isSafeInteger(r)) r = null; // inexact: redo it exactly
+    }
+    if (r === null) {
+      const a = BigInt(x), b = BigInt(y);
+      switch (op) {
+        case "+": r = a + b; break;
+        case "-": r = a - b; break;
+        case "*": r = a * b; break;
+        default:
+          if (b === 0n) fail(CODES.divideByZero, site, "integer division by zero");
+          r = op === "/" ? a / b : a % b; // BigInt division truncates toward zero
+      }
+      if (k === "w" && (r < I64_MIN || r > I64_MAX)) {
+        fail(CODES.overflow, site, `integer overflow: ${x} ${op} ${y} = ${r} is beyond the int64 range of intermediate results`);
+      }
+      if (r >= -9007199254740991n && r <= 9007199254740991n) r = Number(r);
+    }
+    if (k === "i" ? !(r >= INT_MIN && r <= INT_MAX) : k === "u" && !(r >= 0 && r <= UINT_MAX)) {
+      fail(CODES.overflow, site, `integer overflow: ${x} ${op} ${y} = ${r} does not fit in '${k === "i" ? "int" : "uint"}'`);
+    }
+    return typeof r === "number" ? r + 0 : r; // + 0 turns -0 into 0
+  }
+
   // ---- floats ----
   //
   // Float arithmetic is JavaScript's own (IEEE 754, as in ActionScript 3),
@@ -1673,7 +1707,7 @@ const $rt = (() => {
   }
 
   return {
-    addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU, arN, arW, shift,
+    addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU, arN, arW, ga, shift,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
     enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop, withField, structEq,

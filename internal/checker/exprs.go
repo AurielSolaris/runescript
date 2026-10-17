@@ -134,7 +134,7 @@ func (c *checker) convertConst(e ast.Expr, v *big.Int, dst *types.Type) bool {
 func rangeHelp(t *types.Type) string {
 	lo, hi := types.IntRange(t)
 	if t.Bits == 0 {
-		return fmt.Sprintf("'%s' is currently %d bits (%s to %s); widening is not yet implemented", t, types.IntBits(t), lo, hi)
+		return fmt.Sprintf("'%s' holds %s to %s; results computed along the way may be wider, but a value of type '%s' must fit (use int64 for more)", t, lo, hi, t)
 	}
 	return fmt.Sprintf("'%s' holds %s to %s", t, lo, hi)
 }

@@ -39,18 +39,24 @@ func program(js string) string {
 func TestArithmeticIsChecked(t *testing.T) {
 	js, _ := generate(t, `package p;
 public uint f(uint a, uint b) { return a * b - a / b + a % b; }
+public uint g(uint a, uint b) { uint p = a * b; uint q = a / b; uint r = a % b; return p + q + r; }
 protected int main() {
     int x = 3;
     x += 4;
     x++;
-    return -x * 2;
+    int y = -x;
+    return -x * 2 + y;
 }
 `)
 	body := program(js)
 	if m := regexp.MustCompile(`[a-z0-9)] [-+*/%] `).FindString(body); m != "" {
 		t.Errorf("raw arithmetic operator %q in generated code:\n%s", m, body)
 	}
-	for _, want := range []string{"$mulU(a, b,", "$divU(a, b,", "$modU(a, b,", "x = $addI(x, 4,", "$subI(0, x,"} {
+	// Single operations use the int32/uint32 helpers; nested ones compute
+	// wide intermediates with $ga (OQ-NUM-01), checking only the outermost
+	// result against the type.
+	for _, want := range []string{"$mulU(a, b,", "$divU(a, b,", "$modU(a, b,", "x = $addI(x, 4,", "$subI(0, x,",
+		`$ga("*", a, b, "w",`, `$ga("-", 0, x, "w",`, `, "i", `, `, "u", `} {
 		if !strings.Contains(body, want) {
 			t.Errorf("generated code lacks %q:\n%s", want, body)
 		}
