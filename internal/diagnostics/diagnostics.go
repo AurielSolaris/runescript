@@ -263,8 +263,32 @@ func (d *Diagnostic) WithHelp(help string) *Diagnostic {
 // Warnings say "warning" instead of "error"; a warning promoted to an
 // error by -Werror ends its first line with "[-Werror]".
 func Format(d *Diagnostic, filename string, src []byte) string {
+	return format(d, filename, src, false)
+}
+
+// ANSI escape sequences for colored diagnostics.
+const (
+	ansiReset  = "\x1b[0m"
+	ansiBold   = "\x1b[1m"
+	ansiRed    = "\x1b[1;31m"
+	ansiYellow = "\x1b[1;33m"
+	ansiCyan   = "\x1b[1;36m"
+)
+
+func format(d *Diagnostic, filename string, src []byte, color bool) string {
+	paint := func(style, s string) string {
+		if !color {
+			return s
+		}
+		return style + s + ansiReset
+	}
+	accent := ansiRed // errors are red, warnings yellow
+	if d.Severity == Warning {
+		accent = ansiYellow
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s:%s: %s %s: %s", filename, d.Span.Start, d.Severity, d.Code, d.Message)
+	b.WriteString(paint(ansiBold, fmt.Sprintf("%s:%s:", filename, d.Span.Start)) + " ")
+	b.WriteString(paint(accent, fmt.Sprintf("%s %s", d.Severity, d.Code)) + ": " + d.Message)
 	if d.Promoted {
 		b.WriteString(" [-Werror]")
 	}
@@ -275,20 +299,24 @@ func Format(d *Diagnostic, filename string, src []byte) string {
 			width = utf8.RuneCount(src[d.Span.Start.Offset:d.Span.End.Offset])
 		}
 		fmt.Fprintf(&b, "    %s\n", strings.ReplaceAll(line, "\t", " "))
-		fmt.Fprintf(&b, "    %s%s\n", strings.Repeat(" ", d.Span.Start.Col-1), strings.Repeat("^", width))
+		fmt.Fprintf(&b, "    %s%s\n", strings.Repeat(" ", d.Span.Start.Col-1), paint(accent, strings.Repeat("^", width)))
 	}
 	if d.Help != "" {
-		fmt.Fprintf(&b, "  help: %s\n", d.Help)
+		fmt.Fprintf(&b, "  %s %s\n", paint(ansiCyan, "help:"), d.Help)
 	}
 	return b.String()
 }
 
 // Render formats d against the source file its span is in.
-func Render(d *Diagnostic) string {
+func Render(d *Diagnostic) string { return RenderColor(d, false) }
+
+// RenderColor is Render, with ANSI colors when color is set: errors in
+// red, warnings in yellow, and help in cyan.
+func RenderColor(d *Diagnostic, color bool) string {
 	if f := d.Span.Start.File; f != nil {
-		return Format(d, f.Name, f.Text)
+		return format(d, f.Name, f.Text, color)
 	}
-	return Format(d, "", nil)
+	return format(d, "", nil, color)
 }
 
 // sourceLine returns the full line of src containing byte offset off,

@@ -18,6 +18,7 @@ import (
 	"github.com/AurielSolaris/runescript/internal/driver"
 	"github.com/AurielSolaris/runescript/internal/jsgen"
 	"github.com/AurielSolaris/runescript/internal/runtime"
+	"github.com/AurielSolaris/runescript/internal/term"
 )
 
 // Version is the language/implementation version.
@@ -38,6 +39,9 @@ const usage = `usage:
   runescript version         print the version
 
 flags:
+  --color=auto|always|never  color errors red and warnings yellow; auto
+                             (the default) colors a terminal unless
+                             NO_COLOR is set
   -Werror                    treat warnings as errors
   --allow <code>[,<code>]    do not report these warnings, e.g.
                              --allow ASX-WARN-002 (may be repeated)
@@ -56,6 +60,7 @@ func main() {
 }
 
 func cli(args []string, stdout, stderr io.Writer) int {
+	colorMode = term.Auto
 	if len(args) == 1 && args[0] == "version" {
 		fmt.Fprintf(stdout, "runescript %s%s\n", Version, buildDetails())
 		return 0
@@ -115,7 +120,7 @@ func runOnce(in driver.Input, stdout, stderr io.Writer) int {
 	if err != nil {
 		var re *runtime.Error
 		if errors.As(err, &re) {
-			fmt.Fprint(stderr, diagnostics.Render(re.Diag))
+			fmt.Fprint(stderr, diagnostics.RenderColor(re.Diag, colored(stderr)))
 			return exitRuntimeError
 		}
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
@@ -140,6 +145,14 @@ func flags(name string, stderr io.Writer) (*flag.FlagSet, *warningFlags) {
 		Report: func(ws []*diagnostics.Diagnostic) { report(stderr, ws) },
 	}}
 	fs.BoolVar(&w.AsErrors, "Werror", false, "")
+	fs.Func("color", "", func(s string) error {
+		m, err := term.ParseMode(s)
+		if err != nil {
+			w.err = err
+		}
+		colorMode = m
+		return nil
+	})
 	fs.Func("allow", "", func(list string) error {
 		for _, s := range strings.Split(list, ",") {
 			code, ok := diagnostics.ParseCode(s)
@@ -257,7 +270,18 @@ func same(a, b string) bool {
 }
 
 func report(w io.Writer, diags []*diagnostics.Diagnostic) {
+	color := colored(w)
 	for _, d := range diags {
-		fmt.Fprint(w, diagnostics.Render(d))
+		fmt.Fprint(w, diagnostics.RenderColor(d, color))
 	}
+}
+
+// colorMode is the --color setting of the command being run.
+var colorMode = term.Auto
+
+// colored reports whether output to w is colored: w must be a terminal
+// (or --color=always).
+func colored(w io.Writer) bool {
+	f, _ := w.(*os.File)
+	return term.Color(colorMode, f)
 }

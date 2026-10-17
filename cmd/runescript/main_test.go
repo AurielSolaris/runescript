@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -49,12 +50,20 @@ func TestCLI(t *testing.T) {
 		{"allow", []string{"run", "-Werror", "--allow", "ASX-WARN-001", warn}, 0, "ran\n", ""},
 		{"allow list without prefix", []string{"check", "-Werror", "--allow=warn-002,WARN-001", warn}, 0, "", ""},
 		{"allow bad code", []string{"check", "--allow", "ASX-TYPE-004", warn}, exitUsage, "", "--allow takes warning codes"},
+		{"errors are red", []string{"check", "--color=always", bad}, exitCompileError, "", "\x1b[1;31merror ASX-TYPE-004\x1b[0m"},
+		{"warnings are yellow", []string{"check", "--color=always", warn}, 0, "", "\x1b[1;33mwarning ASX-WARN-001\x1b[0m"},
+		{"runtime errors are red", []string{"run", "--color=always", crash}, exitRuntimeError, "", "\x1b[1;31merror ASX-RUN-003\x1b[0m"},
+		{"help is cyan", []string{"check", "--color=always", bad}, exitCompileError, "", "\x1b[1;36mhelp:\x1b[0m"},
+		{"bad color", []string{"check", "--color=rainbow", ok}, exitUsage, "", "--color takes auto, always, or never"},
 		{"run too many files", []string{"run", ok, ok}, exitUsage, "", "usage:"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var stdout, stderr strings.Builder
 			code := cli(c.args, &stdout, &stderr)
+			if !slices.Contains(c.args, "--color=always") && strings.Contains(stderr.String(), "\x1b[") {
+				t.Errorf("colored output that is not a terminal: %q", stderr.String())
+			}
 			if code != c.code {
 				t.Errorf("exit %d, want %d (stderr: %s)", code, c.code, stderr.String())
 			}
