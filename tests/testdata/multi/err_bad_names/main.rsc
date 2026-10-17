@@ -5,6 +5,6 @@ use "if.then";                 // expect: ASX-USE-006 main.rsc:4:5
 use "lib\\x.rsc";             // expect: ASX-USE-006 main.rsc:5:5
 use "go:strings";              // expect: ASX-USE-003 main.rsc:6:5
 
-public int main() {
+protected int main() {
     return 0;
 }

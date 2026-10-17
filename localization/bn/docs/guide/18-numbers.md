@@ -26,11 +26,12 @@
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     uint8 red = 255;
     int64 population = 8_100_000_000;
     uint64 hash = 14695981039346656037;
     trace(red, population, hash);
+    return 0;
 }
 ```
 
@@ -40,12 +41,13 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int8 small = 100;
     int16 wider = (int16) small;   // fine: an explicit conversion
     int64 total = (int64) wider * 1_000_000;
     trace(wider, total);
     int16 oops = small;            // error: ASX-TYPE-001
+    return 0;
 }
 ```
 
@@ -58,7 +60,7 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     uint8 level = 250;
     try {
         level += 10;
@@ -66,6 +68,7 @@ public void main() {
     } catch (RangeError e) {
         trace(e.message);   // integer overflow: 250 + 10 = 260 does not fit in 'uint8'
     }
+    return 0;
 }
 ```
 
@@ -101,7 +104,7 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     uint8 flags = 0b0000_0101;
     flags |= 0b1000_0000;           // set a bit
     flags &= ~((uint8) 0b0100);     // clear a bit
@@ -111,6 +114,7 @@ public void main() {
     uint32 red = (color >> 16) & 0xFF;
     uint32 green = (color >> 8) & 0xFF;
     trace(red, green, color & 0xFF);            // 255 136 0
+    return 0;
 }
 ```
 
@@ -134,13 +138,14 @@ package main;
 
 use "std:math";
 
-public void main() {
+protected int main() {
     float64 pi = math.pi;
     float64 angle = pi / 6;
     trace(math.sin(angle), math.cos(angle));    // 0.49999999999999994 0.8660254037844387
     trace(math.sqrt(2.0), math.pow(2.0, 10.0)); // 1.4142135623730951 1024
     trace(math.floor(-2.5), math.round(-2.5), math.roundToEven(2.5));   // -3 -3 2
     trace(math.max(3, 7), math.abs(-12), math.clamp(15, 0, 10));        // 7 12 10
+    return 0;
 }
 ```
 

@@ -15,7 +15,7 @@ public char shout(char c) {
     return c;
 }
 
-public void main() {
+protected int main() {
     char a = 'a';
     char e = 'é';
     char smile = '😀';
@@ -72,4 +72,5 @@ public void main() {
     } catch (RangeError err) {
         trace(err.message);
     }
+    return 0;
 }

@@ -82,10 +82,10 @@ func TestScriptsCarryNoWebRuntime(t *testing.T) {
 		name, src string
 		want      []string // sections that must be present
 	}{
-		{"plain script", "package p;\npublic void main() { trace(1 + 2); }", nil},
-		{"std:string", "package p;\nuse \"std:string\";\npublic void main() { trace(string.toUpper(\"a\")); }", []string{"string"}},
-		{"extern", "package p;\nextern \"./x.mjs\" int f();\npublic void main() { trace(f()); }", []string{"extern"}},
-		{"rune:dom", "package p;\nuse \"rune:dom\";\npublic Element app() {\n    template { <p>hi</p> }\n}\npublic void main() { dom.renderApp(app, \"#app\"); }", []string{"dom"}},
+		{"plain script", "package p;\nprotected int main() { trace(1 + 2); return 0; }", nil},
+		{"std:string", "package p;\nuse \"std:string\";\nprotected int main() { trace(string.toUpper(\"a\")); return 0; }", []string{"string"}},
+		{"extern", "package p;\nextern \"./x.mjs\" int f();\nprotected int main() { trace(f()); return 0; }", []string{"extern"}},
+		{"rune:dom", "package p;\nuse \"rune:dom\";\npublic Element app() {\n    template { <p>hi</p> }\n}\nprotected int main() { dom.renderApp(app, \"#app\"); return 0; }", []string{"dom"}},
 	}
 	markers := map[string]string{
 		"extern": "---- extern (JavaScript) functions",

@@ -20,6 +20,7 @@ public Element App() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(App, "#app");
+    return 0;
 }

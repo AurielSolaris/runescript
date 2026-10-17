@@ -1,7 +1,7 @@
 // Division by zero inside a nested function.
 package tests.runtime;
 
-public int main() {
+protected int main() {
     private int average(int total, int count) {
         return total / count; // expect runtime error: ASX-RUN-003 6:22
     }

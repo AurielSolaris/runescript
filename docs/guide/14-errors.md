@@ -14,7 +14,7 @@ public int parsePort(string text) {
     return port;
 }
 
-public void main() {
+protected int main() {
     try {
         trace(parsePort("8080"));
         trace(parsePort("99999"));
@@ -25,6 +25,7 @@ public void main() {
     } finally {
         trace("done");
     }
+    return 0;
 }
 ```
 
@@ -86,8 +87,9 @@ public int sign(int n) {
     throw new ArgumentError("zero has no sign");
 }
 
-public void main() {
+protected int main() {
     trace(sign(-5));
+    return 0;
 }
 ```
 
@@ -106,7 +108,7 @@ you can catch:
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int big = 2147483647;
     try {
         trace(big + 1);
@@ -114,6 +116,7 @@ public void main() {
         trace(e.errorID, e.message);
         // 2 integer overflow: 2147483647 + 1 = 2147483648 does not fit in 'int'
     }
+    return 0;
 }
 ```
 
@@ -133,8 +136,9 @@ An error that nothing catches stops the program, like any runtime error:
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     throw new ArgumentError("missing input");   // runtime error: ASX-RUN-005
+    return 0;
 }
 ```
 

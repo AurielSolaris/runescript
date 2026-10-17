@@ -29,7 +29,7 @@ extern "./boundary.mjs" void throwsString();
 extern "./boundary.mjs" void throwsBack(Error e);
 extern "./boundary.mjs" void missing();
 
-public int main() {
+protected int main() {
     // Values of the right type cross unchanged; float32 is rounded.
     trace(intOf(-7), halfInt(8), negZero(), notANumber(), tenth(), greet("rune"));
     voidOk();

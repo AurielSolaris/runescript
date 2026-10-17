@@ -5,7 +5,7 @@ package tests.js;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     string price = "price: 5€, or 😀";
     trace(string.index(price, "€"), string.index(price, "or"), string.lastIndex(price, "😀"));
     trace(string.index(price, ""), string.lastIndex(price, ""), string.index(price, "$"));
@@ -29,4 +29,5 @@ public void main() {
     trace(string.replace("héllo", "", "-", 3), string.replaceAll("a😀b😀", "😀", "<>"));
     trace(string.replace("aaa", "a", "b", 2), string.replace("aaa", "a", "a", -1), string.repeat("é", 3));
     trace(string.toValidUTF8("ok ✓", "?"), string.clone("✓"));
+    return 0;
 }

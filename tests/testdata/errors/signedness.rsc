@@ -9,7 +9,7 @@ public uint fromReturn(int s) {
 public void takesUnsigned(uint u) {
 }
 
-public int main() {
+protected int main() {
     sint s = 5;                 // positive at runtime, but its type is signed
     uint a = s;                 // expect: ASX-TYPE-004 14:14
     uint b = 0;

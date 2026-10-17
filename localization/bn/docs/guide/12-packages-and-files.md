@@ -41,7 +41,7 @@ use "geom";
 use "./util/text.txt" as t;
 use "./helpers.rsc";
 
-public int main() {
+protected int main() {
     trace(geom.area(3, 4), geom.perimeter(3, 4));
     trace(t.shout("hi"));
     trace(twice(21));

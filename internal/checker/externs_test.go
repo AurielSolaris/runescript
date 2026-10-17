@@ -13,7 +13,7 @@ import (
 // withExterns is a program whose externs come before main; main's body
 // starts on line 2 + the number of extern lines + 1.
 func withExterns(externs, body string) string {
-	return "package p;\n" + externs + "\npublic int main() {\n" + body + "\n    return 0;\n}\n"
+	return "package p;\n" + externs + "\nprotected int main() {\n" + body + "\n    return 0;\n}\n"
 }
 
 func TestExternsAccepted(t *testing.T) {
@@ -23,7 +23,7 @@ func TestExternsAccepted(t *testing.T) {
 		"own module":           withExterns(`extern "./lib.mjs" float32 f(int a, uint b, float c, float64 d, bool e, string s);`, `    trace(f(1, 2, 0.5, 1.5, true, "s"));`),
 		"errors":               withExterns(`extern "./lib.mjs" RangeError f(Error e);`, "    RangeError r = f(new TypeError(\"t\"));\n    trace(r.message);"),
 		"void result":          withExterns(`extern "./lib.mjs" void f();`, `    f();`),
-		"extern after main":    "package p;\npublic void main() { trace(f()); }\nextern \"./lib.mjs\" int f();\n",
+		"extern after main":    "package p;\nprotected int main() { trace(f()); return 0; }\nextern \"./lib.mjs\" int f();\n",
 		"wrapped in lambda":    withExterns(`extern "./lib.mjs" int f(int n);`, "    int(int) g = (int n) => f(n);\n    trace(g(1));"),
 		"per-file name":        withExterns(`extern "./lib.mjs" int f();`, `    trace(f());`),
 	}
@@ -51,7 +51,7 @@ func TestExternsRejected(t *testing.T) {
 		{"rune signature mismatch", withExterns(`extern "rune:fs" int readFile(string p);`, ""), diagnostics.TypeExternMismatch, "2:22"},
 		{"rune param mismatch", withExterns(`extern "rune:fs" bool exists(int p);`, ""), diagnostics.TypeExternMismatch, "2:23"},
 		{"duplicate extern", withExterns("extern \"./m.mjs\" int f();\nextern \"./n.mjs\" int f();", ""), diagnostics.NameRedeclared, "3:22"},
-		{"clashes with function", "package p;\nextern \"./m.mjs\" int main();\npublic void main() { }\n", diagnostics.NameRedeclared, "2:22"},
+		{"clashes with function", "package p;\nextern \"./m.mjs\" int main();\nprotected int main() { return 0; }\n", diagnostics.NameRedeclared, "2:22"},
 		{"local shadows extern", withExterns(`extern "./m.mjs" int f();`, "    int f = 1;\n    trace(f);"), diagnostics.NameRedeclared, "4:9"},
 		{"used as value", withExterns(`extern "./m.mjs" int f();`, "    int() g = f;\n    trace(g());"), diagnostics.NameNotAValue, "4:15"},
 		{"assigned", withExterns(`extern "./m.mjs" int f();`, "    f = 1;"), diagnostics.NameAssignToParam, "4:5"},
@@ -83,7 +83,7 @@ func TestExternIsFilePrivate(t *testing.T) {
 		}
 	}
 	write("lib.rsm", "package p;\nextern \"./m.mjs\" int f();\nprotected int g() { return f(); }\n")
-	prog, diags := loader.LoadSource(diagnostics.NewSource("main.rsc", []byte("package p;\nuse \"./lib.rsm\";\npublic int main() { return g() + f(); }\n")), dir)
+	prog, diags := loader.LoadSource(diagnostics.NewSource("main.rsc", []byte("package p;\nuse \"./lib.rsm\";\nprotected int main() { return g() + f(); }\n")), dir)
 	if len(diags) != 0 {
 		t.Fatal(diags)
 	}

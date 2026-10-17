@@ -2,7 +2,7 @@
 // transcendental functions (one shared implementation, internal/fmath).
 package tests.js;
 use "std:math";
-public void main() {
+protected int main() {
     int m = math.max(3, 7);
     float64 r = math.sqrt(2.0);
     trace(m, math.min(-4, 9), math.abs(-12), math.clamp(15, 0, 10), r);
@@ -18,4 +18,5 @@ public void main() {
     trace(math.cbrt(27.0), math.pow(2.0, 0.5), math.pow(-8.0, 3.0), math.pow(10.0, -2.0), math.hypot(3.0, 4.0), math.ldexp(0.75, 4));
     float32 angle = 0.5;
     trace((float32) math.sin((float64) angle));
+    return 0;
 }

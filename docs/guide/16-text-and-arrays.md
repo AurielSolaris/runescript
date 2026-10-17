@@ -12,11 +12,12 @@ that search, split, and change strings are in
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     string name = "Ada";
     string greeting = "Hello, " + name + "!";
     greeting += " Welcome.";
     trace(greeting);   // Hello, Ada! Welcome.
+    return 0;
 }
 ```
 
@@ -27,10 +28,11 @@ use an interpolated string (next section):
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int count = 3;
     trace("count: " + (string) count);   // count: 3
     trace("count: " + count);            // error: ASX-TYPE-012
+    return 0;
 }
 ```
 
@@ -45,13 +47,14 @@ expression's value:
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     string item = "apple";
     int count = 3;
     float price = 0.25;
     trace($"{count} x {item} at {price} = {(float) count * price}");   // 3 x apple at 0.25 = 0.75
     trace($"ready: {count > 0}");                                     // ready: true
     trace($"{{braces}} are written twice");                           // {braces} are written twice
+    return 0;
 }
 ```
 
@@ -72,13 +75,14 @@ quotes:
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     char letter = 'a';
     char accent = 'é';
     char emoji = '😀';
     char quote = '\'';
     trace(letter, accent, emoji, quote, '\\');   // a é 😀 ' \
     trace(letter < 'b', accent == 'é');          // true true
+    return 0;
 }
 ```
 
@@ -105,9 +109,10 @@ public char next(char c) {
     return (char) ((int) c + 1);
 }
 
-public void main() {
+protected int main() {
     trace(next('a'), (int) 'A', (char) "é");   // b 65 é
     trace((string) 'x' + "yz");               // xyz
+    return 0;
 }
 ```
 
@@ -122,7 +127,7 @@ Create one with square brackets:
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     Array<string> names = ["Ada", "Grace"];
     names.push("Linus");                      // add to the end
     trace(names.length, names[0], names[2]);  // 3 Ada Linus
@@ -131,6 +136,7 @@ public void main() {
     names[0] += "!";
     string last = names.pop();                // remove the last one
     trace(last, names.length, names[1]);      // Linus 2 Hopper
+    return 0;
 }
 ```
 
@@ -158,13 +164,14 @@ can catch:
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     Array<int> scores = [90, 75];
     try {
         trace(scores[2]);
     } catch (RangeError e) {
         trace(e.message);   // index 2 is out of range for an array of length 2
     }
+    return 0;
 }
 ```
 
@@ -181,8 +188,9 @@ public int sum(Array<int> values) {
     return total;
 }
 
-public void main() {
+protected int main() {
     trace(sum([3, 4, 5]));   // 12
+    return 0;
 }
 ```
 
@@ -198,11 +206,12 @@ public void addDefaults(Array<string> list) {
     list.push("default");
 }
 
-public void main() {
+protected int main() {
     Array<string> mine = ["first"];
     Array<string> same = mine;
     addDefaults(same);
     trace(mine.length, mine[1]);   // 2 default
+    return 0;
 }
 ```
 
@@ -214,9 +223,10 @@ package main;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     Array<string> words = string.fields("  the quick  brown fox ");
     trace(words.length, string.join(words, "-"));   // 4 the-quick-brown-fox
+    return 0;
 }
 ```
 

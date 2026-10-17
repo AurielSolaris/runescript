@@ -17,7 +17,7 @@ RuneScript-এ ফ্লোটিং-পয়েন্ট টাইপ তি�
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     float a = 0.1;
     float b = 0.2;
     trace(a + b);          // 0.30000000000000004
@@ -25,6 +25,7 @@ public void main() {
 
     float32 f = (float32) 0.1;
     trace(f * 3);          // 0.3, rounded to float32
+    return 0;
 }
 ```
 
@@ -44,12 +45,13 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     float zero = 0;
     float nan = zero / zero;
     trace(1 / zero, -1 / zero, nan);           // Infinity -Infinity NaN
     trace(nan == nan, isNaN(nan));             // false true
     trace(isFinite(1e308 * 10), Infinity > 1); // false true
+    return 0;
 }
 ```
 
@@ -65,20 +67,22 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int n = 3;
     float x = 1.5;
     trace(x * n);   // error: ASX-TYPE-012
+    return 0;
 }
 ```
 
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int n = 3;
     float x = 1.5;
     trace(x * (float) n);   // 4.5
+    return 0;
 }
 ```
 
@@ -96,12 +100,13 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     trace((int) 64.3, (int) -64.7);       // 64 -64: truncates toward zero
     trace((float) "64.7", (int) "-42");   // 64.7 -42: parses strings
     trace((string) 1.5, (bool) "true");   // 1.5 true
     int count = 7;
     trace((float) count / 2);             // 3.5: the cast binds tighter than /
+    return 0;
 }
 ```
 
@@ -117,9 +122,10 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     string input = "12x";
     trace((int) input);   // runtime error: ASX-RUN-006
+    return 0;
 }
 ```
 
@@ -134,10 +140,11 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int signedValue = 10;
     uint u = (uint) signedValue;   // checked: a negative value would throw
     trace(u);
+    return 0;
 }
 ```
 

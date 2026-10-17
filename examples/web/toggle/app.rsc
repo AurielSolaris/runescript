@@ -30,6 +30,7 @@ public Element Details() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(Details, "#app");
+    return 0;
 }

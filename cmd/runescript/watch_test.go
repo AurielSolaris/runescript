@@ -46,7 +46,7 @@ func TestRunWatch(t *testing.T) {
 	path := filepath.Join(dir, "prog.rsc")
 	lib := filepath.Join(dir, "lib.rsm")
 	src := func(word string) string {
-		return "package main;\nuse \"./lib.rsm\";\npublic int main() {\n    trace(\"" + word + "\", lib.n());\n    return 0;\n}\n"
+		return "package main;\nuse \"./lib.rsm\";\nprotected int main() {\n    trace(\"" + word + "\", lib.n());\n    return 0;\n}\n"
 	}
 	if err := os.WriteFile(path, []byte(src("first")), 0o644); err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestRunWatch(t *testing.T) {
 	write(lib, "package lib;\npublic int n() { return 2; }\n")
 	waitFor(t, "the run after the library changed", func() bool { return strings.Contains(stdout.String(), "second 2") })
 	later = later.Add(2 * time.Second)
-	write(path, "package main;\npublic int main() { return x; }\n")
+	write(path, "package main;\nprotected int main() { return x; }\n")
 	waitFor(t, "the compile error", func() bool { return strings.Contains(stderr.String(), "ASX-NAME-001") })
 	if !strings.Contains(stderr.String(), "exit status 1; watching") {
 		t.Errorf("stderr: %s", stderr.String())

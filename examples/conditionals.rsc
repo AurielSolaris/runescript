@@ -13,7 +13,7 @@ public string classify(int n) {
     }
 }
 
-public void main() {
+protected int main() {
     trace(-5, classify(-5));
     trace(0, classify(0));
     trace(7, classify(7));
@@ -22,4 +22,5 @@ public void main() {
     bool a = true;
     bool b = !a || 3 >= 2;
     trace("b is", b);
+    return 0;
 }

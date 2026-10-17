@@ -16,7 +16,7 @@ public int depth(int n) {
     return depth(n - 1) + 1;
 }
 
-public int main() {
+protected int main() {
     trace(chooser()(3)(4));
     trace(((int x) => x * 10)(5));
     trace(apply((int x) => { int y = x + 1; return y * y; }, 4));

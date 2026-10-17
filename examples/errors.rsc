@@ -20,7 +20,7 @@ public void report(string text) {
     }
 }
 
-public int main() {
+protected int main() {
     report("42");
     report("-7");
     report("forty");

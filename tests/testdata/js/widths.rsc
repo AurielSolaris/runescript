@@ -9,7 +9,7 @@ public int64 factorial(int64 n) {
     return n * factorial(n - 1);
 }
 
-public void main() {
+protected int main() {
     int8 a = 127;
     int16 b = -32768;
     int32 c = 2147483647;
@@ -87,4 +87,5 @@ public void main() {
     } catch (RangeError err) {
         trace(err.message);
     }
+    return 0;
 }

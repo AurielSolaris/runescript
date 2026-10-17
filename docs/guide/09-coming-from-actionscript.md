@@ -30,8 +30,9 @@ public void sayHi(string message, int times) {
     }
 }
 
-public void main() {
+protected int main() {
     sayHi("hi", 2);
+    return 0;
 }
 ```
 

@@ -196,7 +196,7 @@ type interp struct {
 }
 
 // Run executes the program's entry point and returns main's result as the
-// process exit code (0 for a void main). The program must have passed
+// process exit code. The program must have passed
 // ir.Verify, and must not call extern (JavaScript) functions or use
 // rune:dom, which only the JavaScript target can run.
 func Run(p *ir.Program, out io.Writer) (code int, err error) {
@@ -217,11 +217,7 @@ func Run(p *ir.Program, out io.Writer) (code int, err error) {
 			}
 		}
 	}()
-	v := in.call(p.Entry, nil, p.EntrySite)
-	if p.EntryVoid {
-		return 0, nil
-	}
-	return int(v.Int), nil
+	return int(in.call(p.Entry, nil, p.EntrySite).Int), nil
 }
 
 // fail raises a runtime error. Those with an error type are thrown and can

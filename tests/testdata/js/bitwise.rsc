@@ -7,7 +7,7 @@ public uint32 rotl(uint32 x, int n) {
     return (low << n) | (x >> (32 - n));
 }
 
-public void main() {
+protected int main() {
     int flags = 0b0101;
     flags |= 0b1000;
     flags &= ~0b0001;
@@ -47,4 +47,5 @@ public void main() {
     } catch (RangeError e) {
         trace(e.message);
     }
+    return 0;
 }

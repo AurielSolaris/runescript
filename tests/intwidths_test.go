@@ -36,7 +36,7 @@ func TestIntegerWidthsMatch(t *testing.T) {
 		return v.Add(v, lo).String()
 	}
 	var b strings.Builder
-	b.WriteString("package fuzz;\n\npublic void main() {\n")
+	b.WriteString("package fuzz;\n\nprotected int main() {\n")
 	n := 0
 	step := func(stmt string) {
 		n++
@@ -59,7 +59,7 @@ func TestIntegerWidthsMatch(t *testing.T) {
 			step(fmt.Sprintf("%s trace(%d, (%s) x, (float64) x, (float32) y, (string) x);", decl, n+1, to))
 		}
 	}
-	b.WriteString("}\n")
+	b.WriteString("    return 0;\n}\n")
 	src := []byte(b.String())
 
 	want := interpret(t, src)

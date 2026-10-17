@@ -1,7 +1,7 @@
 // Integer semantics that JavaScript numbers do not have on their own.
 package tests.js;
 
-public int main() {
+protected int main() {
     int max = 2147483647;
     int min = -2147483648;
     trace("max - 1 + 1 =", max - 1 + 1);

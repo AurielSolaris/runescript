@@ -11,7 +11,7 @@ import (
 // program wraps body lines in `int main()`. The first body line is line 3.
 // extra is appended after main as additional top-level declarations.
 func program(body, extra string) string {
-	return "package p;\npublic int main() {\n" + body + "\n    return 0;\n}\n" + extra
+	return "package p;\nprotected int main() {\n" + body + "\n    return 0;\n}\n" + extra
 }
 
 func check(t *testing.T, src string) []*diagnostics.Diagnostic {
@@ -29,13 +29,13 @@ func check(t *testing.T, src string) []*diagnostics.Diagnostic {
 func TestAccepted(t *testing.T) {
 	cases := map[string]string{
 		"canonical entry":     "package main;\nprotected int main() {\n    return 0;\n}",
-		"void main":           "package p;\npublic void main() { trace(\"hi\"); }",
+		"void main":           "package p;\nprotected int main() { trace(\"hi\"); return 0; }",
 		"float constants":     program("    float f = 3;\n    float32 h = 0.5;\n    float64 d = -1e300;\n    float32 big = 16777216;\n    trace(f * 2, h / 4, d < 0);", ""),
 		"constant casts":      program("    int a = (int) -64.7;\n    uint b = (uint) 3.9;\n    float32 c = (float32) 0.1;\n    float d = (float) 9007199254740993;", ""),
 		"runtime casts":       program("    int n = 3;\n    string s = \"4\";\n    float f = (float) n + (float) s;\n    uint u = (uint) n;\n    bool b = (bool) s;\n    trace((string) f, (int) f, (float32) f, u, b);", ""),
 		"error subtypes":      program("    Error e = new RangeError(\"r\");\n    Error(string) make = (string m) => new TypeError(m);\n    trace(e.message, e.name, e.errorID, make(\"t\"));", ""),
-		"throw ends a path":   "package p;\npublic int f(int n) {\n    if (n > 0) {\n        return n;\n    }\n    throw new ArgumentError(\"n\");\n}\npublic void main() { trace(f(1)); }",
-		"try ends a path":     "package p;\npublic int f() {\n    try {\n        return 1;\n    } catch (Error e) {\n        return 2;\n    }\n}\npublic void main() { trace(f()); }",
+		"throw ends a path":   "package p;\npublic int f(int n) {\n    if (n > 0) {\n        return n;\n    }\n    throw new ArgumentError(\"n\");\n}\nprotected int main() { trace(f(1)); return 0; }",
+		"try ends a path":     "package p;\npublic int f() {\n    try {\n        return 1;\n    } catch (Error e) {\n        return 2;\n    }\n}\nprotected int main() { trace(f()); return 0; }",
 		"loop in finally":     program("    try { trace(1); } finally {\n        for (int i = 0; i < 2; i++) { if (i == 1) { break; } }\n    }", ""),
 		"sint is int":         program("    sint a = 1;\n    int b = a;\n    sint c = b;", ""),
 		"literal to uint":     program("    uint u = 4294967295;", ""),
@@ -58,7 +58,7 @@ func TestAccepted(t *testing.T) {
 		"uint param":          program("    trace(twice(21));", "public uint twice(uint n) { return n * 2; }"),
 		"trace mixed":         program("    trace(\"x\", 1, true, -5);", ""),
 		"recursion":           program("    trace(f(3));", "public int f(int n) { if (n == 0) { return 0; } return f(n - 1); }"),
-		"visibility recorded": "package p;\npublic void main() { }\nprivate void helper() { }",
+		"visibility recorded": "package p;\nprotected int main() { return 0; }\nprivate void helper() { }",
 	}
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestRejected(t *testing.T) {
 		{"int and int64", program("    int a = 1;\n    int64 b = 2;\n    trace(a < b);", ""), diagnostics.TypeBadOperand, "5:13"},
 		{"int8 to uint8", program("    int8 a = 1;\n    uint8 b = a;", ""), diagnostics.TypeSignedToUnsigned, "4:15"},
 		{"width cast constant", program("    trace((uint8) 256);", ""), diagnostics.TypeConstOutOfRange, "3:19"},
-		{"extern int64", "package p;\nextern \"./x.mjs\" int64 f();\npublic void main() { }", diagnostics.TypeExternType, "2:18"},
+		{"extern int64", "package p;\nextern \"./x.mjs\" int64 f();\nprotected int main() { return 0; }", diagnostics.TypeExternType, "2:18"},
 		{"string index", program("    Array<int> a = [1];\n    trace(a[\"0\"]);", ""), diagnostics.TypeMismatch, "4:13"},
 		{"float index", program("    Array<int> a = [1];\n    trace(a[1.5]);", ""), diagnostics.TypeMismatch, "4:13"},
 		{"index a string", program("    string s = \"ab\";\n    trace(s[0]);", ""), diagnostics.TypeBadOperand, "4:11"},
@@ -205,6 +205,10 @@ func TestRejected(t *testing.T) {
 		{"main with params", "package p;\npublic int main(int x) { return 0; }", diagnostics.EntryBadSignature, "2:12"},
 		{"main returns string", "package p;\npublic string main() { return \"\"; }", diagnostics.EntryBadSignature, "2:15"},
 		{"main returns uint", "package p;\npublic uint main() { return 0; }", diagnostics.EntryBadSignature, "2:13"},
+		{"public main", "package p;\npublic int main() { return 0; }", diagnostics.EntryBadSignature, "2:12"},
+		{"private main", "package p;\nprivate int main() { return 0; }", diagnostics.EntryBadSignature, "2:13"},
+		{"void main", "package p;\nprotected void main() { }", diagnostics.EntryBadSignature, "2:16"},
+		{"int32 main", "package p;\nprotected int32 main() { return 0; }", diagnostics.EntryBadSignature, "2:17"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -248,7 +252,7 @@ func TestReportsMultipleErrors(t *testing.T) {
 // withString wraps body in a program that uses std:string. The first body
 // line is line 4.
 func withString(body string) string {
-	return "package p;\nuse \"std:string\";\npublic int main() {\n" + body + "\n    return 0;\n}\n"
+	return "package p;\nuse \"std:string\";\nprotected int main() {\n" + body + "\n    return 0;\n}\n"
 }
 
 func TestStdStringAccepted(t *testing.T) {
@@ -277,12 +281,12 @@ func TestStdStringRejected(t *testing.T) {
 		code diagnostics.Code
 		pos  string
 	}{
-		{"missing file", "package p;\nuse \"lib/x.rsc\";\npublic void main() { }", diagnostics.UseNotFound, "2:5"},
-		{"go use", "package p;\nuse \"go:strings\";\npublic void main() { }", diagnostics.UseUnsupported, "2:5"},
-		{"unknown std package", "package p;\nuse \"std:symrs\";\npublic void main() { }", diagnostics.UseUnknownPackage, "2:5"},
-		{"duplicate use", "package p;\nuse \"std:string\";\nuse \"std:string\";\npublic void main() { }", diagnostics.UseDuplicate, "3:1"},
-		{"missing use", "package p;\npublic void main() { trace(string.toUpper(\"a\")); }", diagnostics.NamePackageNotUsed, "2:28"},
-		{"unknown qualifier", "package p;\npublic void main() { foo.bar(); }", diagnostics.NamePackageNotUsed, "2:22"},
+		{"missing file", "package p;\nuse \"lib/x.rsc\";\nprotected int main() { return 0; }", diagnostics.UseNotFound, "2:5"},
+		{"go use", "package p;\nuse \"go:strings\";\nprotected int main() { return 0; }", diagnostics.UseUnsupported, "2:5"},
+		{"unknown std package", "package p;\nuse \"std:symrs\";\nprotected int main() { return 0; }", diagnostics.UseUnknownPackage, "2:5"},
+		{"duplicate use", "package p;\nuse \"std:string\";\nuse \"std:string\";\nprotected int main() { return 0; }", diagnostics.UseDuplicate, "3:1"},
+		{"missing use", "package p;\nprotected int main() { trace(string.toUpper(\"a\")); return 0; }", diagnostics.NamePackageNotUsed, "2:30"},
+		{"unknown qualifier", "package p;\nprotected int main() { foo.bar(); return 0; }", diagnostics.NamePackageNotUsed, "2:24"},
 		{"Go casing", withString(`    trace(string.ToUpper("a"));`), diagnostics.NameNotInPackage, "4:18"},
 		{"unknown function", withString(`    trace(string.cut("a,b", ","));`), diagnostics.NameNotInPackage, "4:18"},
 		{"arg count", withString(`    trace(string.repeat("a"));`), diagnostics.TypeArgCount, "4:11"},
@@ -391,7 +395,7 @@ func TestFunctionsRejected(t *testing.T) {
 }
 
 func withMath(body string) string {
-	return "package p;\nuse \"std:math\";\npublic int main() {\n" + body + "\n    return 0;\n}\n"
+	return "package p;\nuse \"std:math\";\nprotected int main() {\n" + body + "\n    return 0;\n}\n"
 }
 
 func TestStdMath(t *testing.T) {

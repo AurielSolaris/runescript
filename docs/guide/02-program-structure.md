@@ -8,8 +8,7 @@ in `;`, not a block:
 ```actionscript
 package games.puzzle.solver;
 
-public void main() {
-}
+protected int main() { return 0; }
 ```
 
 Package names are dotted identifiers. A program can span several files
@@ -25,8 +24,9 @@ package main;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     trace(string.toUpper("hello"));   // HELLO
+    return 0;
 }
 ```
 
@@ -48,8 +48,9 @@ package main;
 /* A block comment
    can span several lines. */
 
-public void main() {
+protected int main() {
     trace("comments are ignored"); // trailing comments too
+    return 0;
 }
 ```
 
@@ -83,8 +84,9 @@ protected int main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     trace("no return value needed");
+    return 0;
 }
 ```
 

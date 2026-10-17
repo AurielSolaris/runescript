@@ -3,7 +3,7 @@
 // expect runtime error: ASX-RUN-002 9:19
 package tests.runtime;
 
-public int main() {
+protected int main() {
     try {
         int big = 2147483647;
         trace(big * 2);

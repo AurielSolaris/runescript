@@ -38,7 +38,7 @@ public void rethrow() {
     }
 }
 
-public int main() {
+protected int main() {
     // A thrown error is caught by the first matching clause.
     try {
         trace(checkedDivide(10, 2));

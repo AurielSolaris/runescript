@@ -1,7 +1,7 @@
 // Mutual recursion between nested functions with no base case.
 package tests.runtime;
 
-public void main() {
+protected int main() {
     private int ping(int n);
     private int pong(int n) {
         return ping(n + 1);
@@ -11,4 +11,5 @@ public void main() {
     }
     trace("start");
     trace(ping(0));
+    return 0;
 }

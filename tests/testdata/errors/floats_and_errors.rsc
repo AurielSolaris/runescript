@@ -3,7 +3,7 @@ package tests.errors;
 
 use "std:string";
 
-public int main() {
+protected int main() {
     int i = 64.3;                      // expect: ASX-TYPE-001 7:13
     float32 a = 0.1;                   // expect: ASX-TYPE-018 8:17
     float32 b = 1e39;                  // expect: ASX-TYPE-006 9:17

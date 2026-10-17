@@ -14,6 +14,7 @@ use "./app.rsc";
 //     cd examples/web/multi-file
 //     runescript dev main.rsc
 
-public void main() {
+protected int main() {
     dom.renderApp(app.App, "#app");
+    return 0;
 }

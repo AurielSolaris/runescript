@@ -16,7 +16,7 @@ public int down(int n) {
     }
 }
 
-public int main() {
+protected int main() {
     trace("start");
     return down(0);
 }

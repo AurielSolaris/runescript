@@ -1,7 +1,7 @@
 // Functions: parameters, return values, recursion, and calls before declaration.
 package examples.functions;
 
-public int main() {
+protected int main() {
     trace("5! =", factorial(5));
     trace("fib(20) =", fib(20));
     trace("gcd(84, 36) =", gcd(84, 36));

@@ -26,7 +26,7 @@ public int indexOf(Array<string> words, string word) {
     return -1;
 }
 
-public void main() {
+protected int main() {
     string text = "The cat sat.\nThe dog sat, too!\nA cat? A dog.";
     Array<string> lines = string.split(text, "\n");
 
@@ -55,4 +55,5 @@ public void main() {
     }
     trace($"{total} words, {seen.length} different");
     trace(string.join(report, ", "));
+    return 0;
 }

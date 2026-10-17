@@ -110,7 +110,7 @@ func TestParseTemplateErrors(t *testing.T) {
 }
 
 func TestParseSignalType(t *testing.T) {
-	f := mustParse(t, "package p;\nuse \"rune:dom\";\npublic void main() {\n    Signal<int> count = signal(0);\n    void(Signal<string>) f = (Signal<string> s) => trace(s());\n}\n")
+	f := mustParse(t, "package p;\nuse \"rune:dom\";\nprotected int main() {\n    Signal<int> count = signal(0);\n    void(Signal<string>) f = (Signal<string> s) => trace(s());\n    return 0;\n}\n")
 	d := f.Funcs[0].Body.Stmts[0].(*ast.VarDecl)
 	if d.Type.String() != "Signal<int>" || d.Name.Name != "count" {
 		t.Errorf("got %s %s", d.Type, d.Name.Name)

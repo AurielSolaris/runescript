@@ -1,7 +1,7 @@
 // Number literal forms (OQ-NUM-06): hex, binary, octal, and separators.
 package tests.js;
 
-public void main() {
+protected int main() {
     int million = 1_000_000;
     uint mask = 0xFFFF_FFFF;
     int flags = 0b1010_0101;
@@ -10,4 +10,5 @@ public void main() {
     float64 avogadro = 6.022_140_76e2_3;
     trace(million, mask, flags, perms, big, avogadro);
     trace(0xff + 0b1 + 0o10, -0x80, (uint) 0x7FFF_FFFF);
+    return 0;
 }

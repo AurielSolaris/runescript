@@ -7,7 +7,7 @@ public void sayHi(string message, int times) {
     }
 }
 
-public int main() {
+protected int main() {
     sayHi("Hello world", 3);
 
     int n = 0;

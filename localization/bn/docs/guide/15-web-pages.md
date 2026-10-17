@@ -41,8 +41,9 @@ public Element Hello() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(Hello, "#app");
+    return 0;
 }
 ```
 
@@ -129,8 +130,9 @@ public Element Counter() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(Counter, "#app");
+    return 0;
 }
 ```
 
@@ -193,8 +195,9 @@ public Element Details() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(Details, "#app");
+    return 0;
 }
 ```
 
@@ -212,8 +215,9 @@ package main;
 use "rune:dom";
 use "./app.rsc";
 
-public void main() {
+protected int main() {
     dom.renderApp(app.App, "#app");
+    return 0;
 }
 ```
 
@@ -283,8 +287,9 @@ public Element App() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(App, "#app");
+    return 0;
 }
 ```
 

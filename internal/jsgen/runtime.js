@@ -1655,7 +1655,7 @@ const $rt = (() => {
   //@end
 
   // run calls the entry point. options.trace receives each line of trace
-  // output (default console.log). The result is main's int result, or 0.
+  // output (default console.log). The result is main's int result.
   function run(program, options = {}) {
     files = program.files;
     sites = program.sites;
@@ -1663,8 +1663,7 @@ const $rt = (() => {
     depth = 0;
     fatal = false;
     try {
-      const code = program.main(program.entrySite);
-      return program.entryVoid ? 0 : code;
+      return program.main(program.entrySite);
     } catch (e) {
       throw e instanceof RSError ? report(e) : e;
     } finally {

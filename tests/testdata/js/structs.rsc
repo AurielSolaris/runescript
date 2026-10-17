@@ -28,7 +28,7 @@ public int area(Rect r) {
     return r.size.x * r.size.y;
 }
 
-public void main() {
+protected int main() {
     Point a = Point{x: 1, y: 2};
     Point b = a;          // a copy: changing b leaves a alone
     b.x = 10;
@@ -61,6 +61,7 @@ public void main() {
 
     float32 f = (float32) 0.1;
     trace(Measure{value: f, unit: 'm', ok: true});
+    return 0;
 }
 
 public struct Measure {

@@ -7,7 +7,7 @@ public int pick(bool b) {
     }
 } // expect: ASX-TYPE-008 8:1
 
-public int main() {
+protected int main() {
     int n = 3;
     if (n) {             // expect: ASX-TYPE-013 12:9
     }

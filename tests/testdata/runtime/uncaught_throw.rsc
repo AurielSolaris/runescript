@@ -9,7 +9,7 @@ public void check(int n) {
     throw new RangeError("n is too big", 3);
 }
 
-public int main() {
+protected int main() {
     check(1);
     trace("checked 1");
     check(11);

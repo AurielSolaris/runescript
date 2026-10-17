@@ -245,7 +245,7 @@ if ($LASTEXITCODE -ne 0) { Fail "the installed CLI does not run: $installed" }
 $smoke = Join-Path ([IO.Path]::GetTempPath()) ("runescript-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $smoke | Out-Null
 try {
-    $hello = "package main;`n`npublic int main() {`n    trace(`"Hello from RuneScript`");`n    return 0;`n}`n"
+    $hello = "package main;`n`nprotected int main() {`n    trace(`"Hello from RuneScript`");`n    return 0;`n}`n"
     [IO.File]::WriteAllText((Join-Path $smoke 'hello.rsc'), $hello, (New-Object Text.UTF8Encoding $false))
     Push-Location -LiteralPath $smoke
     try { $out = & $Target run hello.rsc 2>&1 } finally { Pop-Location }

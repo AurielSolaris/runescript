@@ -9,7 +9,7 @@ extern "rune:fs" string readFile(string path);
 extern "rune:fs" bool exists(string path);
 extern "rune:fs" void remove(string path);
 
-public int main() {
+protected int main() {
     trace(exists("notes.txt"));
     writeFile("notes.txt", "ᚱᚢᚾᛖ\n");
     appendFile("notes.txt", "line two");

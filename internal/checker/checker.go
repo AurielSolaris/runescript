@@ -73,10 +73,8 @@ type Info struct {
 	// templates to their entries in the element list.
 	TemplateElems map[*ast.MElement]*dom.Element
 	TemplateAttrs map[*ast.MAttr]*dom.Attr
-	// Entry is the program entry point; EntryVoid reports whether it
-	// returns void.
-	Entry     *ast.FuncDecl
-	EntryVoid bool
+	// Entry is the program entry point, `protected int main()`.
+	Entry *ast.FuncDecl
 	// Warnings holds the warnings found, in no particular order. They are
 	// not in the diagnostics Check returns.
 	Warnings []*diagnostics.Diagnostic
@@ -705,7 +703,7 @@ func (c *checker) entry(prog *loader.Program) {
 	sort.SliceStable(mains, func(i, j int) bool { return mains[i].Def.Span.Start.Before(mains[j].Def.Span.Start) })
 	if len(mains) == 0 {
 		c.errorf(diagnostics.EntryMissing, prog.Entry.AST.Package.Span, "no entry point: function 'main' is not defined").
-			WithHelp("define `public int main() { return 0; }`")
+			WithHelp("define `protected int main() { return 0; }`")
 		return
 	}
 	for _, m := range mains[1:] {
@@ -713,15 +711,27 @@ func (c *checker) entry(prog *loader.Program) {
 			mains[0].Pkg.Name, mains[0].Def.Name.Span.Start.Where(m.File.Source)).
 			WithHelp("a program has exactly one function named 'main'; rename the others")
 	}
+	// The entry point is exactly `protected int main()` (owner decision,
+	// OQ-ENTRY-01): its int result is the exit code, and command-line
+	// arguments come from std:process.
 	main := mains[0]
 	t := main.Type
-	if len(t.Params) != 0 || (t.Result.Kind != types.Signed && t.Result.Kind != types.Void) {
-		if t.Result.Kind != types.Invalid {
-			c.errorf(diagnostics.EntryBadSignature, main.Def.Name.Span, "'main' must take no parameters and return 'int' or 'void'").
-				WithHelp("entry-point parameters (e.g. command-line arguments) are not yet specified")
-		}
+	if t.Result.Kind == types.Invalid {
+		return
+	}
+	var problem, help string
+	switch {
+	case len(t.Params) != 0:
+		problem, help = "takes no parameters", "read command-line arguments with process.args() from std:process"
+	case t.Result.Kind != types.Signed || t.Result.Bits != 0:
+		problem, help = "returns 'int'", "return the exit code, e.g. `return 0;` for success"
+	case main.visibility() != ast.VisProtected:
+		problem, help = "is protected", fmt.Sprintf("write `protected int main()` instead of `%s`", main.visibility())
+	}
+	if problem != "" {
+		c.errorf(diagnostics.EntryBadSignature, main.Def.Name.Span, "the entry point must be declared `protected int main()`: it %s", problem).
+			WithHelp(help)
 		return
 	}
 	c.info.Entry = main.Def
-	c.info.EntryVoid = t.Result.Kind == types.Void
 }

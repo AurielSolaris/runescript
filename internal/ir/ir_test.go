@@ -53,7 +53,7 @@ public uint main2(uint u) {
     v++;
     return v;
 }
-public int main() {
+protected int main() {
     int x = -3;
     return -x;
 }

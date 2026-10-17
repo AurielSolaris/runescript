@@ -4,7 +4,7 @@ use "nopkg" as n;           // expect: ASX-USE-004 main.rsc:3:5
 use "emptypkg";             // expect: ASX-USE-004 main.rsc:4:5
 use "./emptypkg/";          // expect: ASX-USE-004 main.rsc:5:5
 
-public int main() {
+protected int main() {
     n.f();
     emptypkg.g();
     return 0;

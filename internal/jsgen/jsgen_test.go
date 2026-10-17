@@ -39,7 +39,7 @@ func program(js string) string {
 func TestArithmeticIsChecked(t *testing.T) {
 	js, _ := generate(t, `package p;
 public uint f(uint a, uint b) { return a * b - a / b + a % b; }
-public int main() {
+protected int main() {
     int x = 3;
     x += 4;
     x++;
@@ -60,7 +60,7 @@ public int main() {
 func TestReservedNamesAreRenamed(t *testing.T) {
 	js, _ := generate(t, `package p;
 public int delete(int this) { return this; }
-public int main() { int var = delete(1); return var; }
+protected int main() { int var = delete(1); return var; }
 `)
 	for _, want := range []string{"function delete$(this$, $site)", "let var$ = delete$(1,", "return var$;"} {
 		if !strings.Contains(js, want) {
@@ -86,8 +86,8 @@ func TestQuote(t *testing.T) {
 
 // Unicode tables are only included when the program uses them.
 func TestTablesOnlyWhenUsed(t *testing.T) {
-	plain, _ := generate(t, "package p;\npublic void main() { trace(1); }\n")
-	upper, _ := generate(t, "package p;\nuse \"std:string\";\npublic void main() { trace(string.toUpper(\"a\")); }\n")
+	plain, _ := generate(t, "package p;\nprotected int main() { trace(1); return 0; }\n")
+	upper, _ := generate(t, "package p;\nuse \"std:string\";\nprotected int main() { trace(string.toUpper(\"a\")); return 0; }\n")
 	// A program without std:string has no std:string section at all.
 	if strings.Contains(plain, "upper = lazy(") || strings.Contains(upper, "upper = lazy([])") {
 		t.Error("toUpper table inclusion is wrong")

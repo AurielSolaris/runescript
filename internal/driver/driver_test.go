@@ -10,7 +10,7 @@ import (
 // Diagnostics come back in source order even when the checker finds them
 // out of order (an undefined prototype is only known at the end of its scope).
 func TestDiagnosticsAreSortedByPosition(t *testing.T) {
-	_, diags := Check([]byte("package p;\npublic int f(int);\npublic void main() {\n    trace(x);\n}\n"))
+	_, diags := Check([]byte("package p;\npublic int f(int);\nprotected int main() {\n    trace(x);\n    return 0;\n}\n"))
 	if len(diags) != 2 {
 		t.Fatalf("got %v", diags)
 	}
@@ -21,7 +21,7 @@ func TestDiagnosticsAreSortedByPosition(t *testing.T) {
 
 func TestRunReturnsExitCodeAndOutput(t *testing.T) {
 	var out strings.Builder
-	code, diags, err := Run([]byte("package p;\npublic int main() {\n    int(int) f = (int x) => x + 1;\n    trace(\"ok\");\n    return f(41);\n}\n"), &out)
+	code, diags, err := Run([]byte("package p;\nprotected int main() {\n    int(int) f = (int x) => x + 1;\n    trace(\"ok\");\n    return f(41);\n}\n"), &out)
 	if diags != nil || err != nil || code != 42 || out.String() != "ok\n" {
 		t.Errorf("code=%d out=%q diags=%v err=%v", code, out.String(), diags, err)
 	}
@@ -30,7 +30,7 @@ func TestRunReturnsExitCodeAndOutput(t *testing.T) {
 // Extern functions run only on the JavaScript target: the program checks,
 // but the interpreter refuses it with one diagnostic at the first extern.
 func TestInterpreterRejectsExterns(t *testing.T) {
-	src := []byte("package p;\npublic void main() { trace(f(), g()); }\nextern \"./m.mjs\" int f();\nextern \"./m.mjs\" int g();\n")
+	src := []byte("package p;\nprotected int main() { trace(f(), g()); return 0; }\nextern \"./m.mjs\" int f();\nextern \"./m.mjs\" int g();\n")
 	if _, diags := Check(src); diags != nil {
 		t.Fatalf("check: %v", diags)
 	}
@@ -47,7 +47,7 @@ func TestInterpreterRejectsExterns(t *testing.T) {
 
 // rune:dom programs need a browser: the interpreter refuses them.
 func TestInterpreterRejectsDOM(t *testing.T) {
-	src := []byte("package p;\nuse \"rune:dom\";\npublic Element App() { template { <p>x</p> } }\npublic void main() { dom.renderApp(App, \"#app\"); }\n")
+	src := []byte("package p;\nuse \"rune:dom\";\npublic Element App() { template { <p>x</p> } }\nprotected int main() { dom.renderApp(App, \"#app\"); return 0; }\n")
 	if _, diags := Check(src); diags != nil {
 		t.Fatalf("check: %v", diags)
 	}

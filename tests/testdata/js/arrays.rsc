@@ -25,7 +25,7 @@ public Array<int> squares(int n) {
     return out;
 }
 
-public void main() {
+protected int main() {
     Array<string> names = ["ada", "grace"];
     names.push("linus");
     trace(names.length, names[0], names[2]);
@@ -86,4 +86,5 @@ public void main() {
     } catch (RangeError e) {
         trace(e.message, shrink.length);
     }
+    return 0;
 }

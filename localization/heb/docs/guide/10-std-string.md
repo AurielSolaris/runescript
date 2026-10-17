@@ -16,11 +16,12 @@ package main;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     string name = string.trimSpace("   rune script   ");
     trace(string.toUpper(name));                       // RUNE SCRIPT
     trace(string.hasPrefix(name, "rune"));             // true
     trace(string.replaceAll(name, " ", "-"));          // rune-script
+    return 0;
 }
 ```
 
@@ -69,7 +70,7 @@ package main;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     string s = "go gopher";
     trace(string.contains(s, "ph"), string.index(s, "go"), string.lastIndex(s, "go"));   // true 0 3
     trace(string.count("cheese", "e"));                                                  // 3
@@ -77,6 +78,7 @@ public void main() {
     if (string.index(s, "x") == -1) {
         trace("no x");
     }
+    return 0;
 }
 ```
 
@@ -102,10 +104,11 @@ package main;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     trace(string.repeat("ab", 3));                          // ababab
     trace(string.replace("oink oink oink", "k", "ky", 2));  // oinky oinky oink
     trace(string.toLower("LOUD"), string.toUpper("quiet"));  // loud QUIET
+    return 0;
 }
 ```
 
@@ -129,10 +132,11 @@ package main;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     trace(string.trim("!!hello!!", "!"));                 // hello
     trace(string.trimLeft("xxhixx", "x"));                // hixx
     trace(string.trimSuffix("game.rsc", ".rsc"));           // game
+    return 0;
 }
 ```
 
@@ -162,7 +166,7 @@ package main;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     string s = "héllo";
     trace(string.len(s), string.runeCount(s));   // 6 5
     trace(string.slice(s, 0, 3));                // hé
@@ -173,6 +177,7 @@ public void main() {
     } catch (RangeError e) {
         trace(e.message);   // string.slice: byte offset 2 is inside a character
     }
+    return 0;
 }
 ```
 
@@ -216,12 +221,13 @@ public char hide(char c) {
     return c;
 }
 
-public void main() {
+protected int main() {
     string order = "order 66 shipped";
     trace(string.indexFunc(order, isDigit));            // 6
     trace(string.trimFunc("2024-report-v2", isDigit));  // -report-v
     trace(string.map(hide, order));                     // order ## shipped
     trace(string.containsRune(order, 'z'));             // false
+    return 0;
 }
 ```
 
@@ -250,7 +256,7 @@ package main;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     Array<string> cells = string.split("name,age,,city", ",");
     trace(cells.length, cells[1], cells[2] == "");          // 4 age true
 
@@ -259,6 +265,7 @@ public void main() {
 
     Array<string> kv = string.splitN("key=value=more", "=", 2);
     trace(kv[0], kv[1]);                                     // key value=more
+    return 0;
 }
 ```
 

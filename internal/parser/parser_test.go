@@ -116,9 +116,9 @@ func TestParseErrors(t *testing.T) {
 		code diagnostics.Code
 		pos  string
 	}{
-		{"missing package", "public int main() { return 0; }", diagnostics.ParseUnexpected, "1:1"},
+		{"missing package", "protected int main() { return 0; }", diagnostics.ParseUnexpected, "1:1"},
 		{"package block", "package main { }", diagnostics.ParseUnexpected, "1:14"},
-		{"missing semicolon", "package p;\npublic int main() {\n    return 0\n}", diagnostics.ParseUnexpected, "4:1"},
+		{"missing semicolon", "package p;\nprotected int main() {\n    return 0\n}", diagnostics.ParseUnexpected, "4:1"},
 		{"function keyword", "package p;\nfunction main() {}", diagnostics.ParseUnexpected, "2:1"},
 		{"two modifiers", "package p;\npublic private void f() {}", diagnostics.ParseUnexpected, "2:8"},
 		{"reserved class", "package p;\nclass Foo {}", diagnostics.ParseNotImplemented, "2:1"},
@@ -305,7 +305,7 @@ public void f() {
 }
 
 func TestParseExterns(t *testing.T) {
-	f := mustParse(t, "package p;\nextern \"rune:fs\" string readFile(string path);\npublic void main() { }\nextern \"./x.mjs\" int f(int, float32 y);\n")
+	f := mustParse(t, "package p;\nextern \"rune:fs\" string readFile(string path);\nprotected int main() { return 0; }\nextern \"./x.mjs\" int f(int, float32 y);\n")
 	if len(f.Externs) != 2 || len(f.Funcs) != 1 {
 		t.Fatalf("got %d externs, %d funcs", len(f.Externs), len(f.Funcs))
 	}
@@ -323,8 +323,8 @@ func TestParseExternErrors(t *testing.T) {
 		{"no module", "package p;\nextern int f();", "2:8"},
 		{"modifier", "package p;\nextern \"m\" public int f();", "2:12"},
 		{"body", "package p;\nextern \"m\" int f() { return 1; }", "2:20"},
-		{"no semicolon", "package p;\nextern \"m\" int f()\npublic void main() { }", "3:1"},
-		{"inside a function", "package p;\npublic void main() {\n    extern \"m\" int f();\n}", "3:5"},
+		{"no semicolon", "package p;\nextern \"m\" int f()\nprotected int main() { return 0; }", "3:1"},
+		{"inside a function", "package p;\nprotected int main() {\n    extern \"m\" int f();\n    return 0;\n}", "3:5"},
 		{"before use", "package p;\nextern \"m\" int f();\nuse \"std:string\";", "3:1"},
 	}
 	for _, c := range cases {

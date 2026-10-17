@@ -1,7 +1,7 @@
 // The one integer division whose quotient is out of range.
 package tests.runtime;
 
-public int main() {
+protected int main() {
     int min = -2147483648;
     int m = -1;
     trace(min % m);

@@ -18,10 +18,10 @@ func write(t *testing.T, src string) string {
 
 func TestCLI(t *testing.T) {
 	ok := write(t, "package main;\nprotected int main() {\n    trace(\"hello\");\n    return 3;\n}\n")
-	bad := write(t, "package main;\npublic int main() {\n    sint s = -10;\n    uint u = s;\n    return 0;\n}\n")
-	v02 := write(t, "package main;\nuse \"std:string\";\npublic int main() {\n    string(string) shout = (string s) => string.toUpper(s);\n    trace(shout(\"rune\"));\n    private int seven() { return 7; }\n    return seven();\n}\n")
-	crash := write(t, "package main;\npublic int main() {\n    int z = 0;\n    return 1 / z;\n}\n")
-	warn := write(t, "package main;\npublic int main() {\n    int unused = 1;\n    trace(\"ran\");\n    return 0;\n}\n")
+	bad := write(t, "package main;\nprotected int main() {\n    sint s = -10;\n    uint u = s;\n    return 0;\n}\n")
+	v02 := write(t, "package main;\nuse \"std:string\";\nprotected int main() {\n    string(string) shout = (string s) => string.toUpper(s);\n    trace(shout(\"rune\"));\n    private int seven() { return 7; }\n    return seven();\n}\n")
+	crash := write(t, "package main;\nprotected int main() {\n    int z = 0;\n    return 1 / z;\n}\n")
+	warn := write(t, "package main;\nprotected int main() {\n    int unused = 1;\n    trace(\"ran\");\n    return 0;\n}\n")
 
 	cases := []struct {
 		name           string
@@ -69,7 +69,7 @@ func TestCLI(t *testing.T) {
 }
 
 func TestBuild(t *testing.T) {
-	src := write(t, "package main;\npublic int main() {\n    trace(\"hi\");\n    return 0;\n}\n")
+	src := write(t, "package main;\nprotected int main() {\n    trace(\"hi\");\n    return 0;\n}\n")
 	var stdout, stderr strings.Builder
 	if code := cli([]string{"build", src}, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
@@ -102,7 +102,7 @@ func TestMultiFileProgram(t *testing.T) {
 	files := map[string]string{
 		"tool.txt": `package app;
 use "./lib/math.inc";
-public int main() {
+protected int main() {
     trace(math.triple(3));
     return math.triple(1);
 }
@@ -114,7 +114,7 @@ public int triple(int n) {
 `,
 		"broken.rsc": `package app;
 use "./lib/nope.rsc";
-public int main() {
+protected int main() {
     return 0;
 }
 `,
@@ -146,7 +146,7 @@ public int main() {
 // encoding is rejected.
 func TestSourceEncodings(t *testing.T) {
 	dir := t.TempDir()
-	src := "package main;\npublic int main() {\n    trace(\"héllo €\");\n    return 0;\n}\n"
+	src := "package main;\nprotected int main() {\n    trace(\"héllo €\");\n    return 0;\n}\n"
 	utf16le := []byte{0xFF, 0xFE}
 	for _, r := range src { // the program is in the Basic Multilingual Plane
 		utf16le = append(utf16le, byte(r), byte(r>>8))
@@ -156,7 +156,7 @@ func TestSourceEncodings(t *testing.T) {
 	if err := os.WriteFile(wide, utf16le, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(latin, []byte("package main;\npublic int main() {\n    trace(\"h\xe9llo\");\n    return 0;\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(latin, []byte("package main;\nprotected int main() {\n    trace(\"h\xe9llo\");\n    return 0;\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	var stdout, stderr strings.Builder
@@ -176,7 +176,7 @@ func TestSourceEncodings(t *testing.T) {
 func TestBuildDoesNotOverwriteSource(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "app.js")
 	text := `package main;
-public int main() {
+protected int main() {
     return 0;
 }
 `

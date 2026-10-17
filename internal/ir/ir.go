@@ -30,9 +30,8 @@ type Program struct {
 	// Funcs are the top-level function definitions of every file, in load
 	// order, then source order.
 	Funcs []*Func
-	// Entry is main; EntryVoid reports whether it returns void.
-	Entry     *Func
-	EntryVoid bool
+	// Entry is main.
+	Entry *Func
 	// EntrySite is where a runtime error raised on entering main is
 	// reported (main's name, as in the interpreter).
 	EntrySite Span

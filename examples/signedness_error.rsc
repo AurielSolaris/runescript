@@ -4,7 +4,7 @@
 //   runescript check examples/signedness_error.rsc
 package examples.errors;
 
-public int main() {
+protected int main() {
     sint signedValue = -10;
     uint unsignedValue = signedValue; // expect: ASX-TYPE-004 9:26
     return 0;

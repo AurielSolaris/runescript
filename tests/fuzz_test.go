@@ -47,7 +47,7 @@ func addSeeds(f *testing.F) {
 	}
 	f.Add("")
 	f.Add("package p;")
-	f.Add("package p;\npublic void main() { ((int a) => a)(1)(2); }")
+	f.Add("package p;\nprotected int main() { ((int a) => a)(1)(2); return 0; }")
 	f.Add("package p;\npublic int(int)(int main() {")
 }
 

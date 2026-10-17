@@ -24,6 +24,7 @@ public Element Dot() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(Dot, "#app");
+    return 0;
 }

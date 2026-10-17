@@ -10,11 +10,12 @@ public struct Point {
     int y;
 }
 
-public void main() {
+protected int main() {
     Point p = Point{x: 3, y: 4};
     trace(p, p.x + p.y);   // Point{x: 3, y: 4} 7
     p.y = 10;
     trace(p);              // Point{x: 3, y: 10}
+    return 0;
 }
 ```
 
@@ -37,10 +38,11 @@ private struct Settings {
     float volume;
 }
 
-public void main() {
+protected int main() {
     Player p = Player{name: "Ada", score: 0, badges: []};
     Settings s = Settings{sound: true, volume: 0.5};
     trace(p.name, s.volume);   // Ada 0.5
+    return 0;
 }
 ```
 
@@ -64,10 +66,11 @@ public struct Point {
     int y;
 }
 
-public void main() {
+protected int main() {
     Point a = Point{x: 1, y: 2};
     Point b = Point{y: 2, x: 1};   // any order
     Point c = Point{x: 1};         // error: ASX-TYPE-026
+    return 0;
 }
 ```
 
@@ -94,10 +97,11 @@ public Point moved(Point p, int dx) {
     return q;
 }
 
-public void main() {
+protected int main() {
     Point a = Point{x: 1, y: 1};
     Point b = moved(a, 5);
     trace(a, b);   // Point{x: 1, y: 1} Point{x: 6, y: 1}
+    return 0;
 }
 ```
 
@@ -126,13 +130,14 @@ public struct Box {
     Point max;
 }
 
-public void main() {
+protected int main() {
     Box box = Box{min: Point{x: 0, y: 0}, max: Point{x: 2, y: 2}};
     box.max.x = 5;
 
     Array<Box> boxes = [box, box];
     boxes[1].min.y = -3;
     trace(boxes[0].min, boxes[1].min, box.max.x);   // Point{x: 0, y: 0} Point{x: 0, y: -3} 5
+    return 0;
 }
 ```
 
@@ -174,12 +179,13 @@ public MaybeInt parseAge(string text) {
     return MaybeInt{present: true, value: (int) digits};
 }
 
-public void main() {
+protected int main() {
     MaybeInt age = parseAge(" 42 ");
     if (age.present) {
         trace("age", age.value);   // age 42
     }
     trace(parseAge("forty").present);   // false
+    return 0;
 }
 ```
 

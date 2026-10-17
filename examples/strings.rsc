@@ -8,7 +8,7 @@ public string slug(string title) {
     return string.replaceAll(s, " ", "-");
 }
 
-public int main() {
+protected int main() {
     string title = "   Hello RuneScript World   ";
     trace("slug:", slug(title));
 

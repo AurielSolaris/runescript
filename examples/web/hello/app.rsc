@@ -23,6 +23,7 @@ public Element Hello() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(Hello, "#app");
+    return 0;
 }

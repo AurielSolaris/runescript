@@ -27,7 +27,7 @@ public int countWhere(int from, int to, bool(int) pred) {
     return count;
 }
 
-public int main() {
+protected int main() {
     trace("primes up to 100:", countWhere(1, 100, isPrime));
     trace("twin primes up to 100:", countWhere(1, 100, (int n) => isPrime(n) && isPrime(n + 2)));
 

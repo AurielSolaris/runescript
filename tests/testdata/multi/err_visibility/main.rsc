@@ -2,7 +2,7 @@ package app;
 use "lib";
 use "./other.rsc";
 
-public int main() {
+protected int main() {
     trace(lib.open());
     trace(lib.shared());       // expect: ASX-NAME-011 main.rsc:7:15
     trace(lib.secret());       // expect: ASX-NAME-011 main.rsc:8:15

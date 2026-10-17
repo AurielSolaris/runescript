@@ -189,7 +189,7 @@ public int down(int n) {
     }
     return down(n - 1) + 1;
 }
-public int main() {
+protected int main() {
     trace("start");
     trace(down(9000));
     return 0;
@@ -211,7 +211,7 @@ public int main() {
 // `node <module>`, setting the exit code from main.
 func TestJSDirectRun(t *testing.T) {
 	nodePath := node(t)
-	module := compileJS(t, []byte("package p;\npublic int main() {\n    trace(\"direct\", 1, true);\n    return 4;\n}\n"))
+	module := compileJS(t, []byte("package p;\nprotected int main() {\n    trace(\"direct\", 1, true);\n    return 4;\n}\n"))
 	out, stderr, code := runNode(t, nodePath, module)
 	if out != "direct 1 true\n" || stderr != "" || code != 4 {
 		t.Errorf("stdout %q, stderr %q, exit %d", out, stderr, code)

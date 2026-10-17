@@ -279,7 +279,6 @@ func (g *gen) module(p *ir.Program, opts Options, entrySite int) string {
 	m.WriteString("],\n")
 	fmt.Fprintf(&m, "    main: %s,\n", g.funcName(p.Entry))
 	fmt.Fprintf(&m, "    entrySite: %d,\n", entrySite)
-	fmt.Fprintf(&m, "    entryVoid: %t,\n", p.EntryVoid)
 	m.WriteString("  };\n")
 	m.WriteString("})($rt);\n\n")
 	m.WriteString(moduleFooter)
@@ -293,8 +292,7 @@ const moduleFooter = `export { RuneScriptError };
 // return or throw them: new RSError("RangeError", "message", errorID).
 export const RSError = $rt.RSError;
 
-// run executes main and returns the exit code: main's int result, or 0 for
-// a void main. A runtime error is thrown as a RuneScriptError. options.trace
+// run executes main and returns the exit code: main's int result. A runtime error is thrown as a RuneScriptError. options.trace
 // receives each line written by trace (default: console.log).
 export function run(options = {}) {
   return $rt.run($program, options);

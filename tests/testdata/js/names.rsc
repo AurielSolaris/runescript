@@ -22,7 +22,7 @@ public int RuneScriptError() {
     return 99;
 }
 
-public int main() {
+protected int main() {
     int var = 1;
     int instanceof = function(var);
     int typeof = Math(instanceof);

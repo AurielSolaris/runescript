@@ -5,7 +5,7 @@ public string join3(string a, string b, string c) {
     return a + ", " + b + ", " + c;
 }
 
-public void main() {
+protected int main() {
     string name = "héllo";
     string s = name + " wörld";
     s += " 🎉";
@@ -32,4 +32,5 @@ public void main() {
     trace($"no holes" + $"" + "");
     string(int) show = (int x) => $"<{x}>";
     trace(show(7), $"{show(8)}");
+    return 0;
 }

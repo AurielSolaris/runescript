@@ -1,7 +1,7 @@
 // Declarations, assignment, and compound assignment.
 package examples.variables;
 
-public int main() {
+protected int main() {
     int count = 10;
     sint offset = -3;          // 'sint' is another spelling of 'int'
     uint total = 0;

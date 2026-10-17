@@ -3,7 +3,7 @@ package diagnostics
 import "testing"
 
 func TestFormat(t *testing.T) {
-	src := []byte("package p;\r\npublic int main() {\r\n\tuint u = signedValue;\r\n}")
+	src := []byte("package p;\r\nprotected int main() {\r\n\tuint u = signedValue;\r\n}")
 	// "signedValue" starts at byte 36, line 3, column 11 (the tab counts as one column).
 	d := New(TypeSignedToUnsigned, Span{
 		Start: Pos{Offset: 36, Line: 3, Col: 11},

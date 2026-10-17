@@ -15,7 +15,7 @@ import (
 // panics if info is incomplete, which would be a checker bug, not a user
 // error.
 func Lower(info *checker.Info) *Program {
-	p := &Program{EntryVoid: info.EntryVoid, EntrySite: info.Entry.Name.Span}
+	p := &Program{EntrySite: info.Entry.Name.Span}
 	l := &lowerer{info: info, prog: p, funcs: map[*ast.FuncDecl]*Func{}, syms: map[*checker.FuncSym]*Func{},
 		externs: map[*checker.ExternSym]*Extern{}}
 	for _, file := range info.Program.Files {

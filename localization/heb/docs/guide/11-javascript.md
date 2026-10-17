@@ -90,7 +90,7 @@ JavaScript רק מספרים, `bool`, `string` ושגיאות, דרך פונקצ
 ```actionscript
 package demo;
 
-public int main() {
+protected int main() {
     int big = 2147483647;
     trace(big * big); // runtime error: ASX-RUN-002
     return 0;
@@ -120,7 +120,7 @@ extern "rune:fs" void writeFile(string path, string data);
 extern "rune:fs" string readFile(string path);
 extern "./clock.mjs" float64 now();
 
-public int main() {
+protected int main() {
     writeFile("notes.txt", "ᚱᚢᚾᛖ");
     trace(readFile("notes.txt"), now() > 0);
     return 0;
@@ -187,7 +187,7 @@ package demo;
 
 extern "./lib.mjs" int half(int n);
 
-public int main() {
+protected int main() {
     try {
         trace(half(3)); // JavaScript returns 1.5
     } catch (TypeError e) {

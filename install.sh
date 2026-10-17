@@ -230,7 +230,7 @@ smoke=$(mktemp -d 2>/dev/null || mktemp -d -t runescript)
 cat > "$smoke/hello.rsc" <<'EOF'
 package main;
 
-public int main() {
+protected int main() {
     trace("Hello from RuneScript");
     return 0;
 }

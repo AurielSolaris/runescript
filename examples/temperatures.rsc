@@ -5,7 +5,7 @@ public float toFahrenheit(float celsius) {
     return celsius * 9 / 5 + 32;
 }
 
-public int main() {
+protected int main() {
     for (int c = -40; c <= 100; c += 35) {
         float f = toFahrenheit((float) c);
         trace(c, "C is", f, "F");

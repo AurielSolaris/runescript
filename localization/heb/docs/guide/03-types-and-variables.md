@@ -15,12 +15,13 @@
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int count = 10;
     uint total = 250;
     bool ready = true;
     string name = "Ada";
     trace(name, count, total, ready);   // Ada 10 250 true
+    return 0;
 }
 ```
 
@@ -53,11 +54,12 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     sint a = -5;
     int b = a;      // fine: same type
     sint c = b;     // fine
     trace(a, b, c);
+    return 0;
 }
 ```
 
@@ -74,7 +76,7 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int x = 1;
     x = 10;     // 10
     x += 5;     // 15
@@ -85,6 +87,7 @@ public void main() {
     x++;        // 2
     x--;        // 1
     trace(x);
+    return 0;
 }
 ```
 
@@ -105,7 +108,7 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     if (true) {
         int inner = 1;
         trace(inner);
@@ -118,6 +121,7 @@ public void main() {
     for (int i = 0; i < 2; i++) {   // fine: the first 'i' is gone
         trace(i);
     }
+    return 0;
 }
 ```
 
@@ -131,11 +135,12 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int x = 1;
     if (true) {
         int x = 2; // error: ASX-NAME-002
     }
+    return 0;
 }
 ```
 
@@ -152,7 +157,7 @@ RuneScript אינה הופכת בשקט מספר שלם עם סימן למספר
 ```actionscript
 package main;
 
-public int main() {
+protected int main() {
     sint signedValue = -10;
     uint unsignedValue = signedValue; // error: ASX-TYPE-004
     return 0;
@@ -176,27 +181,30 @@ main.rsc:5:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsign
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     uint a = 42;            // fine: 42 fits in uint
     uint b = 6 * 7;         // fine: constants are computed at compile time
     int c = -2147483648;    // fine: the smallest int
     trace(a, b, c);
+    return 0;
 }
 ```
 
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     uint u = -1;            // error: ASX-TYPE-007
+    return 0;
 }
 ```
 
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int big = 3000000000;   // error: ASX-TYPE-006
+    return 0;
 }
 ```
 

@@ -10,6 +10,7 @@ public int fold(int(int, int) step, int start, int times) {
     return acc;
 }
 
-public void main() {
+protected int main() {
     trace(fold((int acc, int i) => acc * 1000, 3, 5)); // expect runtime error: ASX-RUN-002 14:40
+    return 0;
 }

@@ -13,7 +13,7 @@ import (
 // app is a component file: use "rune:dom", the given helpers, and App
 // with body. App's first body line is line 4 + the lines of extra.
 func app(extra, body string) string {
-	return "package p;\nuse \"rune:dom\";\n" + extra + "public Element App() {\n" + body + "\n}\npublic void main() { dom.renderApp(App, \"#app\"); }\n"
+	return "package p;\nuse \"rune:dom\";\n" + extra + "public Element App() {\n" + body + "\n}\nprotected int main() { dom.renderApp(App, \"#app\"); return 0; }\n"
 }
 
 func tmpl(markup string) string { return app("", "    template {\n"+markup+"\n    }") }
@@ -35,7 +35,7 @@ func TestDOMAccepted(t *testing.T) {
 		"rune parameter":    app("public void bump(Signal<int> s) { s.set(s() + 1); }\n", "    Signal<int> n = signal(0);\n    template {\n        <button onclick={{ () => bump(n) }}>{{ n() }}</button>\n    }"),
 		"inferred rune":     app("", "    Signal<string> s = signal(\"x\");\n    trace(s());\n    template { <p>{{ s() }}</p> }"),
 		"lambda component":  app("", "    Element() inner = () => {\n        template { <i>x</i> }\n    };\n    template { <p>{{ inner() }}</p> }"),
-		"void main renders": "package p;\nuse \"rune:dom\";\npublic Element App() { template { <p>x</p> } }\npublic void main() { dom.renderApp(App, \"#app\"); }\n",
+		"void main renders": "package p;\nuse \"rune:dom\";\npublic Element App() { template { <p>x</p> } }\nprotected int main() { dom.renderApp(App, \"#app\"); return 0; }\n",
 	}
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -52,9 +52,9 @@ func TestDOMRejected(t *testing.T) {
 		code      diagnostics.Code
 		msg       string // in the message or help
 	}{
-		{"no rune:dom", "package p;\npublic Element App() { template { <p>x</p> } }\npublic void main() { }\n", diagnostics.TypeUnknown, `use "rune:dom"`},
+		{"no rune:dom", "package p;\npublic Element App() { template { <p>x</p> } }\nprotected int main() { return 0; }\n", diagnostics.TypeUnknown, `use "rune:dom"`},
 		{"template not last", app("", "    template { <p>x</p> }\n    trace(1);"), diagnostics.TmplPlacement, "last statement"},
-		{"template in void function", "package p;\nuse \"rune:dom\";\npublic void f() { template { <p>x</p> } }\npublic void main() { f(); }\n", diagnostics.TmplPlacement, "returns 'void'"},
+		{"template in void function", "package p;\nuse \"rune:dom\";\npublic void f() { template { <p>x</p> } }\nprotected int main() { f(); return 0; }\n", diagnostics.TmplPlacement, "returns 'void'"},
 		{"template in if", app("", "    if (true) { template { <p>x</p> } }\n    template { <p>y</p> }"), diagnostics.TmplPlacement, "last statement"},
 		{"unknown element", tmpl("<dvi>x</dvi>"), diagnostics.TmplUnknownElement, "unknown element <dvi>"},
 		{"uppercase html", tmpl("<DIV>x</DIV>"), diagnostics.TmplUnknownElement, "lowercase: <div>"},
@@ -84,10 +84,10 @@ func TestDOMRejected(t *testing.T) {
 		{"unknown rune method", app("", "    Signal<int> n = signal(0);\n    n.update(1);\n    template { <p>x</p> }"), diagnostics.TypeNoField, "no method 'update'"},
 		{"capture non-rune", app("", "    int step = 1;\n    void() f = () => trace(step);\n    template { <p>x</p> }"), diagnostics.NameAcrossBoundary, "pass 'step'"},
 		{"assign captured rune", app("", "    Signal<int> n = signal(0);\n    void() f = () => { n = signal(1); };\n    template { <p>x</p> }"), diagnostics.NameAcrossBoundary, ""},
-		{"wrong component", "package p;\nuse \"rune:dom\";\npublic Element App(int x) { template { <p>x</p> } }\npublic void main() { dom.renderApp(App, \"#app\"); }\n", diagnostics.TypeMismatch, "Element()"},
-		{"unknown dom function", "package p;\nuse \"rune:dom\";\npublic void main() { dom.render(\"#app\"); }\n", diagnostics.NameNotInPackage, "renderApp"},
-		{"unknown rune module", "package p;\nuse \"rune:net\";\npublic void main() { }\n", diagnostics.UseUnknownPackage, "rune:dom"},
-		{"type args on Error", "package p;\npublic void main() { Error<int> e = new Error(\"x\"); trace(e.message); }\n", diagnostics.TypeArgs, "no type arguments"},
+		{"wrong component", "package p;\nuse \"rune:dom\";\npublic Element App(int x) { template { <p>x</p> } }\nprotected int main() { dom.renderApp(App, \"#app\"); return 0; }\n", diagnostics.TypeMismatch, "Element()"},
+		{"unknown dom function", "package p;\nuse \"rune:dom\";\nprotected int main() { dom.render(\"#app\"); return 0; }\n", diagnostics.NameNotInPackage, "renderApp"},
+		{"unknown rune module", "package p;\nuse \"rune:net\";\nprotected int main() { return 0; }\n", diagnostics.UseUnknownPackage, "rune:dom"},
+		{"type args on Error", "package p;\nprotected int main() { Error<int> e = new Error(\"x\"); trace(e.message); return 0; }\n", diagnostics.TypeArgs, "no type arguments"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -117,7 +117,7 @@ func TestDOMWarnings(t *testing.T) {
 		}
 	}
 	// A file that uses rune:dom only for its types still uses it.
-	got := warnings(t, "package p;\nuse \"rune:dom\";\npublic Element App() { template { <p>x</p> } }\npublic void main() { }\n")
+	got := warnings(t, "package p;\nuse \"rune:dom\";\npublic Element App() { template { <p>x</p> } }\nprotected int main() { return 0; }\n")
 	if strings.Contains(strings.Join(got, ","), "WARN-003") {
 		t.Errorf("use rune:dom reported unused: %v", got)
 	}
@@ -136,11 +136,11 @@ func TestQualifiedFunctionValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	for src, want := range map[string]string{
-		"package p;\nuse \"geom\";\npublic void main() { int(int, int) f = geom.area; trace(f(1, 2)); }\n":              "",
-		"package p;\nuse \"geom\";\npublic void main() { int() f = geom.hidden; trace(f()); }\n":                        "ASX-NAME-011",
-		"package p;\nuse \"geom\";\npublic void main() { int() f = geom.nope; trace(f()); }\n":                          "ASX-NAME-008",
-		"package p;\nuse \"geom\";\npublic void main() { int() f = geom.area; trace(f()); }\n":                          "ASX-TYPE-001",
-		"package p;\nuse \"std:string\";\npublic void main() { string(string) f = string.toUpper; trace(f(\"a\")); }\n": "ASX-NAME-004",
+		"package p;\nuse \"geom\";\nprotected int main() { int(int, int) f = geom.area; trace(f(1, 2)); return 0; }\n":              "",
+		"package p;\nuse \"geom\";\nprotected int main() { int() f = geom.hidden; trace(f()); return 0; }\n":                        "ASX-NAME-011",
+		"package p;\nuse \"geom\";\nprotected int main() { int() f = geom.nope; trace(f()); return 0; }\n":                          "ASX-NAME-008",
+		"package p;\nuse \"geom\";\nprotected int main() { int() f = geom.area; trace(f()); return 0; }\n":                          "ASX-TYPE-001",
+		"package p;\nuse \"std:string\";\nprotected int main() { string(string) f = string.toUpper; trace(f(\"a\")); return 0; }\n": "ASX-NAME-004",
 	} {
 		prog, diags := loader.LoadSource(diagnostics.NewSource("t.rsc", []byte(src)), dir)
 		if len(diags) != 0 {

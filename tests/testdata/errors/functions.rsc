@@ -13,7 +13,7 @@ public int apply(int(int) f, int x) {
     return f(x);
 }
 
-public int main() {
+protected int main() {
     int base = 10;
     private int addBase(int x) {
         return x + base;               // expect: ASX-NAME-009 19:20

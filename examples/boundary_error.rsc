@@ -4,7 +4,7 @@
 //   runescript check examples/boundary_error.rsc
 package examples.errors;
 
-public int main() {
+protected int main() {
     int total = 0;
     private void add(int n) {
         total += n; // expect: ASX-NAME-009 10:9

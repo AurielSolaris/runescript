@@ -8,6 +8,7 @@ public Element App() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(App, "#missing");
+    return 0;
 }

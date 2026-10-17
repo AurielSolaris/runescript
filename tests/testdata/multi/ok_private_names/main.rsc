@@ -5,7 +5,7 @@ package app;
 use "./other.rsc";
 use "./lib/lib.rsc";
 
-public int main() {
+protected int main() {
     trace(helper(), fromOther(), lib.fromLib());
     return 0;
 }

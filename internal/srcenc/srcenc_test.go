@@ -6,7 +6,7 @@ import (
 	"unicode/utf16"
 )
 
-const program = "package p;\n// € and 😀\npublic void main() { trace(\"é\"); }\n"
+const program = "package p;\n// € and 😀\nprotected int main() { trace(\"é\"); return 0; }\n"
 
 func encode16(s string, order binary.AppendByteOrder, bom bool) []byte {
 	var out []byte

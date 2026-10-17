@@ -7,7 +7,7 @@ public float average(float a, float b) {
     return (a + b) / 2;
 }
 
-public int main() {
+protected int main() {
     // float: float32 by default, widening exactly; values are float64's.
     float a = 0.1;
     float b = 0.2;

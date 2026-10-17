@@ -33,6 +33,7 @@ public Element Counter() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(Counter, "#app");
+    return 0;
 }

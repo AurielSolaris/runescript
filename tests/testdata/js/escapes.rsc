@@ -3,7 +3,7 @@ package tests.js;
 
 use "std:string";
 
-public void main() {
+protected int main() {
     string s = "caf\u{E9} \u{1F600} \u{2603}";
     trace(s, string.len(s), string.runeCount(s));
     char snow = '\u{2603}';
@@ -12,4 +12,5 @@ public void main() {
     trace(string.len(nul), string.indexRune(nul, '\0'));
     trace("it\'s", '\'', "tab[\t] quote[\"] backslash[\\]");
     trace($"interp \u{E9}{s}\u{E8}");
+    return 0;
 }

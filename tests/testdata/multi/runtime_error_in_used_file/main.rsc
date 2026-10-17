@@ -3,7 +3,7 @@ package app;
 
 use "calc";
 
-public int main() {
+protected int main() {
     trace("before");
     trace(calc.square(65536));
     return 0;

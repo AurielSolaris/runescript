@@ -34,6 +34,7 @@ public Element Dial() {
     }
 }
 
-public void main() {
+protected int main() {
     dom.renderApp(Dial, "#app");
+    return 0;
 }

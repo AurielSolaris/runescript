@@ -15,7 +15,7 @@ public void fizzbuzz(int limit) {
     }
 }
 
-public int main() {
+protected int main() {
     fizzbuzz(15);
     return 0;
 }

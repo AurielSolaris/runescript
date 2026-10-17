@@ -22,9 +22,10 @@
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int x = 7;
     trace(x + 2, x - 9, x * 3, x / 2, x % 4, -x);   // 9 -2 21 3 3 -7
+    return 0;
 }
 ```
 
@@ -45,9 +46,10 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int x = 2147483647;
     x = x + 1;          // runtime error: ASX-RUN-002 integer overflow
+    return 0;
 }
 ```
 
@@ -69,11 +71,12 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int a = 1;
     int b = 2;
     string s = "rune";
     trace(a < b, a == b, s == "rune", true != false);   // true false true true
+    return 0;
 }
 ```
 
@@ -94,10 +97,11 @@ public void main() {
 ```actionscript
 package main;
 
-public void main() {
+protected int main() {
     int age = 30;
     bool adult = age >= 18 && !(age > 120);
     trace(adult);   // true
+    return 0;
 }
 ```
 

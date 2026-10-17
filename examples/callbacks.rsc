@@ -24,7 +24,7 @@ public int(int) multiplier(int factor) {
     return (int x) => x;
 }
 
-public int main() {
+protected int main() {
     // Pass a lambda as a callback.
     forEach(1, 3, (int i) => trace("item", i));
 
