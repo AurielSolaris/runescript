@@ -41,14 +41,16 @@ protected int main() {
 }
 ```
 
-## অবস্থা: v0.3 তৈরি হচ্ছে (প্রাথমিক পর্যায়)
+## অবস্থা: v0.6 তৈরি হচ্ছে (প্রাথমিক পর্যায়)
 
 **এখন যা কাজ করে**, এবং টেস্ট দিয়ে যাচাই করা:
 
-- প্যাকেজ; `public|private|protected <type> <name>(…)` আকারে ঘোষিত ফাংশন; রিকার্শন
+- প্যাকেজ; `public|private|protected <type> <name>(…)` আকারে ঘোষিত ফাংশন; রিকার্শন;
+  প্রবেশবিন্দু `protected int main()`, যার ফল এক্সিট স্ট্যাটাস
 - নেস্টেড ফাংশন, প্রোটোটাইপ, ফাংশন টাইপ (`int(int, int)`), কলব্যাক এবং ল্যাম্বডা (`(int a) => a * 2`)
 - `int`/`sint`, `uint`, `bool`, `string`, `void`
-- ভেরিয়েবল, `=`, `+= -= *= /= %=`, `++`/`--`
+- ভেরিয়েবল, `=`, `+= -= *= /= %=`, `++`/`--`; `int n;` শূন্য মান দিয়ে শুরু হয়
+  (কোনো `null` নেই); নেস্টেড ব্লকে শ্যাডোইং, একটি সতর্কবার্তাসহ
 - গাণিতিক, তুলনা ও লজিক্যাল অপারেটর
 - `if`/`else if`/`else`, `while`, `for`, `break`, `continue`, `return`
 - `trace(...)`
@@ -75,7 +77,12 @@ protected int main() {
 - অবস্থান-সহ ডায়াগনস্টিক দিয়ে কম্পাইল-টাইম টাইপ-চেকিং, যার মধ্যে সাইনড → আনসাইনড
   অ্যাসাইনমেন্ট প্রত্যাখ্যানও আছে
 - পূর্ণসংখ্যার ওভারফ্লো ও শূন্য দিয়ে ভাগ রানটাইম এরর হিসেবে জানানো হয়, কখনো
-  নিঃশব্দে ঘুরে (wrap) যায় না
+  নিঃশব্দে ঘুরে (wrap) যায় না; `int`/`uint`-এর মধ্যবর্তী ফল হুবহু প্রশস্ত হয়, তাই
+  `big * big / big` কাজ করে ([গাইড](docs/guide/04-operators.md))
+- দুটি টার্গেটেই ফাইল, ইনপুট ও আউটপুট: `std:io` (নতুন লাইন ছাড়া প্রিন্ট, লাল এরর ও
+  হলুদ সতর্কবার্তার লাইন, স্ট্যান্ডার্ড ইনপুট), `std:process` (আর্গুমেন্ট, এনভায়রনমেন্ট),
+  `std:fs` (ফাইল ও ডিরেক্টরি), এবং `std:path` (Node.js-এর path-এর নিয়ম, RuneScript-এর
+  রানটাইমে বাস্তবায়িত) ([গাইড](docs/guide/20-files-and-input.md))
 - JavaScript-এ কম্পাইল (`runescript build`): একটি ES2015 মডিউল (সাথে BigInt ও `??`), যা ব্রাউজার ও
   Node.js-এ চলে এবং ইন্টারপ্রেটার যে প্রোগ্রাম চালাতে পারে তার প্রতিটিতে
   ইন্টারপ্রেটারের মতো হুবহু আচরণ করে ([গাইড](docs/guide/11-javascript.md))
@@ -85,8 +92,9 @@ protected int main() {
   DOM ছাড়া ([গাইড](docs/guide/15-web-pages.md))
 - `extern` ঘোষণার মাধ্যমে JavaScript কল করা, হোস্ট-নিরপেক্ষ `rune:fs` সহ।
   JavaScript থেকে ফেরত আসা প্রতিটি মান তার ঘোষিত টাইপের সঙ্গে যাচাই করা হয়
-- অব্যবহৃত ভেরিয়েবল, প্যারামিটার ও use, অগম্য কোড এবং ফেলে দেওয়া ফলাফলের জন্য
-  সতর্কবার্তা, `-Werror` ও `--allow <code>` সহ
+- অব্যবহৃত ভেরিয়েবল, প্যারামিটার ও use, অগম্য কোড, ফেলে দেওয়া ফলাফল এবং শ্যাডোইংয়ের
+  জন্য সতর্কবার্তা, `-Werror` ও `--allow <code>` সহ; টার্মিনালে এরর লাল ও সতর্কবার্তা
+  হলুদ (`--color`)
 - কাজের সময় লাইভ রিলোড: `runescript dev app.rsc` একটি ওয়েব প্রোগ্রাম পরিবেশন করে
   এবং প্রতিটি সেভে ব্রাউজার রিলোড করে; `runescript run --watch` একটি কমান্ড-লাইন
   প্রোগ্রাম আবার চালায়
@@ -97,10 +105,9 @@ TypeScript তার ঘোষণাগুলোকে বিশ্বাস ক
 JavaScript থেকে আসা প্রতিটি মান যাচাই করে, এবং এতে কোনো `any`, কোনো অন্তর্নিহিত
 রূপান্তর বা কোনো যাচাইহীন কাস্ট নেই।
 
-**এখনো তৈরি হয়নি:** ক্লাস, for-each লুপ, কমান্ড-লাইন আর্গুমেন্ট,
-`go:` প্যাকেজ, `std:symrs`, JavaScript-এর সীমানা
-পেরিয়ে অবজেক্ট, অ্যারে ও কলব্যাক, `rune:process`, টেমপ্লেটে `$foreach` ও কম্পোনেন্ট
-ট্যাগ, এবং পরিকল্পিত নেটিভ গ্রাফিক্স প্যাকেজ। দেখুন [রোডম্যাপ](../../docs/ROADMAP.md) (ইংরেজিতে)।
+**এখনো তৈরি হয়নি:** ক্লাস, for-each লুপ, বাইনারি ফাইল, `go:` প্যাকেজ, `std:symrs`,
+JavaScript-এর সীমানা পেরিয়ে অবজেক্ট, অ্যারে, স্ট্রাক্ট ও কলব্যাক, টেমপ্লেটে `$foreach`
+ও কম্পোনেন্ট ট্যাগ, এবং পরিকল্পিত নেটিভ গ্রাফিক্স প্যাকেজ। দেখুন [রোডম্যাপ](../../docs/ROADMAP.md) (ইংরেজিতে)।
 
 ## ইনস্টল
 
@@ -130,6 +137,7 @@ go build -o runescript ./cmd/runescript
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
 ./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
 ./runescript run --watch examples/hello.rsc         # runs it again on every save
+./runescript run examples/brainfuck.rsc examples/bf/hello.bf   # arguments follow the file
 go test ./...
 ```
 
@@ -164,7 +172,8 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 ## উদাহরণ
 
 [`examples/`](../../examples/README.md)-এ প্রতিটি বৈশিষ্ট্যের প্রোগ্রাম আছে: মৌলিক
-বিষয়, `std:string`, কলব্যাক ও ল্যাম্বডা, একটি মৌলিক সংখ্যা গণক, এবং দুটি প্রোগ্রাম
+বিষয়, `std:string`, কলব্যাক ও ল্যাম্বডা, একটি মৌলিক সংখ্যা গণক, ৩২,৭৬৮ ঘরের একটি
+[Brainfuck ইন্টারপ্রেটার](../../examples/brainfuck.rsc), এবং দুটি প্রোগ্রাম
 যা কম্পাইলার ইচ্ছাকৃতভাবে প্রত্যাখ্যান করে। প্রতিটি উদাহরণের আউটপুট টেস্ট দিয়ে
 যাচাই করা হয়।
 
@@ -177,6 +186,7 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [null নেই, any নেই, জেনেরিক নেই](docs/guide/17-no-null-any-generics.md)
 - [সংখ্যার গভীরে: প্রস্থ, লিটারাল, বিট, std:math](docs/guide/18-numbers.md)
 - [স্ট্রাক্ট](docs/guide/19-structs.md)
+- [ফাইল, ইনপুট ও আউটপুট: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
 - [JavaScript-এ কম্পাইল](docs/guide/11-javascript.md)
 - [ডায়াগনস্টিক তালিকা](docs/guide/08-diagnostics.md)
 - [ActionScript 3 থেকে আসছেন?](docs/guide/09-coming-from-actionscript.md)
@@ -200,10 +210,13 @@ internal/jsgen/        JavaScript code generator and its inlined runtime
 internal/jshost/       host-neutral JavaScript modules (rune:fs)
 internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
 internal/diagnostics/  error codes and formatting
+internal/term/         terminal detection for colored output
 internal/driver/       wires the stages together
 internal/watch/        file watcher for run --watch and dev
 internal/devserver/    the runescript dev server and its browser client
-stdlib/                standard library packages (std:string), implemented in Go
+stdlib/                standard library packages (std:string, std:math, std:io, std:process,
+                       std:fs, std:path), implemented in Go; their JavaScript twins are in
+                       internal/jsgen/runtime.js
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests
 assets/                logo: SVG source and PNGs generated from it

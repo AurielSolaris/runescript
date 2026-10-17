@@ -13,7 +13,7 @@
 ```sh
 runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 runescript build -o web/app.js examples/hello.rsc # choose the output file
-node examples/fizzbuzz.js                         # runs it; main's result is the exit code
+node examples/fizzbuzz.js a b                     # runs it with arguments; main's result is the exit code
 ```
 
 `--target js` হলো ডিফল্ট, এবং আপাতত একমাত্র টার্গেট। কয়েকটি ফাইলের একটি প্রোগ্রাম
@@ -23,8 +23,10 @@ node examples/fizzbuzz.js                         # runs it; main's result is th
 **কী প্রতিশ্রুতি দেওয়া হয়, আর কী হয় না।** RuneScript এখনো JavaScript-এর সঙ্গে
 পূর্ণ সামঞ্জস্যের প্রতিশ্রুতি **দেয় না**। মডিউলটির দরকার ES2015, `BigInt`, `??`
 ও ES মডিউল সমর্থনকারী একটি ইঞ্জিন। এটি JavaScript-এর সঙ্গে কেবল সংখ্যা, `bool`,
-`string` ও এরর আদান-প্রদান করে, নিচের extern ফাংশনের মাধ্যমে। আর এখন পর্যন্ত
-একমাত্র হোস্ট-নিরপেক্ষ API হলো `rune:fs`। যা এটি **দেয়**, তা হলো কঠোর কোড:
+`string` ও এরর আদান-প্রদান করে, নিচের extern ফাংশনের মাধ্যমে। স্ট্যান্ডার্ড প্যাকেজ
+`std:io`, `std:process`, `std:fs` ও `std:path` ([অধ্যায় ২০](20-files-and-input.md))
+দুটি টার্গেটেই কাজ করে; JavaScript-এ এগুলো `run`-কে যা দেওয়া হয় তা ব্যবহার করে, যা
+মডিউলটি চালানোর সময় Node.js নিজেই দেয়। যা এটি **দেয়**, তা হলো কঠোর কোড:
 যাচাই ছাড়া কোনো কিছুই RuneScript প্রোগ্রামে ঢুকতে পারে না। TypeScript তার
 ঘোষণাগুলোকে বিশ্বাস করে এবং মুছে ফেলে, তাই যে `.d.ts` বলে `number`, সেটি রানটাইমে
 একটি স্ট্রিং দিতে পারে। RuneScript JavaScript থেকে ফেরত আসা প্রতিটি মানকে তার
@@ -51,9 +53,24 @@ node examples/fizzbuzz.js                         # runs it; main's result is th
 </script>
 ```
 
-`options.trace` `trace` আউটপুটের প্রতিটি লাইন পায়। এটি না দিলে লাইনগুলো যায়
-`console.log`-এ। একটি `RuneScriptError`-এর আরও আছে `code`, `file`, `line`, `col`
+`options.trace` আউটপুটের (`trace` ও `io.print`) প্রতিটি লাইন পায়। এটি না দিলে লাইনগুলো
+যায় `console.log`-এ। একটি `RuneScriptError`-এর আরও আছে `code`, `file`, `line`, `col`
 ও `detail` (অবস্থান বাদ দিয়ে বার্তাটি)।
+
+বাকি অপশনগুলো প্রোগ্রামের পরিবেশ, সবগুলোই ঐচ্ছিক:
+
+| অপশন | যে ব্যবহার করে | ডিফল্ট |
+|---|---|---|
+| `stdout(text)`, `stderr(text)` | `trace`, `io.print`; `io.error`, `io.warn` | পূর্ণ লাইনগুলো `options.trace`-এ (বা `console.log`-এ) ও `console.error`-এ |
+| `stdin()` | `io.readLine`, `io.readByte`, … | কোনো ইনপুট নেই। পরের অংশটি একটি `Uint8Array` হিসেবে ফেরত দিন, শেষে `null` |
+| `args`, `env` | `process.args()`, `process.env(name)` | `[]`, `{}` |
+| `cwd()`, `platform` | `process.cwd()`, `std:path` | `"/"`, `"browser"` (Node.js-এর `process.platform`-এর নাম) |
+| `color` | `io.error`, `io.warn` | `false` |
+| `fs`, `tempDir()` | `std:fs` | নেই: `std:fs` একটি `Error` থ্রো করে |
+
+Node.js যখন মডিউলটি সরাসরি চালায় (`node app.js a b`), মডিউলটি Node-এর নিজস্ব
+স্ট্যান্ডার্ড স্ট্রিম, `process.argv`, `process.env`, ওয়ার্কিং ডিরেক্টরি, প্ল্যাটফর্ম ও
+`node:fs` দেয়।
 
 extern ফাংশনসহ একটি প্রোগ্রাম সেগুলোর মডিউল ইমপোর্ট করে, তাই এটি কেবল সেখানেই
 চলে যেখানে সেই মডিউলগুলো আছে: `rune:fs` ব্যবহারকারী একটি মডিউল Node.js-এ চলে,
@@ -67,7 +84,7 @@ JavaScript-এ সংখ্যার টাইপ একটিই এবং ক�
 | RuneScript-এর নিয়ম | সাধারণ JavaScript | তৈরি হওয়া কোড |
 |---|---|---|
 | প্রতিটি মানের টাইপ তার ঘোষিত টাইপ | ভেরিয়েবলে যা খুশি থাকতে পারে | কম্পাইলের সময় যাচাই হয়, তারপর কোনো কোড লেখার আগে টাইপসহ IR-এ আবার যাচাই হয়। কখনো যাচাইহীন রূপান্তর তৈরি হয় না। |
-| `int` ও `uint` 32-বিট; ওভারফ্লো হলে `ASX-RUN-002` | `2147483647 + 1` হলো `2147483648` | পূর্ণসংখ্যার প্রতিটি `+ - * / %` একটি সীমা-যাচাইয়ের মধ্য দিয়ে যায়, যা প্রোগ্রাম থামিয়ে দেয় |
+| `int` ও `uint` 32-বিট; মধ্যবর্তী ফল হুবহু প্রশস্ত হয়; ওভারফ্লো হলে `ASX-RUN-002` | `2147483647 + 1` হলো `2147483648`, আর বড় গুণফল গোল করা হয় | পূর্ণসংখ্যার প্রতিটি `+ - * / %` একটি সীমা-যাচাইয়ের মধ্য দিয়ে যায়, যা প্রোগ্রাম থামিয়ে দেয়; প্রশস্ত মধ্যবর্তী মান 2^53-এর বেশি হলে `BigInt`-এ চলে যায় |
 | `/` দশমিক অংশ ছেঁটে ফেলে | `7 / 2` হলো `3.5` | ছেঁটে ফেলা ভাগ |
 | শূন্য দিয়ে ভাগ হলে `ASX-RUN-003` | `Infinity` বা `NaN` | পূর্ণসংখ্যা ও ফ্লোট দুটির জন্যই যাচাই হয় |
 | `float32` 32 বিটে রাউন্ড হয় | একটিই 64-বিট সংখ্যার টাইপ | `float32`-এর ফল `Math.fround`-এর মধ্য দিয়ে যায়, এবং float32-এর সবচেয়ে ছোট অঙ্কে দেখানো হয়; `float` ও `float64` হলো JavaScript সংখ্যা (IEEE, `NaN` ও `Infinity`-সহ, AS3-এর মতো) |
@@ -152,7 +169,12 @@ export const now = () => Date.now();
 | `void remove(string path)` | একটি ফাইল মুছে ফেলে |
 
 কোনো ফাংশন ব্যর্থ হলে, যেমন অনুপস্থিত ফাইলে `readFile`, একটি `Error`
-(`ASX-RUN-008`) থ্রো হয়। এরপর আসছে `rune:process`।
+(`ASX-RUN-008`) থ্রো হয়।
+
+`rune:fs` আগে এসেছিল এবং কেবল JavaScript টার্গেটে চলে। নতুন প্রোগ্রামের জন্য
+স্ট্যান্ডার্ড প্যাকেজ `std:fs` বেছে নিন ([অধ্যায় ২০](20-files-and-input.md)): এটি বেশি
+কাজ করে (ডিরেক্টরি, আকার, কপি, পুরো গাছ ঘোরা), ইন্টারপ্রেটারেও চলে, এবং দুটি টার্গেটে
+একই বার্তা দিয়ে ব্যর্থ হয়।
 
 ### সীমানা পার হয়ে কী যায়
 

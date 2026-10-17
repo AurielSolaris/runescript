@@ -22,7 +22,7 @@ import (
 )
 
 // Version is the language/implementation version.
-const Version = "0.3.0-dev"
+const Version = "0.6.0-dev"
 
 const usage = `usage:
   runescript run [flags] [--watch] <file> [args...]

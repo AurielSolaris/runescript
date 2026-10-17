@@ -79,13 +79,15 @@ parameters instead.
 ## Block scope
 
 In AS3, a `var` declared inside a loop is visible in the whole function.
-In RuneScript, a variable lives only in its block, and a new variable can't
-reuse the name of one that's still visible.
+In RuneScript, a variable lives only in its block. A variable in a nested
+block may hide one of an enclosing block, with a warning, but not one of
+the same block. As in AS3, `int n;` starts at `0`; unlike AS3, `string s;`
+starts at `""`, since there is no `null`.
 
 ## Entry point
 
 AS3 programs start from a document class. RuneScript programs start from a
-top-level `main()` function, and no class is needed.
+top-level `protected int main()` function, and no class is needed.
 
 ## The same as AS3
 

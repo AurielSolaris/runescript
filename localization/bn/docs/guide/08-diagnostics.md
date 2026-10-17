@@ -13,7 +13,9 @@ prog.rsc:9:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsign
   help: Use an explicit checked conversion, (uint) x, or change the destination type.
 ```
 
-`ASX` উপসর্গটি অস্থায়ী, এর নাম বদলাতে পারে। সংখ্যাগুলো একই থাকবে।
+টার্মিনালে `error` ও এর ক্যারেটগুলো লাল, `warning` হলুদ, আর `help:` সায়ান রঙে দেখানো হয়।
+`--color=never` তা বন্ধ করে, `--color=always` আউটপুট ফাইল বা পাইপে গেলেও রং রাখে, আর
+ডিফল্ট `auto`-তে `NO_COLOR` এনভায়রনমেন্ট ভেরিয়েবল রং বন্ধ করে।
 
 ## লেক্সিক্যাল এরর
 

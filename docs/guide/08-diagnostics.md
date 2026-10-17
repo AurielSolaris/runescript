@@ -9,8 +9,10 @@ prog.rsc:9:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsign
   help: Use an explicit checked conversion, (uint) x, or change the destination type.
 ```
 
-The `ASX` prefix is provisional and may be renamed. The numbers stay the
-same.
+On a terminal, `error` and its carets are shown in red, `warning` in yellow,
+and `help:` in cyan. `--color=never` turns that off, `--color=always` keeps
+it when the output goes to a file or a pipe, and the `NO_COLOR` environment
+variable turns it off for `auto`, the default.
 
 ## Lexical errors
 

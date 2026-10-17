@@ -48,8 +48,10 @@ protected int main() {
 }
 ```
 
-`int32` is not `int` either: `int` is the general integer, which may one
-day widen when a value needs more room, and an `int32` never will.
+`int32` is not `int` either: `int` is the general integer, whose
+intermediate results widen when a calculation needs more room
+([chapter 4](04-operators.md#overflow-never-wraps-silently)), and an
+`int32` never does.
 
 Arithmetic in every width is checked, as for `int`: a result that doesn't
 fit throws a `RangeError` instead of wrapping around.

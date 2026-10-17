@@ -50,7 +50,7 @@ irm https://raw.githubusercontent.com/AurielSolaris/runescript/main/install.ps1 
 
 ```text
 $ runescript version
-runescript 0.3.0-dev (commit 9609a35, go1.25.11 linux/amd64)
+runescript 0.6.0-dev (commit 0fdbc61, go1.25.11 linux/amd64)
 ```
 
 <div dir="rtl">
@@ -117,7 +117,7 @@ Hello, RuneScript!
 
 | פקודה | מה היא עושה |
 |---|---|
-| `runescript run <file>` | בודקת את התוכנית ואז מריצה אותה |
+| `runescript run <file> [args...]` | בודקת את התוכנית ואז מריצה אותה; המילים שאחרי הקובץ הן הארגומנטים שלה (`process.args()`, [פרק 20](20-files-and-input.md)) |
 | `runescript check <file>` | מדווחת על שגיאות הידור בלי להריץ |
 | `runescript run --watch <file>` | מריצה את התוכנית, ושוב בכל פעם שאחד הקבצים שלה משתנה (Ctrl+C עוצר) |
 | `runescript build [-o out.js] <file>` | מהדרת למודול JavaScript ([פרק 11](11-javascript.md)) |
@@ -125,13 +125,15 @@ Hello, RuneScript!
 | `runescript version` | מדפיסה את הגרסה |
 
 `run`, `check`, `build` ו-`dev` מקבלות גם `-Werror` ו-`--allow <codes>` עבור אזהרות
-(ראו [פרק 8](08-diagnostics.md)).
+(ראו [פרק 8](08-diagnostics.md)), וגם `--color=auto|always|never`: במסוף, שגיאות
+מוצגות באדום ואזהרות בצהוב, אלא אם משתנה הסביבה `NO_COLOR` מוגדר. הדגלים באים לפני
+הקובץ; כל מה שאחריו עובר לתוכנית.
 
 ## קוד היציאה
 
 | מצב | קוד היציאה |
 |---|---|
-| התוכנית רצה | ה-`int` ש-`main` מחזירה (0 עבור `void main`) |
+| התוכנית רצה | ה-`int` ש-`main` מחזירה |
 | שגיאת הידור | 1 |
 | שגיאת זמן ריצה (גלישה, חלוקה באפס, …) | 1 |
 | שורת פקודה שגויה או קובץ שאי אפשר לקרוא | 2 |

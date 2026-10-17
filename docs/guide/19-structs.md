@@ -50,8 +50,9 @@ protected int main() {
   package, and `private` ones only in their file.
 - A field can have any value type: numbers, `bool`, `string`, `char`,
   arrays, functions, errors, and other structs.
-- Fields have no default values. That's why every literal must name them
-  all.
+- A struct literal names every field: there are no defaults in a literal.
+  A struct variable declared without a value, `Point p;`, starts with
+  every field at its zero value ([chapter 3](03-types-and-variables.md)).
 
 ## Building a struct
 
@@ -194,4 +195,4 @@ protected int main() {
 Methods, constructors, private fields, and passing structs to JavaScript
 `extern` functions.
 
-Next: back to the [guide index](README.md)
+Next: [Files, input, and output](20-files-and-input.md)

@@ -1,6 +1,6 @@
 # RuneScript Language Specification
 
-**Version 0.3 (draft, in progress).** This is the formal companion to `CLAUDE.md`. If
+**Version 0.6 (draft, in progress).** This is the formal companion to `CLAUDE.md`. If
 the two disagree, the disagreement is flagged in §11 rather than silently
 resolved.
 
@@ -8,7 +8,7 @@ Every rule carries one of these labels:
 
 | Label | Meaning |
 |---|---|
-| **[v0.1]**, **[v0.2]**, **[v0.3]** | Implemented, and covered by tests, in that version. |
+| **[v0.1]**, **[v0.2]**, **[v0.3]**, or a date such as **[2026-10-17]** | Implemented, and covered by tests, in that version or on that date. |
 | **[v0.1, provisional]** | Implemented, but the owner has not decided the rule. It is the most conservative choice and may change. |
 | **[planned]** | Required by the design; not implemented. |
 | **[undecided]** | Not yet designed. Programs using it are rejected. |
@@ -149,7 +149,7 @@ Stmt         = FuncDecl                 (* nested function or prototype *)
              | IfStmt | WhileStmt | ForStmt | TryStmt
              | TemplateStmt ;                               (* §13 *)
 SimpleStmt   = VarDecl | Assignment | IncDec | Call ;
-VarDecl      = Type Ident "=" Expr ;
+VarDecl      = Type Ident [ "=" Expr ] ;      (* without "=": the zero value, §7.1 *)
 Assignment   = ( Ident | Postfix "[" Expr "]" ) AssignOp Expr ;
 AssignOp     = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
 IncDec       = Ident ( "++" | "--" ) ;
@@ -326,13 +326,15 @@ use "go:<package>";           // Go package                 [planned]
 - **[undecided]** Default arguments, variadic parameters,
   overloading, capturing closures.
 
-### 4.4 Entry point **[v0.1, provisional]**
-A program runs by calling a top-level function `main` that takes no
-parameters and returns `int`/`sint` or `void`. An `int` result becomes the
-process exit code; `void` means exit code 0. **[v0.3, decided]** `main` may
-be in any file of the program, but there must be exactly one
-(`ASX-ENTRY-003` for the others; `ASX-ENTRY-001` if there is none). The
-canonical form is:
+### 4.4 Entry point **[decided 2026-10-17]**
+A program runs by calling its top-level function `main`, which is declared
+exactly `protected int main()` (owner decision): `protected`, no
+parameters, and an `int` (or `sint`) result, which becomes the process
+exit code. Any other visibility, a `void` or explicit-width result, or
+parameters is `ASX-ENTRY-002`. Command-line arguments come from
+`process.args()` (§8.2). **[v0.3, decided]** `main` may be in any file of
+the program, but there must be exactly one (`ASX-ENTRY-003` for the
+others; `ASX-ENTRY-001` if there is none):
 
 ```actionscript
 package main;
@@ -342,8 +344,8 @@ protected int main() {
 }
 ```
 
-Every function needs an access modifier, so `main` has one too; any of the
-three is accepted.
+**[undecided]** Whether a class member can be the entry point (classes
+are not designed yet).
 
 ## 5. Types
 
@@ -507,15 +509,32 @@ The constant must fit the target type, otherwise it's an error:
 `ASX-TYPE-006` for out of range, `ASX-TYPE-007` for a negative value going
 to an unsigned type. Dividing by a constant zero is `ASX-TYPE-014`.
 
-### 5.4 Widening **[undecided]**
+### 5.4 Widening **[decided 2026-10-17]**
 CLAUDE.md §4.4 says generic numeric types widen when needed and never
-contract. The widening model has not been chosen yet, so v0.1 implements
-**no widening**:
+contract. The owner chose the model in which **expression results widen
+and variables keep their declared representation** (OQ-NUM-01, option A):
 
-- **[v0.1, provisional]** Integer arithmetic is exact. A result outside the
-  operand type's v0.1 range stops the program with `ASX-RUN-002`. It never
-  wraps. When widening is specified, programs that run today will produce
-  the same results.
+- In an expression of the generic `int` or `uint`, every result that is an
+  operand of another `int`/`uint` arithmetic operation (`+ - * / %`, and
+  unary `-`), of a comparison, or of an explicit conversion `(T) x` is an
+  **intermediate**: it is computed exactly, within the range of `int64`.
+  The outermost result, the one that is stored, passed, returned,
+  traced, or interpolated, must fit the declared type.
+- So `big * big / big` is `big`, `a * b > limit` compares the exact
+  product, and `(int64) (a * b)` keeps it, while `int x = big * big;`
+  stops with `ASX-RUN-002`. A `uint` intermediate may be negative:
+  `a - b + c` is fine if the result is not.
+- An intermediate beyond `int64`'s range is also `ASX-RUN-002` ("beyond
+  the int64 range of intermediate results").
+- Variables, parameters, results, array elements, and struct fields keep
+  their declared type and memory layout; nothing contracts implicitly.
+- Integer arithmetic never wraps. Every program that ran before this rule
+  gives the same results; programs that stopped on an intermediate
+  overflow now run.
+- The explicit widths (`int8` … `uint64`, §5.1d) never widen. `float` has
+  widened since v0.3 (§5.1b).
+- Constants are untyped and exact (§5.3), so they need no widening; a
+  constant still has to fit its destination type.
 
 ### 5.5 Assignability **[v0.1]**
 A value of type `S` can be stored in, passed as, or returned as a
@@ -528,7 +547,7 @@ destination of type `D` only if:
 | untyped constant → integer type | allowed if the value fits (§5.3) |
 | untyped constant → float type [v0.3] | allowed if the value is exactly representable (§5.1b) |
 | signed (`int`/`sint`) → `uint` | **error `ASX-TYPE-004`**, whatever the runtime value |
-| `uint` → `int`/`sint` | **error `ASX-TYPE-005`** [provisional: rules undecided] |
+| `uint` → `int`/`sint` | **error `ASX-TYPE-005`** [decided 2026-10-17: always an explicit, checked conversion `(int) u`] |
 | `void` → anything | error `ASX-TYPE-002` |
 | anything else | error `ASX-TYPE-001` |
 
@@ -612,9 +631,19 @@ compile-time error: `(uint) -2.5` is `ASX-TYPE-007`, `(int) 3e10` is
 
 ### 7.1 Variables **[v0.1]**
 `Type name = expr;` declares a variable in the current block.
-- **[provisional]** An initializer is required.
-- **[provisional]** Redeclaring or shadowing any visible variable,
-  parameter, or function name is rejected (`ASX-NAME-002`).
+- **[decided 2026-10-17]** `Type name;` gives the variable its type's zero
+  value: `0` for numbers, U+0000 for `char`, `""`, `false`, a new empty
+  array, or a struct whose fields have their zero values. Function types,
+  error types, runes, and structs containing one have no zero value: they
+  need an initializer (`ASX-TYPE-028`). There is no `null`.
+- **[decided 2026-10-17]** A variable declared in a nested block may
+  **shadow** a variable or parameter of an enclosing block of the same
+  function, with warning `ASX-WARN-009`; the initializer still sees the
+  outer one. Redeclaring a name in the same block (the parameters count as
+  being in the function body's block), or reusing the name of a function,
+  struct, or extern, is still `ASX-NAME-002`.
+- **[provisional]** Parameters are read-only (`ASX-NAME-006`), and the
+  bodies of `if`, `else`, `while`, and `for` must be blocks.
 - Scope is the block. A variable declared in a `for` initializer is scoped
   to the loop.
 
@@ -729,6 +758,10 @@ of it. A NaN's sign is not observable:
 |---|---|
 | `std:string` | 43 functions: Go's `strings` functions expressible with `string`, `int`, `bool`, `char`, callbacks, and `Array<string>`, plus `len`, `runeCount`, and `slice` (see `docs/guide/10-std-string.md`) |
 | `std:math` | [2026-10-17] Go's `math` on `float64`: `abs ceil floor trunc round roundToEven sqrt min max mod remainder dim nextafter copysign signbit isInf inf nan ldexp`, and `sin cos tan asin acos atan atan2 sinh cosh tanh asinh acosh atanh exp exp2 expm1 log log10 log2 log1p cbrt pow hypot`; the int helpers `abs min max clamp`; untyped constants `pi e phi sqrt2 sqrtE sqrtPi sqrtPhi ln2 log2E ln10 log10E maxFloat64 smallestNonzeroFloat64 maxFloat32 smallestNonzeroFloat32` and `minInt/maxInt` … `maxUint64` for every integer type. |
+| `std:io` | [2026-10-17] `print` (no newline), `error` and `warn` (a line on standard error, red or yellow when standard error is a terminal and `NO_COLOR` is unset), and standard input: `readLine`, `readByte` (`-1` at the end), `readAll`, `atEnd`. Input is decoded as UTF-8 the WHATWG way (invalid bytes become U+FFFD). `trace` and `print` share standard output. |
+| `std:process` | [2026-10-17] `args()` (a new array each call), `env(name)` (`""` if unset), `hasEnv(name)`, `cwd()`, `platform()` (`"windows"`, `"linux"`, `"macos"`, or the system's own name; `"browser"` where the JavaScript host gives none) |
+| `std:fs` | [2026-10-17] `readFile writeFile appendFile exists isFile isDir size copyFile rename remove removeAll mkdir mkdirAll readDir walk tempDir`. Paths are relative to the working directory; text is UTF-8. A failure throws an `Error` whose message is `<qualifier>.<function>: cannot <operation> <path>: <reason>`, with the reasons "no such file or directory", "already exists", "is a directory", "not a directory", "directory not empty", and "permission denied" worded the same on every target and platform. `readDir` sorts by code point; `walk` lists a directory before its contents and does not follow symbolic links. |
+| `std:path` | [2026-10-17] Node.js's `path` semantics, implemented in RuneScript's runtimes: `join joinAll resolve resolveAll normalize isAbsolute relative dirname basename extname root sep delimiter`, with `basename(p, suffix)` as an overload. The plain names follow the running platform's rules (Windows or POSIX); `posix…` and `win32…` versions (`path.posixJoin`) choose. Differences from Node.js: Windows paths compare ignoring ASCII case only, and resolving a path on another drive starts at that drive's root instead of reading cmd.exe's `=D:` variables. |
 | `std:symrs` | [planned] Symbolic mathematics, a port of the owner's SympJS library; needs objects, floats, and arrays |
 
 ## 9. Diagnostics and runtime errors
@@ -742,7 +775,7 @@ file.rsc:LINE:COL: error CODE: message
   help: <suggestion>
 ```
 
-The `ASX` code prefix is **provisional**. Each code is
+The `ASX` code prefix is **decided** (owner, 2026-10-17). Each code is
 `ASX-<STAGE>-<NNN>`, where the stages are `LEX`, `PARSE`, `NAME`, `TYPE`,
 `FLOW`, `USE`, `ENTRY`, `TARGET`, `RUN`, and `WARN`. The full list is in `docs/guide/08-diagnostics.md`.
 
@@ -751,6 +784,9 @@ but probably wrong: unused locals, parameters, and uses; unreachable code;
 discarded results; externs from one host's own module. They are reported
 only for programs without errors, never stop a program, and are controlled
 with `-Werror` (every warning becomes an error) and `--allow <codes>`.
+**[2026-10-17]** On a terminal the CLI colors `error` red, `warning`
+yellow, and `help:` cyan; `--color=auto|always|never` chooses, and
+`NO_COLOR` turns colors off in `auto` mode.
 
 The checker reports every semantic error it finds. The parser stops at the
 first syntax error. A runtime error that nothing catches (§7.6) ends the
@@ -775,14 +811,15 @@ purpose:
 | Variable | `var n:int = 0;` | `int n = 0;` |
 | Semicolons | Optional | Required |
 | Untyped values | `*` and missing annotations allowed | No `any`; every declaration is explicitly typed |
-| Top-level code | One externally visible definition per file; no `main` | Many functions per file; `main()` entry point |
+| Top-level code | One externally visible definition per file; no `main` | Many functions per file; `protected int main()` entry point |
 | `int`/`uint` mixing | Implicit coercion; `var u:uint = -1` wraps to 4294967295 | Compile errors (`ASX-TYPE-004/005/007/011`) |
-| Integer overflow | Wraps | Never wraps silently (v0.1: runtime error; widening planned) |
+| Integer overflow | Wraps | Never wraps silently: intermediate `int`/`uint` results widen exactly, and a stored value that doesn't fit is a runtime error |
 | Integer division | Produces `Number` (`7/2 == 3.5`) | Truncating integer division |
 | Floating point | `Number` (64-bit), with `NaN` and `Infinity` | `float` (float32 by default, widening exactly), `float32`, `float64`; IEEE, with `NaN` and `Infinity`, as in AS3 [v0.3] |
 | Type names | `String`, `Boolean` | `string`, `bool`; `sint` alias added |
 | Truthiness | `if (count)` allowed | Conditions must be `bool` |
-| Variable scope | `var` is function-scoped and hoisted | Block-scoped; no shadowing [provisional] |
+| Variable scope | `var` is function-scoped and hoisted | Block-scoped; shadowing only in nested blocks, with a warning |
+| Declarations without a value | `var n:int;` is `0`, `var s:String;` is `null` | `int n;` is `0`, `string s;` is `""`; no `null` |
 | Visibility | `public protected private internal`; default `internal` | `public` (everywhere), `protected` (package), `private` (file); always written |
 | Casts | `T(x)` and `x as T`; `int("x")` is `0` | `(T) x`, checked: `(int) "x"` throws a `TypeError` [v0.3] |
 | Exceptions | `throw` any value; `catch (e:Error)`, `catch (e)` | `throw` error values only; `catch (Error e)`, `catch (e)`; runtime errors are catchable [v0.3] |
@@ -808,6 +845,12 @@ metadata, E4X XML, `Vector.<T>` (vs. `Array<T>` generics), type inference,
 2. **Open-questions file.** CLAUDE.md §6 and §9 list
    `docs/OPEN_QUESTIONS.md` as a repository file. The owner has asked that
    it stay local and uncommitted.
+3. **Decisions CLAUDE.md still lists as open** (owner, 2026-10-17):
+   the entry point is `protected int main()` (CLAUDE.md §3.1 and §5); the
+   diagnostic prefix stays `ASX` (§4.5); widening follows option A,
+   "expression results widen, variables keep their type" (§4.4, §5.4
+   here); unsigned → signed always needs a checked conversion (§4.5).
+   CLAUDE.md should be updated to match.
 
 ## 12. JavaScript target **[v0.2]**
 
@@ -820,8 +863,14 @@ checks the generated code for newer syntax and built-ins. **[v0.3]** Every file 
 program is compiled into that one module, and runtime errors name the file
 they happened in, as the interpreter's do. The module exports
 `run(options)`, which calls `main` and returns the exit code, and
-`RuneScriptError`. Run directly with Node.js (`node out.js`), the module
-calls `run` itself.
+`RuneScriptError`. Run directly with Node.js (`node out.js args…`), the
+module calls `run` itself. **[2026-10-17]** `run`'s options are the
+program's environment for `std:io`, `std:process`, `std:fs`, and
+`std:path`: `stdout`/`stderr` writers (or `trace` for whole lines),
+`stdin`, `args`, `env`, `cwd`, `platform`, `color`, `fs` (a Node.js-style
+fs module), and `tempDir`. Run directly, the module passes Node.js's own,
+reaching `node:fs` through `process.getBuiltinModule` only under
+`import.meta.main`, so a module still loads in a browser.
 
 **Semantics are the language's, not JavaScript's.** A program that checks
 behaves identically on the interpreter and on the JavaScript target: same
@@ -842,9 +891,9 @@ Programs with extern functions (§12.1) run only on the JavaScript target.
 - **[v0.2, decided]** `std:string` keeps UTF-8 byte offsets (§5.1) on the
   JavaScript target. Case mapping, case folding, and white space use
   tables generated from Go's `unicode` package.
-- **[v0.2, decided]** Widening (OQ-NUM-01) is still undecided. The
-  JavaScript target traps on overflow exactly like the interpreter. If
-  64-bit widening is adopted, the JavaScript target will need `BigInt`.
+- **[2026-10-17]** Widening (§5.4): wide intermediates are numbers while
+  they are safe integers and `BigInt`s beyond, so `===` still compares
+  them exactly; single operations keep the int32 fast paths.
 - **[v0.2] Host limits.** If the JavaScript host's stack runs out before
   the 10,000-call limit, the program stops with `ASX-RUN-001` at a call
   site inside the recursion. That site may differ from the interpreter's.

@@ -54,14 +54,14 @@ conditionals, loops, and basic functions.
 - [x] Diagnostics are reported in source order
 - [x] Examples: `callbacks.rsc`, `primes.rsc`, `strings.rsc`, `boundary_error.rsc`, plus `examples/README.md`
 
-### Settle v0.1 provisional rules
+### Settle v0.1 provisional rules ✅ (owner decisions, 2026-10-17)
 - [x] Final source file extension: `.rsc` (`.rs` was Rust's)
-- [ ] Final diagnostic prefix (currently `ASX`)
-- [ ] Integer widening model, overflow behaviour, and the width of `uint`
+- [x] Final diagnostic prefix: `ASX` stays
+- [x] Integer widening model: intermediate results widen, variables keep their type (option A, done in v0.5); `uint` stays 32 bits
 - [x] Explicit checked conversion syntax: C-style `(T) x` (v0.3)
-- [ ] Unsigned → signed and mixed-signedness rules
-- [ ] Entry-point rules and visibility semantics for top-level functions
-- [ ] Confirm or relax: required initializers, read-only parameters, no shadowing, mandatory braces
+- [x] Unsigned → signed and mixed signedness: always an explicit, checked conversion; mixed arithmetic stays an error
+- [x] Entry point: exactly `protected int main()` (`ASX-ENTRY-002` otherwise); arguments come from `std:process`
+- [x] Relaxed: `T x;` takes the zero value (`ASX-TYPE-028` for types without one); shadowing is allowed in nested blocks, with `ASX-WARN-009`. Kept: read-only parameters, mandatory braces
 
 ### JavaScript target ✅
 - [x] Typed IR (`internal/ir`) lowered from the checked AST, with an independent verifier
@@ -86,7 +86,7 @@ conditionals, loops, and basic functions.
 - [x] Host-neutral `rune:fs` (readFile, writeFile, appendFile, exists, remove) mapped to `node:fs`; `node:`/`bun:`/`deno:` modules allowed with `ASX-WARN-006`
 - [x] Boundary checks on every result (scalars and errors; float32 rounded): `ASX-RUN-007` `TypeError`; JavaScript exceptions are `ASX-RUN-008` `Error`; error values cross as the exported `RSError` class
 - [x] The interpreter rejects programs with externs (`ASX-TARGET-002`); Node.js tests in `tests/testdata/extern`
-- [ ] `rune:process` (arguments, environment, exit code)
+- [x] Arguments and environment: `std:process` on both targets instead of a JavaScript-only `rune:process` (2026-10-17)
 - [ ] Objects, arrays, and callbacks across the boundary (need classes and arrays first)
 - [ ] Source maps
 
@@ -115,7 +115,7 @@ conditionals, loops, and basic functions.
 - [ ] A small ES2015-compatible JavaScript engine shipped with RuneScript, so compiled programs run without Node.js or Bun. It supports the extras above (`BigInt`, `??`, modules)
 - [ ] Conformance: its output is compared against Node.js (ES2022), the reference host
 
-## v0.3: `use` for packages and files (current)
+## v0.3: `use` for packages and files ✅
 
 Syntax decided by the owner: `use "<package_name>";` and `use "<file_path>";`,
 with paths relative to the current working directory. (`std:` works since v0.2.)
@@ -163,29 +163,36 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
   converted; other non-UTF-8 files are rejected (`ASX-LEX-007`) on every
   target
 - [ ] `runescript` flag to resolve uses from a directory other than the
-  working directory, if wanted
+  working directory, if wanted (optional; moved to Later)
 
-## v0.4: Strings and output
+## v0.4: Strings, output, and the system ✅
 
 - [x] String concatenation `+` (strings only) and interpolation `$"…{x}…"` (2026-10-16)
 - [x] `string.len`, `string.slice`, `string.runeCount` in bytes; `char` as a Unicode scalar with `'a'` literals (2026-10-16)
 - [x] `std:string` functions that take `char` and callbacks: `containsRune`, `indexRune`, `indexFunc`, `trimFunc`, `map`, … (2026-10-16)
 - [x] Escape sequences: `\u{...}` Unicode escapes and `\0` (2026-10-17)
+- [x] Colored diagnostics: errors red, warnings yellow, `--color=auto|always|never`, `NO_COLOR` (2026-10-17)
+- [x] `std:io`: `print` without a newline, `error`/`warn` lines on standard error (red/yellow on a terminal), standard input by line, byte, or all at once (2026-10-17)
+- [x] `std:process`: `args`, `env`, `hasEnv`, `cwd`, `platform`; `runescript run prog.rsc args…` and `node prog.js args…` (2026-10-17)
+- [x] `std:fs` on both targets: files, directories (`mkdir`, `mkdirAll`, `readDir`, `walk`, `remove`, `removeAll`), `copyFile`, `rename`, `size`, `tempDir`, with the same error messages everywhere (2026-10-17)
+- [x] `std:path`: Node.js's path semantics, implemented rather than wrapped, with platform, `posix…`, and `win32…` versions; tested against Node.js (2026-10-17)
+- [x] Example: a Brainfuck interpreter with 32,768 cells (`examples/brainfuck.rsc`) (2026-10-17)
+- [ ] Binary files (`Array<uint8>` in and out of `std:fs`)
 
-## v0.5: Numbers
+## v0.5: Numbers ✅
 
 - [x] Explicit-width integers (`int8`…`int64`, `uint8`…`uint64`), checked in every width; BigInt on the JavaScript target (2026-10-17)
 - [x] Bitwise operators and shifts, with checked shift counts and trapping `<<` (2026-10-17)
-- [ ] Widening as decided in v0.2, with boundary and non-contraction tests
+- [x] Widening, option A: exact intermediate results within int64, stored values checked; boundary, non-contraction, and randomized cross-target tests (2026-10-17)
 - [x] `float`, `float32`, `float64` (v0.3); widening is exact, so
   representation only matters once floats are stored in arrays/structs
 - [x] Literal forms: hex `0xFF`, binary `0b1010`, octal `0o17`, `_` separators (2026-10-17)
 - [x] `std:math`: Go's `math` on float64, int helpers, constants; transcendental functions from one shared implementation (`internal/fmath`), bit-identical on both targets (2026-10-17)
 
-## v0.6: Aggregates
+## v0.6: Aggregates (current)
 
 - [x] `Array<T>`: literals, bounds-checked indexing, `length`, `push`, `pop`, reference semantics (2026-10-16, details provisional)
-- [ ] For-each loops, slicing, sorting; `main(Array<string> args)`
+- [ ] For-each loops, slicing, sorting (arguments come from `process.args()`)
 - [x] `struct`: value semantics (copy on assignment), named-field literals, nested field writes, `==` by field (2026-10-17)
 - [ ] Struct methods and constructors
 - [ ] `matrix` (design first)
@@ -227,6 +234,7 @@ Depends on: floats (v0.5), arrays (v0.6), classes or opaque native types (v0.8),
 
 ## Later
 
+- [ ] A `runescript` flag to resolve uses from a directory other than the working directory, if wanted
 - [ ] Standard library modules (`stdlib/`)
 - [ ] Better parser error recovery (report more than one syntax error)
 - [ ] Performance work (bytecode/VM) only after semantics are stable and measured

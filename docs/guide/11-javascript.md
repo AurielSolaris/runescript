@@ -10,7 +10,7 @@ components and templates, see [chapter 15](15-web-pages.md).
 ```sh
 runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 runescript build -o web/app.js examples/hello.rsc # choose the output file
-node examples/fizzbuzz.js                         # runs it; main's result is the exit code
+node examples/fizzbuzz.js a b                     # runs it with arguments; main's result is the exit code
 ```
 
 `--target js` is the default and currently the only target. A program of
@@ -21,8 +21,11 @@ one module, and runtime errors name the file they happened in.
 full JavaScript compatibility. The module needs an engine with ES2015,
 `BigInt`, `??`, and ES modules. It exchanges only numbers, `bool`,
 `string`, and errors with JavaScript, through
-[extern functions](#calling-javascript-extern-functions). And `rune:fs` is
-the only host-neutral API so far. What it **does** promise is strict code:
+[extern functions](#calling-javascript-extern-functions). The standard
+packages `std:io`, `std:process`, `std:fs`, and `std:path`
+([chapter 20](20-files-and-input.md)) work on both targets; in JavaScript
+they use what `run` is given, which Node.js provides when it runs the
+module. What it **does** promise is strict code:
 nothing gets into a RuneScript program without being checked. TypeScript
 trusts its declarations and erases them, so a `.d.ts` that says `number`
 can hand you a string at run time. RuneScript checks every value that comes
@@ -51,9 +54,24 @@ runtime error.
 </script>
 ```
 
-`options.trace` receives each line of `trace` output. Without it, lines go
-to `console.log`. A `RuneScriptError` also has `code`, `file`, `line`,
-`col`, and `detail` (the message without the location).
+`options.trace` receives each line of output (`trace` and `io.print`).
+Without it, lines go to `console.log`. A `RuneScriptError` also has `code`,
+`file`, `line`, `col`, and `detail` (the message without the location).
+
+The other options are the program's environment, all optional:
+
+| Option | Used by | Default |
+|---|---|---|
+| `stdout(text)`, `stderr(text)` | `trace`, `io.print`; `io.error`, `io.warn` | whole lines to `options.trace` (or `console.log`) and `console.error` |
+| `stdin()` | `io.readLine`, `io.readByte`, … | no input. Return the next chunk as a `Uint8Array`, or `null` at the end |
+| `args`, `env` | `process.args()`, `process.env(name)` | `[]`, `{}` |
+| `cwd()`, `platform` | `process.cwd()`, `std:path` | `"/"`, `"browser"` (Node.js's `process.platform` names) |
+| `color` | `io.error`, `io.warn` | `false` |
+| `fs`, `tempDir()` | `std:fs` | none: `std:fs` throws an `Error` |
+
+When Node.js runs the module directly (`node app.js a b`), the module
+passes Node's own standard streams, `process.argv`, `process.env`, working
+directory, platform, and `node:fs`.
 
 A program with extern functions imports their modules, so it runs only
 where those modules exist: a module using `rune:fs` runs in Node.js, not in
@@ -68,7 +86,7 @@ guard the rest:
 | RuneScript rule | Plain JavaScript | The generated code |
 |---|---|---|
 | Every value has its declared type | Variables hold anything | Checked at compile time, then re-verified on the typed IR before any code is written. No unchecked conversion is ever emitted. |
-| `int` and `uint` are 32-bit; overflow is `ASX-RUN-002` | `2147483647 + 1` is `2147483648` | Every integer `+ - * / %` goes through a range check that stops the program |
+| `int` and `uint` are 32-bit; intermediate results widen exactly; overflow is `ASX-RUN-002` | `2147483647 + 1` is `2147483648`, and large products are rounded | Every integer `+ - * / %` goes through a range check that stops the program; wide intermediates switch to `BigInt` beyond 2^53 |
 | `/` truncates | `7 / 2` is `3.5` | Truncating division |
 | Division by zero is `ASX-RUN-003` | `Infinity` or `NaN` | Checked, for integers and floats |
 | `float32` rounds to 32 bits | One 64-bit number type | `float32` results go through `Math.fround`, and print with float32's shortest digits; `float` and `float64` are JavaScript numbers (IEEE, with `NaN` and `Infinity`, as in AS3) |
@@ -155,7 +173,12 @@ that host is Node.js.
 | `void remove(string path)` | Deletes a file |
 
 A failing function, e.g. `readFile` on a missing file, throws an `Error`
-(`ASX-RUN-008`). `rune:process` is next.
+(`ASX-RUN-008`).
+
+`rune:fs` came first and runs only on the JavaScript target. For new
+programs, prefer the standard package `std:fs` ([chapter 20](20-files-and-input.md)):
+it does more (directories, sizes, copying, walking a tree), runs in the
+interpreter too, and fails with the same messages on both targets.
 
 ### What crosses the boundary
 

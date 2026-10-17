@@ -12,7 +12,7 @@ language tag, `lang="he"`, which browsers and screen readers expect.)
 | বাংলা (Bengali) | [`bn/`](bn/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
 | עברית (Hebrew) | [`heb/`](heb/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
 
-**Status:** the README, the guide index, and all 19 chapters are translated
+**Status:** the README, the guide index, and all 20 chapters are translated
 in both languages.
 
 **Help is appreciated.** If you speak one of these languages, corrections

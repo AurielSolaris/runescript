@@ -34,7 +34,7 @@ Open a new terminal afterwards, then:
 
 ```text
 $ runescript version
-runescript 0.3.0-dev (commit 9609a35, go1.25.11 linux/amd64)
+runescript 0.6.0-dev (commit 0fdbc61, go1.25.11 linux/amd64)
 ```
 
 From a clone of the repository, run the installer there to build that
@@ -88,7 +88,7 @@ Hello, RuneScript!
 
 | Command | What it does |
 |---|---|
-| `runescript run <file>` | Check the program, then run it |
+| `runescript run <file> [args...]` | Check the program, then run it; the words after the file are its arguments (`process.args()`, [chapter 20](20-files-and-input.md)) |
 | `runescript check <file>` | Report compile-time errors without running |
 | `runescript run --watch <file>` | Run it, then run it again whenever one of its files changes (Ctrl+C stops) |
 | `runescript build [-o out.js] <file>` | Compile to a JavaScript module ([chapter 11](11-javascript.md)) |
@@ -96,13 +96,16 @@ Hello, RuneScript!
 | `runescript version` | Print the version |
 
 `run`, `check`, `build`, and `dev` also take `-Werror` and `--allow <codes>`
-for warnings (see [chapter 8](08-diagnostics.md#warnings)).
+for warnings (see [chapter 8](08-diagnostics.md#warnings)), and
+`--color=auto|always|never`: on a terminal, errors are shown in red and
+warnings in yellow unless the `NO_COLOR` environment variable is set.
+Flags go before the file; everything after it is passed to the program.
 
 ## Exit status
 
 | Situation | Exit status |
 |---|---|
-| Program ran | The `int` returned by `main` (0 for `void main`) |
+| Program ran | The `int` returned by `main` |
 | Compile-time error | 1 |
 | Runtime error (overflow, division by zero, …) | 1 |
 | Bad command line or unreadable file | 2 |

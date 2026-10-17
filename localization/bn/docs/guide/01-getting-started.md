@@ -38,7 +38,7 @@ irm https://raw.githubusercontent.com/AurielSolaris/runescript/main/install.ps1 
 
 ```text
 $ runescript version
-runescript 0.3.0-dev (commit 9609a35, go1.25.11 linux/amd64)
+runescript 0.6.0-dev (commit 0fdbc61, go1.25.11 linux/amd64)
 ```
 
 রিপোজিটরির একটি ক্লোন থেকে, সর্বশেষ সংস্করণের বদলে সেই সোর্স তৈরি করতে সেখানেই
@@ -91,7 +91,7 @@ Hello, RuneScript!
 
 | কমান্ড | কাজ |
 |---|---|
-| `runescript run <file>` | প্রোগ্রামটি যাচাই করে, তারপর চালায় |
+| `runescript run <file> [args...]` | প্রোগ্রামটি যাচাই করে, তারপর চালায়; ফাইলের পরের শব্দগুলো এর আর্গুমেন্ট (`process.args()`, [অধ্যায় ২০](20-files-and-input.md)) |
 | `runescript check <file>` | না চালিয়ে কম্পাইল-টাইম এরর জানায় |
 | `runescript run --watch <file>` | প্রোগ্রামটি চালায়, তারপর এর কোনো ফাইল বদলালেই আবার চালায় (Ctrl+C থামায়) |
 | `runescript build [-o out.js] <file>` | একটি JavaScript মডিউলে কম্পাইল করে ([অধ্যায় ১১](11-javascript.md)) |
@@ -99,13 +99,15 @@ Hello, RuneScript!
 | `runescript version` | সংস্করণ দেখায় |
 
 `run`, `check`, `build` ও `dev` সতর্কবার্তার জন্য `-Werror` ও `--allow <codes>`-ও নেয়
-(দেখুন [অধ্যায় ৮](08-diagnostics.md))।
+(দেখুন [অধ্যায় ৮](08-diagnostics.md)), আর `--color=auto|always|never`-ও: টার্মিনালে
+এরর লাল এবং সতর্কবার্তা হলুদ রঙে দেখানো হয়, যদি না `NO_COLOR` এনভায়রনমেন্ট
+ভেরিয়েবল সেট করা থাকে। ফ্ল্যাগগুলো ফাইলের আগে বসে; ফাইলের পরের সবকিছু প্রোগ্রামটি পায়।
 
 ## এক্সিট স্ট্যাটাস
 
 | অবস্থা | এক্সিট স্ট্যাটাস |
 |---|---|
-| প্রোগ্রাম চলেছে | `main` যে `int` ফেরত দেয় (`void main` হলে 0) |
+| প্রোগ্রাম চলেছে | `main` যে `int` ফেরত দেয় |
 | কম্পাইল-টাইম এরর | 1 |
 | রানটাইম এরর (ওভারফ্লো, শূন্য দিয়ে ভাগ, …) | 1 |
 | ভুল কমান্ড লাইন বা পড়া যায় না এমন ফাইল | 2 |

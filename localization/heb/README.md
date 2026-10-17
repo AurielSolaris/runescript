@@ -50,14 +50,16 @@ protected int main() {
 
 <div dir="rtl">
 
-## מצב: גרסה 0.3 בפיתוח (שלב מוקדם)
+## מצב: גרסה 0.6 בפיתוח (שלב מוקדם)
 
 **מה עובד כבר עכשיו**, ומכוסה בבדיקות:
 
-- חבילות; פונקציות המוצהרות בצורה `public|private|protected <type> <name>(…)`; רקורסיה
+- חבילות; פונקציות המוצהרות בצורה `public|private|protected <type> <name>(…)`; רקורסיה;
+  נקודת הכניסה `protected int main()`, שהתוצאה שלה היא קוד היציאה
 - פונקציות מקוננות, אבות-טיפוס (prototypes), טיפוסי פונקציה (`int(int, int)`), פונקציות callback וביטויי למבדה (`(int a) => a * 2`)
 - `int`/`sint`, `uint`, `bool`, `string`, `void`
-- משתנים, `=`, `+= -= *= /= %=`, `++`/`--`
+- משתנים, `=`, `+= -= *= /= %=`, `++`/`--`; `int n;` מתחיל בערך האפס (אין `null`);
+  הסתרה בבלוקים מקוננים, עם אזהרה
 - אופרטורים אריתמטיים, אופרטורי השוואה ואופרטורים לוגיים
 - `if`/`else if`/`else`, `while`, `for`, `break`, `continue`, `return`
 - `trace(...)`
@@ -84,7 +86,12 @@ protected int main() {
 - בדיקת טיפוסים בזמן הידור עם הודעות שמצביעות על המיקום המדויק, כולל דחיית השמה
   של ערך עם סימן למשתנה בלי סימן
 - גלישה של מספרים שלמים וחלוקה באפס מדווחות כשגיאות זמן ריצה, ולעולם אינן
-  "מתגלגלות" בשקט
+  "מתגלגלות" בשקט; תוצאות ביניים של `int`/`uint` מתרחבות במדויק, כך ש-`big * big / big`
+  עובד ([מדריך](docs/guide/04-operators.md))
+- קבצים, קלט ופלט בשני היעדים: `std:io` (הדפסה בלי שורה חדשה, שורות שגיאה באדום ואזהרה
+  בצהוב, קלט סטנדרטי), `std:process` (ארגומנטים, סביבה), `std:fs` (קבצים ותיקיות)
+  ו-`std:path` (הכללים של path ב-Node.js, ממומשים בזמני הריצה של RuneScript)
+  ([מדריך](docs/guide/20-files-and-input.md))
 - הידור ל-JavaScript (`runescript build`): מודול ES2015 (בתוספת BigInt ו-`??`) שרץ בדפדפנים וב-Node.js
   ומתנהג בדיוק כמו המפרש בכל תוכנית שהמפרש יכול להריץ ([מדריך](docs/guide/11-javascript.md))
 - דפי רשת עם `rune:dom`: רכיבים עם תבניות HTML ו-SVG שכל אלמנט ומאפיין בהן נבדק בזמן
@@ -92,8 +99,9 @@ protected int main() {
   שמעדכנים בדיוק את מה שקרא אותם, בלי DOM וירטואלי ([מדריך](docs/guide/15-web-pages.md))
 - קריאה ל-JavaScript דרך הצהרות `extern`, כולל `rune:fs` שאינו תלוי בסביבת ההרצה.
   כל ערך שחוזר מ-JavaScript נבדק מול הטיפוס המוצהר שלו
-- אזהרות על משתנים, פרמטרים והצהרות use שאינם בשימוש, על קוד שלא ירוץ לעולם ועל
-  תוצאות שנזרקות, עם `-Werror` ו-`--allow <code>`
+- אזהרות על משתנים, פרמטרים והצהרות use שאינם בשימוש, על קוד שלא ירוץ לעולם, על
+  תוצאות שנזרקות ועל הסתרה, עם `-Werror` ו-`--allow <code>`; במסוף שגיאות באדום ואזהרות
+  בצהוב (`--color`)
 - טעינה מחדש חיה בזמן העבודה: `runescript dev app.rsc` מגישה תוכנית רשת וטוענת מחדש
   את הדפדפן בכל שמירה; `runescript run --watch` מריצה שוב תוכנית שורת פקודה
 
@@ -102,10 +110,9 @@ protected int main() {
 RuneScript בודקת כל ערך שנכנס מ-JavaScript, ואין בה `any`, המרות מרומזות או
 המרות לא בדוקות.
 
-**עדיין לא מומש:** מחלקות, לולאות for-each, ארגומנטים משורת
-הפקודה, חבילות `go:`, `std:symrs`, אובייקטים, מערכים ו-callbacks שחוצים את הגבול
-עם JavaScript, `rune:process`, `$foreach` ותגי רכיבים בתבניות, וחבילת הגרפיקה
-המקורית המתוכננת. ראו את
+**עדיין לא מומש:** מחלקות, לולאות for-each, קבצים בינאריים, חבילות `go:`,
+`std:symrs`, אובייקטים, מערכים, מבנים ו-callbacks שחוצים את הגבול עם JavaScript,
+`$foreach` ותגי רכיבים בתבניות, וחבילת הגרפיקה המקורית המתוכננת. ראו את
 [מפת הדרכים](../../docs/ROADMAP.md) (באנגלית).
 
 ## התקנה
@@ -142,6 +149,7 @@ go build -o runescript ./cmd/runescript
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
 ./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
 ./runescript run --watch examples/hello.rsc         # runs it again on every save
+./runescript run examples/brainfuck.rsc examples/bf/hello.bf   # arguments follow the file
 go test ./...
 ```
 
@@ -182,7 +190,8 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 ## דוגמאות
 
 ב-[`examples/`](../../examples/README.md) יש תוכניות לכל תכונה: היסודות,
-`std:string`, פונקציות callback וביטויי למבדה, מונה מספרים ראשוניים, ושתי
+`std:string`, פונקציות callback וביטויי למבדה, מונה מספרים ראשוניים,
+[מפרש Brainfuck](../../examples/brainfuck.rsc) עם 32,768 תאים, ושתי
 תוכניות שהמהדר דוחה בכוונה. הפלט של כל דוגמה נבדק בחבילת הבדיקות.
 
 ## תיעוד
@@ -194,6 +203,7 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [בלי null, בלי any, בלי גנריות](docs/guide/17-no-null-any-generics.md)
 - [מספרים לעומק: רוחב, ליטרלים, סיביות, std:math](docs/guide/18-numbers.md)
 - [מבנים](docs/guide/19-structs.md)
+- [קבצים, קלט ופלט: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
 - [הידור ל-JavaScript](docs/guide/11-javascript.md)
 - [מדריך הודעות האבחון](docs/guide/08-diagnostics.md)
 - [למי שמגיע מ-ActionScript 3](docs/guide/09-coming-from-actionscript.md)
@@ -219,10 +229,13 @@ internal/jsgen/        JavaScript code generator and its inlined runtime
 internal/jshost/       host-neutral JavaScript modules (rune:fs)
 internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
 internal/diagnostics/  error codes and formatting
+internal/term/         terminal detection for colored output
 internal/driver/       wires the stages together
 internal/watch/        file watcher for run --watch and dev
 internal/devserver/    the runescript dev server and its browser client
-stdlib/                standard library packages (std:string), implemented in Go
+stdlib/                standard library packages (std:string, std:math, std:io, std:process,
+                       std:fs, std:path), implemented in Go; their JavaScript twins are in
+                       internal/jsgen/runtime.js
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests
 assets/                logo: SVG source and PNGs generated from it

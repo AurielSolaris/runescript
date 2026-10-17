@@ -16,7 +16,7 @@
 ```sh
 runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 runescript build -o web/app.js examples/hello.rsc # choose the output file
-node examples/fizzbuzz.js                         # runs it; main's result is the exit code
+node examples/fizzbuzz.js a b                     # runs it with arguments; main's result is the exit code
 ```
 
 <div dir="rtl">
@@ -27,8 +27,10 @@ node examples/fizzbuzz.js                         # runs it; main's result is th
 
 **מה מובטח ומה לא.** RuneScript עדיין **אינה** מבטיחה תאימות מלאה ל-JavaScript.
 המודול צריך מנוע שתומך ב-ES2015, ב-`BigInt`, ב-`??` ובמודולי ES. הוא מחליף עם
-JavaScript רק מספרים, `bool`, `string` ושגיאות, דרך פונקציות extern (בהמשך). ו-`rune:fs`
-הוא בינתיים ה-API היחיד שאינו תלוי בסביבת ההרצה. מה שהיא **כן** מבטיחה הוא קוד קפדני:
+JavaScript רק מספרים, `bool`, `string` ושגיאות, דרך פונקציות extern (בהמשך). החבילות
+הסטנדרטיות `std:io`, `std:process`, `std:fs` ו-`std:path` ([פרק 20](20-files-and-input.md))
+עובדות בשני היעדים; ב-JavaScript הן משתמשות במה ש-`run` מקבלת, ו-Node.js מספק זאת כשהוא
+מריץ את המודול. מה שהיא **כן** מבטיחה הוא קוד קפדני:
 שום דבר לא נכנס לתוכנית RuneScript בלי בדיקה. TypeScript סומכת על ההצהרות שלה
 ומוחקת אותן, ולכן `.d.ts` שאומר `number` יכול להחזיר מחרוזת בזמן ריצה. RuneScript
 בודקת כל ערך שחוזר מ-JavaScript מול הטיפוס המוצהר שלו, ועוצרת עם `TypeError` כשהוא
@@ -58,9 +60,24 @@ JavaScript רק מספרים, `bool`, `string` ושגיאות, דרך פונקצ
 
 <div dir="rtl">
 
-`options.trace` מקבלת כל שורה של פלט `trace`. בלעדיה, השורות הולכות ל-`console.log`.
-ל-`RuneScriptError` יש גם `code`, `file`, `line`, `col` ו-`detail` (ההודעה בלי
-המיקום).
+`options.trace` מקבלת כל שורה של הפלט (`trace` ו-`io.print`). בלעדיה, השורות הולכות
+ל-`console.log`. ל-`RuneScriptError` יש גם `code`, `file`, `line`, `col` ו-`detail`
+(ההודעה בלי המיקום).
+
+שאר האפשרויות הן הסביבה של התוכנית, וכולן רשות:
+
+| אפשרות | מי משתמש בה | ברירת מחדל |
+|---|---|---|
+| `stdout(text)`, `stderr(text)` | `trace`, `io.print`; `io.error`, `io.warn` | שורות שלמות ל-`options.trace` (או ל-`console.log`) ול-`console.error` |
+| `stdin()` | `io.readLine`, `io.readByte`, … | אין קלט. החזירו את הקטע הבא כ-`Uint8Array`, או `null` בסוף |
+| `args`, `env` | `process.args()`, `process.env(name)` | `[]`, `{}` |
+| `cwd()`, `platform` | `process.cwd()`, `std:path` | `"/"`, `"browser"` (השמות של `process.platform` ב-Node.js) |
+| `color` | `io.error`, `io.warn` | `false` |
+| `fs`, `tempDir()` | `std:fs` | אין: `std:fs` זורקת `Error` |
+
+כש-Node.js מריץ את המודול ישירות (`node app.js a b`), המודול מעביר את הזרמים
+הסטנדרטיים של Node, את `process.argv`, את `process.env`, את תיקיית העבודה, את
+הפלטפורמה ואת `node:fs`.
 
 תוכנית עם פונקציות extern מייבאת את המודולים שלהן, ולכן היא רצה רק היכן שהמודולים
 האלה קיימים: מודול שמשתמש ב-`rune:fs` רץ ב-Node.js, לא בדפדפן.
@@ -73,7 +90,7 @@ JavaScript רק מספרים, `bool`, `string` ושגיאות, דרך פונקצ
 | הכלל ב-RuneScript | JavaScript רגיל | הקוד שנוצר |
 |---|---|---|
 | לכל ערך יש הטיפוס שהוצהר | משתנים מחזיקים כל דבר | נבדק בזמן ההידור, ואז מאומת שוב על ה-IR המוקלד לפני שנכתב קוד כלשהו. לעולם לא נוצרת המרה לא בדוקה. |
-| `int` ו-`uint` הם בני 32 סיביות; גלישה היא `ASX-RUN-002` | `2147483647 + 1` הוא `2147483648` | כל `+ - * / %` על מספרים שלמים עובר בדיקת טווח שעוצרת את התוכנית |
+| `int` ו-`uint` הם בני 32 סיביות; תוצאות ביניים מתרחבות במדויק; גלישה היא `ASX-RUN-002` | `2147483647 + 1` הוא `2147483648`, ומכפלות גדולות מעוגלות | כל `+ - * / %` על מספרים שלמים עובר בדיקת טווח שעוצרת את התוכנית; ערכי ביניים רחבים עוברים ל-`BigInt` מעבר ל-2^53 |
 | `/` קוטע את השבר | `7 / 2` הוא `3.5` | חילוק קוטע |
 | חלוקה באפס היא `ASX-RUN-003` | `Infinity` או `NaN` | נבדקת, למספרים שלמים ולמספרים עשרוניים |
 | `float32` מעוגל ל-32 סיביות | טיפוס מספר אחד בן 64 סיביות | תוצאות `float32` עוברות דרך `Math.fround`, ומודפסות בספרות הקצרות ביותר של float32; `float` ו-`float64` הם מספרי JavaScript (IEEE, עם `NaN` ו-`Infinity`, כמו ב-AS3) |
@@ -161,7 +178,10 @@ export const now = () => Date.now();
 | `void remove(string path)` | מוחקת קובץ |
 
 פונקציה שנכשלת, למשל `readFile` על קובץ חסר, זורקת `Error` (`ASX-RUN-008`).
-`rune:process` הוא הבא בתור.
+
+`rune:fs` הגיעה ראשונה ורצה רק ביעד JavaScript. בתוכניות חדשות עדיף להשתמש בחבילה
+הסטנדרטית `std:fs` ([פרק 20](20-files-and-input.md)): היא עושה יותר (תיקיות, גדלים,
+העתקה, מעבר על עץ), רצה גם במפרש, ונכשלת עם אותן הודעות בשני היעדים.
 
 ### מה חוצה את הגבול
 

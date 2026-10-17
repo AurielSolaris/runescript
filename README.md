@@ -37,14 +37,16 @@ protected int main() {
 }
 ```
 
-## Status: v0.3 in progress (early development)
+## Status: v0.6 in progress (early development)
 
 **Works now**, and is covered by tests:
 
-- Packages; functions declared `public|private|protected <type> <name>(…)`; recursion
+- Packages; functions declared `public|private|protected <type> <name>(…)`; recursion;
+  the entry point `protected int main()`, whose result is the exit status
 - Nested functions, prototypes, function types (`int(int, int)`), callbacks, and lambdas (`(int a) => a * 2`)
 - `int`/`sint`, `uint`, `bool`, `string`, `void`
-- Variables, `=`, `+= -= *= /= %=`, `++`/`--`
+- Variables, `=`, `+= -= *= /= %=`, `++`/`--`; `int n;` starts at the zero
+  value (there is no `null`); shadowing in nested blocks, with a warning
 - Arithmetic, comparison, and logical operators
 - `if`/`else if`/`else`, `while`, `for`, `break`, `continue`, `return`
 - `trace(...)`
@@ -73,7 +75,13 @@ protected int main() {
 - Compile-time type checking with located diagnostics, including rejection
   of signed → unsigned assignment
 - Integer overflow and division by zero are reported as runtime errors and
-  never wrap silently
+  never wrap silently; intermediate `int`/`uint` results widen exactly, so
+  `big * big / big` works ([guide](docs/guide/04-operators.md#overflow-never-wraps-silently))
+- Files, input, and output on both targets: `std:io` (print without a
+  newline, red error and yellow warning lines, standard input), `std:process`
+  (arguments, environment), `std:fs` (files and directories), and `std:path`
+  (Node.js's path rules, implemented in RuneScript's runtimes)
+  ([guide](docs/guide/20-files-and-input.md))
 - Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
   in browsers and Node.js and behaves exactly like the interpreter for every
   program the interpreter can run ([guide](docs/guide/11-javascript.md))
@@ -85,8 +93,9 @@ protected int main() {
 - Calling JavaScript through `extern` declarations, including the
   host-neutral `rune:fs`. Every value that comes back from JavaScript is
   checked against its declared type
-- Warnings for unused variables, parameters, and uses, unreachable code, and
-  discarded results, with `-Werror` and `--allow <code>`
+- Warnings for unused variables, parameters, and uses, unreachable code,
+  discarded results, and shadowing, with `-Werror` and `--allow <code>`;
+  errors in red and warnings in yellow on a terminal (`--color`)
 - Live reload while you work: `runescript dev app.rsc` serves a web program
   and reloads the browser on every save; `runescript run --watch` re-runs a
   command-line program
@@ -97,11 +106,10 @@ TypeScript, which trusts its declarations and erases them, RuneScript
 checks every value that crosses in from JavaScript, and it has no `any`, no
 implicit conversions, and no unchecked casts.
 
-**Not yet implemented:** classes, for-each loops, command-line
-arguments, `go:` packages, `std:symrs`, objects, arrays, structs, and
-callbacks across the JavaScript boundary, `rune:process`, `$foreach` and
-component tags in templates, and the planned native graphics package. See
-the [roadmap](docs/ROADMAP.md).
+**Not yet implemented:** classes, for-each loops, binary files, `go:`
+packages, `std:symrs`, objects, arrays, structs, and callbacks across the
+JavaScript boundary, `$foreach` and component tags in templates, and the
+planned native graphics package. See the [roadmap](docs/ROADMAP.md).
 
 ## Install
 
@@ -131,6 +139,7 @@ go build -o runescript ./cmd/runescript
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
 ./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
 ./runescript run --watch examples/hello.rsc         # runs it again on every save
+./runescript run examples/brainfuck.rsc examples/bf/hello.bf   # arguments follow the file
 go test ./...
 ```
 
@@ -165,7 +174,8 @@ The suite includes:
 ## Examples
 
 [`examples/`](examples/README.md) has programs for every feature: the
-basics, `std:string`, callbacks and lambdas, a prime counter, two
+basics, `std:string`, callbacks and lambdas, a prime counter, a
+[Brainfuck interpreter](examples/brainfuck.rsc) with 32,768 cells, two
 programs the compiler rejects on purpose, and web pages in
 [`examples/web/`](examples/web/) (a static page, a counter, a toggle, an
 SVG dial, and a multi-file app). Every example's output is checked by the
@@ -180,6 +190,7 @@ test suite; the web examples run on a fake DOM under Node.js.
 - [No null, no any, no generics](docs/guide/17-no-null-any-generics.md)
 - [Numbers in depth: widths, literals, bits, std:math](docs/guide/18-numbers.md)
 - [Structs](docs/guide/19-structs.md)
+- [Files, input, and output: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
 - [Compiling to JavaScript](docs/guide/11-javascript.md)
 - [Web pages with rune:dom](docs/guide/15-web-pages.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)
@@ -204,10 +215,13 @@ internal/jsgen/        JavaScript code generator and its inlined runtime
 internal/jshost/       host-neutral JavaScript modules (rune:fs)
 internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
 internal/diagnostics/  error codes and formatting
+internal/term/         terminal detection for colored output
 internal/driver/       wires the stages together
 internal/watch/        file watcher for run --watch and dev
 internal/devserver/    the runescript dev server and its browser client
-stdlib/                standard library packages (std:string), implemented in Go
+stdlib/                standard library packages (std:string, std:math, std:io, std:process,
+                       std:fs, std:path), implemented in Go; their JavaScript twins are in
+                       internal/jsgen/runtime.js
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests
 assets/                logo: SVG source and PNGs generated from it

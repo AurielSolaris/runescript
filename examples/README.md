@@ -6,6 +6,8 @@ Run any example with:
 go run ./cmd/runescript run examples/hello.rsc
 go run ./cmd/runescript run --watch examples/hello.rsc   # runs it again on every save
 go run ./cmd/runescript dev examples/fizzbuzz.rsc        # in the browser, with live reload
+go run ./cmd/runescript run examples/brainfuck.rsc examples/bf/hello.bf   # with arguments
+echo "Hello, World!" | go run ./cmd/runescript run examples/brainfuck.rsc examples/bf/rot13.bf
 ```
 
 Programs that call JavaScript through `extern` run only on the JavaScript
@@ -26,6 +28,7 @@ with their JavaScript helper modules instead of here.
 | [`temperatures.rsc`](temperatures.rsc) | `float`, `float32`, and checked conversions such as `(int) f` and `(float) "98.6"` |
 | [`errors.rsc`](errors.rsc) | `throw`, `try`/`catch`/`finally`, error types, and catching a runtime error |
 | [`wordcount.rsc`](wordcount.rsc) | A text report: `Array<T>`, `char` callbacks, `+`, `$"…"`, and `string.split`/`fields`/`map`/`join` |
+| [`brainfuck.rsc`](brainfuck.rsc) | A Brainfuck interpreter with 32,768 cells: `std:fs`, `std:io`, `std:process`, structs, `Array<uint8>`. Programs to run are in [`bf/`](bf/): `hello.bf`, `alphabet.bf`, `cat.bf`, `rot13.bf` |
 
 These two are **rejected on purpose**. Run them with `check` to see the
 diagnostics:

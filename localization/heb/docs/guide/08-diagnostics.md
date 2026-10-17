@@ -19,7 +19,9 @@ prog.rsc:9:26: error ASX-TYPE-004: Cannot assign signed integer 'sint' to unsign
 
 <div dir="rtl">
 
-הקידומת `ASX` זמנית ועשויה לקבל שם אחר. המספרים יישארו כפי שהם.
+במסוף, `error` והחיצים שלה מוצגים באדום, `warning` בצהוב ו-`help:` בטורקיז.
+`--color=never` מבטל זאת, `--color=always` משאיר את הצבעים גם כשהפלט הולך לקובץ או
+לצינור, ומשתנה הסביבה `NO_COLOR` מבטל אותם במצב `auto`, ברירת המחדל.
 
 ## שגיאות לקסיקליות
 
