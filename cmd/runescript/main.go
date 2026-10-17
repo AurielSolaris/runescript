@@ -25,9 +25,11 @@ import (
 const Version = "0.3.0-dev"
 
 const usage = `usage:
-  runescript run [flags] [--watch] <file>
-                             check and run a program; --watch runs it again
-                             whenever one of its files changes
+  runescript run [flags] [--watch] <file> [args...]
+                             check and run a program, passing it args
+                             (process.args() in std:process); --watch
+                             runs it again whenever one of its files
+                             changes
   runescript check [flags] <file>   check a program without running it
   runescript build [flags] [--target js] [-o <out.js>] <file>
                              compile a program to a JavaScript module
@@ -80,12 +82,15 @@ func cli(args []string, stdout, stderr io.Writer) int {
 	if args[0] == "run" {
 		fs.BoolVar(&watching, "watch", false, "")
 	}
-	if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 || policy.err != nil {
+	// Everything after the file is the program's own arguments, for run.
+	if err := fs.Parse(args[1:]); err != nil || fs.NArg() < 1 || (args[0] == "check" && fs.NArg() != 1) || policy.err != nil {
 		usageError(stderr, policy.err)
 		return exitUsage
 	}
 	in, err := input(fs.Arg(0), stderr)
 	in.Warnings = policy.WarningPolicy
+	in.Args = fs.Args()[1:]
+	in.Stdin, in.Stderr, in.Color = stdin, stderr, colored(stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage
@@ -275,6 +280,9 @@ func report(w io.Writer, diags []*diagnostics.Diagnostic) {
 		fmt.Fprint(w, diagnostics.RenderColor(d, color))
 	}
 }
+
+// stdin is the standard input of programs that run; tests replace it.
+var stdin io.Reader = os.Stdin
 
 // colorMode is the --color setting of the command being run.
 var colorMode = term.Auto

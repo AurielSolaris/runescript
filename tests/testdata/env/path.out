@@ -1,0 +1,14 @@
+a/c a\c a\b\c
+/x/z/ C:\y .
+/a/b c.txt c
+.gz [] .
+C:\a b \\srv\share\
+[] / C: C:\
+true false true true
+../../c ..\b D:\y
+.. /a/c D:\b\c
+/ \ : ;
+true true
+true true
+true
+file .txt

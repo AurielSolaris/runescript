@@ -34,7 +34,7 @@ const $rt = (() => {
   const MAX_DEPTH = /*@MAX_DEPTH@*/;
   const INT_MIN = -2147483648, INT_MAX = 2147483647, UINT_MAX = 4294967295;
 
-  let files = [], sites = [], depth = 0, sink = null;
+  let files = [], sites = [], depth = 0, sink = null, host = null;
   // fatal is set once an error that cannot be caught (the call-depth
   // limit) is on its way out: catch clauses let it pass and finally blocks
   // are skipped, as in the interpreter.
@@ -1688,12 +1688,758 @@ const $rt = (() => {
 
   //@end
 
-  // run calls the entry point. options.trace receives each line of trace
-  // output (default console.log). The result is main's int result.
+  // ---- the program's environment ----
+  //
+  // host is what a running program reaches outside itself, from run()'s
+  // options: standard streams, arguments, environment variables, working
+  // directory, platform, and a Node.js-style fs module. std:io,
+  // std:process, std:fs, and std:path use it (stdlib.Env in Go).
+
+  //@section host
+  // decodeUTF8 turns bytes into a string, replacing invalid UTF-8 with
+  // U+FFFD as the WHATWG Encoding Standard says (stdlib/utf8.go matches
+  // it). A byte-order mark is kept, as in the interpreter.
+  const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
+  const decodeUTF8 = (bytes) => decoder.decode(bytes);
+  // isWindows is whether the program runs on Windows, which decides
+  // std:path's platform rules.
+  const isWindows = () => host.platform === "win32";
+  //@end
+
+  //@section io
+  // Standard input is read in chunks of bytes; inBuf[inPos..] are the bytes
+  // read but not used yet.
+  const RED = "\x1b[31m", YELLOW = "\x1b[33m", RESET = "\x1b[0m";
+  let inBuf = new Uint8Array(0), inPos = 0, inEnd = false;
+  // more makes a byte available, reporting false at the end of the input.
+  function more() {
+    while (inPos >= inBuf.length) {
+      if (inEnd) return false;
+      const chunk = host.readStdin();
+      if (chunk === null || chunk.length === 0) {
+        inEnd = true;
+        return false;
+      }
+      inBuf = chunk;
+      inPos = 0;
+    }
+    return true;
+  }
+  // takeUntilNewline returns the bytes up to and including the next "\n"
+  // (or to the end of the input).
+  function takeUntilNewline() {
+    const parts = [];
+    let total = 0;
+    while (more()) {
+      const nl = inBuf.indexOf(10, inPos);
+      const end = nl === -1 ? inBuf.length : nl + 1;
+      parts.push(inBuf.subarray(inPos, end));
+      total += end - inPos;
+      inPos = end;
+      if (nl !== -1) break;
+    }
+    const out = new Uint8Array(total);
+    let at = 0;
+    for (const p of parts) {
+      out.set(p, at);
+      at += p.length;
+    }
+    return out;
+  }
+  const colorLine = (color, text) => host.stderr(host.color ? color + text + RESET + "\n" : text + "\n");
+  const io = {
+    print(s) { host.stdout(s); },
+    error(s) { colorLine(RED, s); },
+    warn(s) { colorLine(YELLOW, s); },
+    readLine() {
+      let s = decodeUTF8(takeUntilNewline());
+      if (s.endsWith("\n")) s = s.slice(0, -1);
+      if (s.endsWith("\r")) s = s.slice(0, -1);
+      return s;
+    },
+    readAll() {
+      const parts = [];
+      while (more()) {
+        parts.push(inBuf.subarray(inPos));
+        inPos = inBuf.length;
+      }
+      const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+      let at = 0;
+      for (const p of parts) {
+        out.set(p, at);
+        at += p.length;
+      }
+      return decodeUTF8(out);
+    },
+    readByte: () => (more() ? inBuf[inPos++] : -1),
+    atEnd: () => !more(),
+  };
+  std.io = io;
+  //@end
+
+  //@section process
+  const PLATFORMS = { win32: "windows", darwin: "macos" };
+  const process$ = {
+    args: () => host.args.slice(), // a new array each call
+    env: (name) => host.env[name] ?? "",
+    hasEnv: (name) => host.env[name] !== undefined,
+    cwd: () => host.cwd(),
+    platform: () => PLATFORMS[host.platform] ?? host.platform,
+  };
+  std.process = process$;
+  //@end
+
+  //@section fs
+  // std:fs on a Node.js-style fs module (run()'s options.fs), with the
+  // checks and messages of stdlib/fs.go, so both targets fail alike.
+  function nodeFs() {
+    if (host.fs === null) throw new Fault("Error", "there is no file system here: run the module with Node.js, or pass run({ fs })");
+    return host.fs;
+  }
+  const fsFail = (op, path, reason) => {
+    throw new Fault("Error", `cannot ${op} ${path}: ${reason}`);
+  };
+  const REASONS = {
+    ENOENT: "no such file or directory", EEXIST: "already exists", EISDIR: "is a directory",
+    ENOTDIR: "not a directory", ENOTEMPTY: "directory not empty", EACCES: "permission denied", EPERM: "permission denied",
+  };
+  // attempt runs f, turning a host error into the Error for op on path.
+  function attempt(op, path, f) {
+    try {
+      return f();
+    } catch (e) {
+      if (e instanceof Fault) throw e;
+      return fsFail(op, path, REASONS[e.code] ?? e.message);
+    }
+  }
+  // statOf returns path's stats, following symbolic links, or null if it
+  // does not exist.
+  const statOf = (op, path) => attempt(op, path, () => nodeFs().statSync(path, { throwIfNoEntry: false }) ?? null);
+  function mustFile(op, path) {
+    const st = statOf(op, path);
+    if (st === null) fsFail(op, path, "no such file or directory");
+    if (st.isDirectory()) fsFail(op, path, "is a directory");
+    return st;
+  }
+  function mustDir(op, path) {
+    const st = statOf(op, path);
+    if (st === null) fsFail(op, path, "no such file or directory");
+    if (!st.isDirectory()) fsFail(op, path, "not a directory");
+  }
+  function notDir(op, path) {
+    const st = statOf(op, path);
+    if (st !== null && st.isDirectory()) fsFail(op, path, "is a directory");
+  }
+  // byName sorts names in code point order, which is UTF-8 byte order, as
+  // Go's os.ReadDir does.
+  function byName(a, b) {
+    const x = Array.from(a), y = Array.from(b);
+    for (let i = 0; i < x.length && i < y.length; i++) {
+      const c = x[i].codePointAt(0), d = y[i].codePointAt(0);
+      if (c !== d) return c < d ? -1 : 1;
+    }
+    return x.length - y.length;
+  }
+  function entries(op, path) {
+    return attempt(op, path, () => nodeFs().readdirSync(path, { withFileTypes: true })).sort((a, b) => byName(a.name, b.name));
+  }
+  function walk(root, rel, out) {
+    const sep = isWindows() ? "\\" : "/";
+    const dir = rel === "" ? root : root + sep + rel;
+    for (const e of entries("walk", dir)) {
+      const p = rel === "" ? e.name : rel + sep + e.name;
+      out.push(p);
+      if (e.isDirectory()) walk(root, p, out);
+    }
+    return out;
+  }
+  const fs = {
+    readFile(path) {
+      mustFile("read", path);
+      return decodeUTF8(attempt("read", path, () => nodeFs().readFileSync(path)));
+    },
+    writeFile(path, data) {
+      notDir("write", path);
+      attempt("write", path, () => nodeFs().writeFileSync(path, data));
+    },
+    appendFile(path, data) {
+      notDir("append to", path);
+      attempt("append to", path, () => nodeFs().appendFileSync(path, data));
+    },
+    exists: (path) => statOf("check", path) !== null,
+    isFile(path) {
+      const st = statOf("check", path);
+      return st !== null && st.isFile();
+    },
+    isDir(path) {
+      const st = statOf("check", path);
+      return st !== null && st.isDirectory();
+    },
+    size: (path) => BigInt(mustFile("measure", path).size),
+    copyFile(from, to) {
+      mustFile("copy", from);
+      notDir("copy to", to);
+      attempt("copy to", to, () => nodeFs().copyFileSync(from, to));
+    },
+    rename(from, to) {
+      attempt("rename", from, () => nodeFs().lstatSync(from));
+      attempt("rename", from, () => nodeFs().renameSync(from, to));
+    },
+    remove(path) {
+      const st = attempt("remove", path, () => nodeFs().lstatSync(path));
+      if (st.isDirectory()) {
+        if (attempt("remove", path, () => nodeFs().readdirSync(path)).length > 0) fsFail("remove", path, "directory not empty");
+        attempt("remove", path, () => nodeFs().rmdirSync(path));
+      } else {
+        attempt("remove", path, () => nodeFs().unlinkSync(path));
+      }
+    },
+    removeAll(path) {
+      attempt("remove", path, () => nodeFs().rmSync(path, { recursive: true, force: true }));
+    },
+    mkdir(path) {
+      if (statOf("create", path) !== null) fsFail("create", path, "already exists");
+      attempt("create", path, () => nodeFs().mkdirSync(path));
+    },
+    mkdirAll(path) {
+      const st = statOf("create", path);
+      if (st !== null && !st.isDirectory()) fsFail("create", path, "already exists");
+      attempt("create", path, () => nodeFs().mkdirSync(path, { recursive: true }));
+    },
+    readDir(path) {
+      mustDir("list", path);
+      return entries("list", path).map((e) => e.name);
+    },
+    walk(path) {
+      mustDir("walk", path);
+      return walk(path, "", []);
+    },
+    tempDir: () => host.tempDir(),
+  };
+  std.fs = fs;
+  //@end
+
+  //@section path
+  // std:path: a line-by-line port of stdlib/path.go, which implements the
+  // semantics of Node.js's path module (tested against it). Strings are
+  // UTF-16 here and UTF-8 there; every character the rules look at is
+  // ASCII, so the results are the same.
+  const isDrive = (c) => (c >= "A" && c <= "Z") || (c >= "a" && c <= "z");
+  const hasDrive = (p) => p.length >= 2 && isDrive(p[0]) && p[1] === ":";
+  const asciiLower = (s) => s.replace(/[A-Z]+/g, (m) => m.toLowerCase());
+  const equalFoldASCII = (a, b) => asciiLower(a) === asciiLower(b);
+
+  function flavor(win) {
+    const sep = win ? "\\" : "/";
+    const isSep = (c) => c === "/" || (win && c === "\\");
+
+    function normalizeString(p, allowAboveRoot) {
+      let res = "", lastSegmentLength = 0, lastSlash = -1, dots = 0, c = "";
+      for (let i = 0; i <= p.length; i++) {
+        if (i < p.length) c = p[i];
+        else if (isSep(c)) return res;
+        else c = "/";
+        if (isSep(c)) {
+          if (lastSlash === i - 1 || dots === 1) {
+            // an empty or "." segment
+          } else if (dots === 2) {
+            if (res.length < 2 || lastSegmentLength !== 2 || res[res.length - 1] !== "." || res[res.length - 2] !== ".") {
+              if (res.length > 2) {
+                const j = res.lastIndexOf(sep);
+                if (j === -1) {
+                  res = "";
+                  lastSegmentLength = 0;
+                } else {
+                  res = res.slice(0, j);
+                  lastSegmentLength = res.length - 1 - res.lastIndexOf(sep);
+                }
+                lastSlash = i;
+                dots = 0;
+                continue;
+              } else if (res.length !== 0) {
+                res = "";
+                lastSegmentLength = 0;
+                lastSlash = i;
+                dots = 0;
+                continue;
+              }
+            }
+            if (allowAboveRoot) {
+              res = res.length > 0 ? res + sep + ".." : "..";
+              lastSegmentLength = 2;
+            }
+          } else {
+            res = res.length > 0 ? res + sep + p.slice(lastSlash + 1, i) : p.slice(lastSlash + 1, i);
+            lastSegmentLength = i - lastSlash - 1;
+          }
+          lastSlash = i;
+          dots = 0;
+        } else if (c === "." && dots !== -1) {
+          dots++;
+        } else {
+          dots = -1;
+        }
+      }
+      return res;
+    }
+
+    // uncRoot: [device, end] for a leading "\\server\share", or null.
+    function uncRoot(p) {
+      let j = 2;
+      while (j < p.length && !isSep(p[j])) j++;
+      if (j >= p.length || j === 2) return null;
+      const server = p.slice(2, j);
+      let last = j;
+      while (j < p.length && isSep(p[j])) j++;
+      if (j >= p.length || j === last) return null;
+      last = j;
+      while (j < p.length && !isSep(p[j])) j++;
+      return ["\\\\" + server + "\\" + p.slice(last, j), j];
+    }
+
+    // winRoot: [device, rootEnd, absolute].
+    function winRoot(p) {
+      if (p.length === 0) return ["", 0, false];
+      if (p.length === 1) return isSep(p[0]) ? ["", 1, true] : ["", 0, false];
+      if (isSep(p[0])) {
+        if (isSep(p[1])) {
+          const u = uncRoot(p);
+          if (u !== null) return [u[0], u[1], true];
+        }
+        return ["", 1, true];
+      }
+      if (hasDrive(p)) return p.length > 2 && isSep(p[2]) ? [p.slice(0, 2), 3, true] : [p.slice(0, 2), 2, false];
+      return ["", 0, false];
+    }
+
+    function isAbsolute(p) {
+      if (win) return p.length > 0 && (isSep(p[0]) || (p.length > 2 && hasDrive(p) && isSep(p[2])));
+      return p.length > 0 && p[0] === "/";
+    }
+
+    function normalize(p) {
+      if (p === "") return ".";
+      if (!win) {
+        const abs = p[0] === "/", trailing = p[p.length - 1] === "/";
+        let p2 = normalizeString(p, !abs);
+        if (p2 === "") return abs ? "/" : trailing ? "./" : ".";
+        if (trailing) p2 += "/";
+        return abs ? "/" + p2 : p2;
+      }
+      if (p.length === 1) return p === "/" ? "\\" : p;
+      let device = "", hasDevice = false, rootEnd = 0, abs = false;
+      if (isSep(p[0])) {
+        abs = true;
+        rootEnd = 1;
+        if (isSep(p[1])) {
+          const u = uncRoot(p);
+          if (u !== null) {
+            if (u[1] === p.length) return u[0] + "\\";
+            device = u[0];
+            hasDevice = true;
+            rootEnd = u[1];
+          }
+        }
+      } else if (hasDrive(p)) {
+        device = p.slice(0, 2);
+        hasDevice = true;
+        rootEnd = 2;
+        if (p.length > 2 && isSep(p[2])) {
+          abs = true;
+          rootEnd = 3;
+        }
+      }
+      let tail = rootEnd < p.length ? normalizeString(p.slice(rootEnd), !abs) : "";
+      if (tail === "" && !abs) tail = ".";
+      if (tail !== "" && isSep(p[p.length - 1])) tail += "\\";
+      if (!abs && !hasDevice && p.includes(":")) {
+        if (hasDrive(tail)) return ".\\" + tail;
+        for (let i = p.indexOf(":"); i !== -1; i = p.indexOf(":", i + 1)) {
+          if (i === p.length - 1 || isSep(p[i + 1])) return ".\\" + tail;
+        }
+      }
+      if (!hasDevice) return abs ? "\\" + tail : tail;
+      return abs ? device + "\\" + tail : device + tail;
+    }
+
+    function join(parts) {
+      let joined = "", first = "";
+      for (const p of parts) {
+        if (p === "") continue;
+        if (joined === "") {
+          joined = p;
+          first = p;
+        } else {
+          joined += sep + p;
+        }
+      }
+      if (joined === "") return ".";
+      if (win) {
+        let needsReplace = true, slashes = 0;
+        if (isSep(first[0])) {
+          slashes++;
+          if (first.length > 1 && isSep(first[1])) {
+            slashes++;
+            if (first.length > 2) {
+              if (isSep(first[2])) slashes++;
+              else needsReplace = false;
+            }
+          }
+        }
+        if (needsReplace) {
+          while (slashes < joined.length && isSep(joined[slashes])) slashes++;
+          if (slashes >= 2) joined = "\\" + joined.slice(slashes);
+        }
+      }
+      return normalize(joined);
+    }
+
+    function cwd() {
+      let dir = host.cwd();
+      if (!win && isWindows()) {
+        dir = dir.replace(/\\/g, "/");
+        const i = dir.indexOf("/");
+        if (i >= 0) dir = dir.slice(i);
+      }
+      return dir;
+    }
+
+    function resolve(parts) {
+      if (!win) {
+        let resolved = "", abs = false;
+        for (let i = parts.length - 1; i >= -1 && !abs; i--) {
+          const p = i >= 0 ? parts[i] : cwd();
+          if (p === "") continue;
+          resolved = p + "/" + resolved;
+          abs = p[0] === "/";
+        }
+        resolved = normalizeString(resolved, !abs);
+        if (abs) return "/" + resolved;
+        return resolved === "" ? "." : resolved;
+      }
+      let resolvedDevice = "", resolvedTail = "", resolvedAbs = false;
+      for (let i = parts.length - 1; i >= -1; i--) {
+        let p;
+        if (i >= 0) {
+          p = parts[i];
+          if (p === "") continue;
+        } else if (resolvedDevice === "") {
+          p = cwd();
+        } else {
+          p = cwd();
+          if (p.length > 2 && !equalFoldASCII(p.slice(0, 2), resolvedDevice) && p[2] === "\\") p = resolvedDevice + "\\";
+        }
+        const [device, rootEnd, abs] = winRoot(p);
+        if (device !== "") {
+          if (resolvedDevice !== "") {
+            if (!equalFoldASCII(device, resolvedDevice)) continue;
+          } else {
+            resolvedDevice = device;
+          }
+        }
+        if (resolvedAbs) {
+          if (resolvedDevice !== "") break;
+        } else {
+          resolvedTail = p.slice(rootEnd) + "\\" + resolvedTail;
+          resolvedAbs = abs;
+          if (abs && resolvedDevice !== "") break;
+        }
+      }
+      resolvedTail = normalizeString(resolvedTail, !resolvedAbs);
+      if (resolvedAbs) return resolvedDevice + "\\" + resolvedTail;
+      return resolvedDevice + resolvedTail || ".";
+    }
+
+    function relative(from, to) {
+      if (from === to) return "";
+      const fromOrig = resolve([from]), toOrig = resolve([to]);
+      if (fromOrig === toOrig) return "";
+      if (!win) {
+        const fromStart = 1, fromEnd = fromOrig.length, fromLen = fromEnd - fromStart;
+        const toStart = 1, toLen = toOrig.length - toStart;
+        const length = Math.min(fromLen, toLen);
+        let lastCommonSep = -1, i = 0;
+        for (; i < length; i++) {
+          const c = fromOrig[fromStart + i];
+          if (c !== toOrig[toStart + i]) break;
+          else if (c === "/") lastCommonSep = i;
+        }
+        if (i === length) {
+          if (toLen > length) {
+            if (toOrig[toStart + i] === "/") return toOrig.slice(toStart + i + 1);
+            if (i === 0) return toOrig.slice(toStart + i);
+          } else if (fromLen > length) {
+            if (fromOrig[fromStart + i] === "/") lastCommonSep = i;
+            else if (i === 0) lastCommonSep = 0;
+          }
+        }
+        let out = "";
+        for (i = fromStart + lastCommonSep + 1; i <= fromEnd; i++) {
+          if (i === fromEnd || fromOrig[i] === "/") out += out === "" ? ".." : "/..";
+        }
+        return out + toOrig.slice(toStart + lastCommonSep);
+      }
+      const fromL = asciiLower(fromOrig), toL = asciiLower(toOrig);
+      if (fromL === toL) return "";
+      let fromStart = 0;
+      while (fromStart < fromL.length && fromL[fromStart] === "\\") fromStart++;
+      let fromEnd = fromL.length;
+      while (fromEnd - 1 > fromStart && fromL[fromEnd - 1] === "\\") fromEnd--;
+      const fromLen = fromEnd - fromStart;
+      let toStart = 0;
+      while (toStart < toL.length && toL[toStart] === "\\") toStart++;
+      let toEnd = toL.length;
+      while (toEnd - 1 > toStart && toL[toEnd - 1] === "\\") toEnd--;
+      const toLen = toEnd - toStart;
+      const length = Math.min(fromLen, toLen);
+      let lastCommonSep = -1, i = 0;
+      for (; i < length; i++) {
+        const c = fromL[fromStart + i];
+        if (c !== toL[toStart + i]) break;
+        else if (c === "\\") lastCommonSep = i;
+      }
+      if (i !== length) {
+        if (lastCommonSep === -1) return toOrig;
+      } else {
+        if (toLen > length) {
+          if (toL[toStart + i] === "\\") return toOrig.slice(toStart + i + 1);
+          if (i === 2) return toOrig.slice(toStart + i);
+        }
+        if (fromLen > length) {
+          if (fromL[fromStart + i] === "\\") lastCommonSep = i;
+          else if (i === 2) lastCommonSep = 3;
+        }
+        if (lastCommonSep === -1) lastCommonSep = 0;
+      }
+      let out = "";
+      for (i = fromStart + lastCommonSep + 1; i <= fromEnd; i++) {
+        if (i === fromEnd || fromL[i] === "\\") out += out === "" ? ".." : "\\..";
+      }
+      toStart += lastCommonSep;
+      if (out !== "") return out + toOrig.slice(toStart, toEnd);
+      if (toOrig[toStart] === "\\") toStart++;
+      return toOrig.slice(toStart, toEnd);
+    }
+
+    function dirname(p) {
+      if (p === "") return ".";
+      if (!win) {
+        const hasRoot = p[0] === "/";
+        let end = -1, matchedSlash = true;
+        for (let i = p.length - 1; i >= 1; i--) {
+          if (p[i] === "/") {
+            if (!matchedSlash) {
+              end = i;
+              break;
+            }
+          } else {
+            matchedSlash = false;
+          }
+        }
+        if (end === -1) return hasRoot ? "/" : ".";
+        if (hasRoot && end === 1) return "//";
+        return p.slice(0, end);
+      }
+      if (p.length === 1) return isSep(p[0]) ? p : ".";
+      let rootEnd = -1, offset = 0;
+      if (isSep(p[0])) {
+        rootEnd = offset = 1;
+        if (isSep(p[1])) {
+          const u = uncRoot(p);
+          if (u !== null) {
+            if (u[1] === p.length) return p;
+            rootEnd = offset = u[1] + 1;
+          }
+        }
+      } else if (hasDrive(p)) {
+        rootEnd = p.length > 2 && isSep(p[2]) ? 3 : 2;
+        offset = rootEnd;
+      }
+      let end = -1, matchedSlash = true;
+      for (let i = p.length - 1; i >= offset; i--) {
+        if (isSep(p[i])) {
+          if (!matchedSlash) {
+            end = i;
+            break;
+          }
+        } else {
+          matchedSlash = false;
+        }
+      }
+      if (end === -1) {
+        if (rootEnd === -1) return ".";
+        end = rootEnd;
+      }
+      return p.slice(0, end);
+    }
+
+    function basename(p, suffix) {
+      let start = 0, end = -1, matchedSlash = true;
+      if (win && hasDrive(p)) start = 2;
+      if (suffix !== "" && suffix.length <= p.length) {
+        if (suffix === p) return "";
+        let extIdx = suffix.length - 1, firstNonSlashEnd = -1;
+        for (let i = p.length - 1; i >= start; i--) {
+          const c = p[i];
+          if (isSep(c)) {
+            if (!matchedSlash) {
+              start = i + 1;
+              break;
+            }
+            continue;
+          }
+          if (firstNonSlashEnd === -1) {
+            matchedSlash = false;
+            firstNonSlashEnd = i + 1;
+          }
+          if (extIdx >= 0) {
+            if (c === suffix[extIdx]) {
+              if (--extIdx === -1) end = i;
+            } else {
+              extIdx = -1;
+              end = firstNonSlashEnd;
+            }
+          }
+        }
+        if (start === end) end = firstNonSlashEnd;
+        else if (end === -1) end = p.length;
+        return p.slice(start, end);
+      }
+      for (let i = p.length - 1; i >= start; i--) {
+        if (isSep(p[i])) {
+          if (!matchedSlash) {
+            start = i + 1;
+            break;
+          }
+        } else if (end === -1) {
+          matchedSlash = false;
+          end = i + 1;
+        }
+      }
+      return end === -1 ? "" : p.slice(start, end);
+    }
+
+    function extname(p) {
+      let start = 0, startDot = -1, startPart = 0, end = -1, matchedSlash = true, preDotState = 0;
+      if (win && hasDrive(p)) start = startPart = 2;
+      for (let i = p.length - 1; i >= start; i--) {
+        const c = p[i];
+        if (isSep(c)) {
+          if (!matchedSlash) {
+            startPart = i + 1;
+            break;
+          }
+          continue;
+        }
+        if (end === -1) {
+          matchedSlash = false;
+          end = i + 1;
+        }
+        if (c === ".") {
+          if (startDot === -1) startDot = i;
+          else if (preDotState !== 1) preDotState = 1;
+        } else if (startDot !== -1) {
+          preDotState = -1;
+        }
+      }
+      if (startDot === -1 || end === -1 || preDotState === 0 ||
+          (preDotState === 1 && startDot === end - 1 && startDot === startPart + 1)) {
+        return "";
+      }
+      return p.slice(startDot, end);
+    }
+
+    function root(p) {
+      if (!win) return p.startsWith("/") ? "/" : "";
+      if (p === "") return "";
+      if (p.length === 1) return isSep(p[0]) ? p : "";
+      if (isSep(p[0])) {
+        let rootEnd = 1;
+        if (isSep(p[1])) {
+          const u = uncRoot(p);
+          if (u !== null) rootEnd = u[1] < p.length ? u[1] + 1 : u[1];
+        }
+        return p.slice(0, rootEnd);
+      }
+      if (hasDrive(p)) return p.length > 2 && isSep(p[2]) ? p.slice(0, 3) : p.slice(0, 2);
+      return "";
+    }
+
+    return {
+      sep: () => sep,
+      delimiter: () => (win ? ";" : ":"),
+      join: (a, b) => join([a, b]),
+      joinAll: (parts) => join(parts),
+      resolve: (p) => resolve([p]),
+      resolveAll: (parts) => resolve(parts),
+      normalize, isAbsolute, relative, dirname, extname, root,
+      basename: (p) => basename(p, ""),
+      basenameSuffix: basename,
+    };
+  }
+
+  const POSIX = flavor(false), WIN32 = flavor(true);
+  const path = {};
+  for (const name of Object.keys(POSIX)) {
+    const cap = name[0].toUpperCase() + name.slice(1);
+    path[name] = (...args) => (isWindows() ? WIN32 : POSIX)[name](...args);
+    path["posix" + cap] = POSIX[name];
+    path["win32" + cap] = WIN32[name];
+  }
+  std.path = path;
+  //@end
+
+  // lineWriter collects text and passes each complete line to emit;
+  // flush passes on the rest.
+  function lineWriter(emit) {
+    let pending = "";
+    const write = (text) => {
+      const lines = (pending + text).split("\n");
+      pending = lines.pop();
+      for (const line of lines) emit(line);
+    };
+    write.flush = () => {
+      if (pending !== "") emit(pending);
+      pending = "";
+    };
+    return write;
+  }
+
+  // run calls the entry point, and returns main's int result. Its options
+  // are the program's environment, all optional:
+  //   stdout(text), stderr(text)  where trace and io.print, and io.error
+  //       and io.warn, write; by default whole lines go to options.trace
+  //       (or console.log) and console.error
+  //   trace(line)  receives each line of standard output, when stdout is
+  //       not given
+  //   stdin()      returns the next chunk of standard input as a
+  //       Uint8Array, or null at its end (default: no input)
+  //   args, env    command-line arguments (an array of strings) and
+  //       environment variables (an object)
+  //   cwd(), platform  the working directory and Node.js's
+  //       process.platform name (default "/" and "browser")
+  //   color        whether io.error and io.warn color their lines
+  //   fs, tempDir()  a Node.js-style fs module for std:fs, and the
+  //       temporary directory
+  // Running the module with Node.js passes Node's own (see the end of
+  // the module).
   function run(program, options = {}) {
     files = program.files;
     sites = program.sites;
-    sink = options.trace ?? ((line) => console.log(line));
+    const stdout = options.stdout ?? lineWriter(options.trace ?? ((line) => console.log(line)));
+    const stderr = options.stderr ?? lineWriter((line) => console.error(line));
+    host = {
+      stdout, stderr,
+      readStdin: options.stdin ?? (() => null),
+      args: options.args ?? [],
+      env: options.env ?? {},
+      cwd: options.cwd ?? (() => "/"),
+      platform: options.platform ?? "browser",
+      color: options.color ?? false,
+      fs: options.fs ?? null,
+      tempDir: options.tempDir ?? (() => "/tmp"),
+    };
+    sink = (line) => stdout(line + "\n");
     depth = 0;
     fatal = false;
     try {
@@ -1703,6 +2449,8 @@ const $rt = (() => {
     } finally {
       depth = 0;
       fatal = false;
+      if (stdout.flush) stdout.flush();
+      if (stderr.flush) stderr.flush();
     }
   }
 

@@ -27,6 +27,8 @@ type Func struct {
 	// Impl receives one Go value per parameter and returns the result
 	// (nil for void). A panic inside Impl becomes a RuneScript runtime error.
 	Impl func(args []any) any
+	// EnvImpl, set instead of Impl, also receives the program's Env.
+	EnvImpl func(env *Env, args []any) any
 	// JSName is the function's name in the JavaScript runtime's package
 	// object: Name, except for overloads, which need names of their own.
 	JSName string

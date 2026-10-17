@@ -1,0 +1,28 @@
+false false
+true true false
+héllo
+wörld
+
+14 true
+replaced true
+a.txt,sub
+a.txt
+sub
+sub/deeper
+sub/deeper/c.txt
+sub/renamed.txt
+read a missing file -> fs.readFile: cannot read data/missing.txt: no such file or directory
+read a directory -> fs.readFile: cannot read data: is a directory
+make an existing directory -> fs.mkdir: cannot create data: already exists
+make a directory over a file -> fs.mkdirAll: cannot create data/a.txt: already exists
+remove a non-empty directory -> fs.remove: cannot remove data/sub: directory not empty
+remove a missing file -> fs.remove: cannot remove data/nope: no such file or directory
+list a file -> fs.readDir: cannot list data/a.txt: not a directory
+list a missing directory -> fs.walk: cannot walk nowhere: no such file or directory
+measure a directory -> fs.size: cannot measure data: is a directory
+write over a directory -> fs.writeFile: cannot write data/sub: is a directory
+rename a missing file -> fs.rename: cannot rename nope: no such file or directory
+copy a missing file -> fs.copyFile: cannot copy nope: no such file or directory
+copy onto a directory -> fs.copyFile: cannot copy to data/sub: is a directory
+a.txt
+false true

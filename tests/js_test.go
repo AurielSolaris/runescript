@@ -40,7 +40,12 @@ if (isMainThread) {
   const { run, RuneScriptError } = await import(workerData);
   let out = "";
   try {
-    const code = run({ trace: (line) => { out += line + "\n"; } });
+    const code = run({
+      trace: (line) => { out += line + "\n"; },
+      cwd: () => process.cwd(),
+      platform: process.platform,
+      fs: await import("node:fs"),
+    });
     parentPort.postMessage({ out, code });
   } catch (e) {
     if (!(e instanceof RuneScriptError)) throw e;

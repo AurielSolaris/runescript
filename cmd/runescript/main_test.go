@@ -22,6 +22,7 @@ func TestCLI(t *testing.T) {
 	bad := write(t, "package main;\nprotected int main() {\n    sint s = -10;\n    uint u = s;\n    return 0;\n}\n")
 	v02 := write(t, "package main;\nuse \"std:string\";\nprotected int main() {\n    string(string) shout = (string s) => string.toUpper(s);\n    trace(shout(\"rune\"));\n    private int seven() { return 7; }\n    return seven();\n}\n")
 	crash := write(t, "package main;\nprotected int main() {\n    int z = 0;\n    return 1 / z;\n}\n")
+	args := write(t, "package main;\nuse \"std:process\";\nuse \"std:string\";\nprotected int main() {\n    trace(string.join(process.args(), \"|\"));\n    return process.args().length;\n}\n")
 	warn := write(t, "package main;\nprotected int main() {\n    int unused = 1;\n    trace(\"ran\");\n    return 0;\n}\n")
 
 	cases := []struct {
@@ -55,7 +56,9 @@ func TestCLI(t *testing.T) {
 		{"runtime errors are red", []string{"run", "--color=always", crash}, exitRuntimeError, "", "\x1b[1;31merror ASX-RUN-003\x1b[0m"},
 		{"help is cyan", []string{"check", "--color=always", bad}, exitCompileError, "", "\x1b[1;36mhelp:\x1b[0m"},
 		{"bad color", []string{"check", "--color=rainbow", ok}, exitUsage, "", "--color takes auto, always, or never"},
-		{"run too many files", []string{"run", ok, ok}, exitUsage, "", "usage:"},
+		{"run passes arguments", []string{"run", args, "one", "--two", "-Werror"}, 3, "one|--two|-Werror\n", ""},
+		{"run without arguments", []string{"run", args}, 0, "\n", ""},
+		{"check takes one file", []string{"check", ok, ok}, exitUsage, "", "usage:"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

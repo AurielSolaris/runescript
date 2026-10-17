@@ -15,6 +15,7 @@ import (
 	"github.com/AurielSolaris/runescript/internal/jsgen"
 	"github.com/AurielSolaris/runescript/internal/loader"
 	"github.com/AurielSolaris/runescript/internal/runtime"
+	"github.com/AurielSolaris/runescript/stdlib"
 )
 
 // Input is a program's entry file and the working directory its uses are
@@ -32,6 +33,15 @@ type Input struct {
 	// Files, if set, receives the absolute paths of the files the program
 	// was loaded from, even when it has errors (watch mode uses them).
 	Files func(paths []string)
+
+	// What a running program reads and writes besides its standard
+	// output: its standard input (default: empty), standard error
+	// (default: discarded), command-line arguments, and whether io.error
+	// and io.warn color their lines.
+	Stdin  io.Reader
+	Stderr io.Writer
+	Args   []string
+	Color  bool
 }
 
 // WarningPolicy controls warnings. Warnings are only reported for programs
@@ -145,7 +155,13 @@ func RunInput(in Input, out io.Writer) (int, []*diagnostics.Diagnostic, error) {
 	if err := ir.Verify(p); err != nil {
 		return 0, nil, err
 	}
-	code, err := runtime.Run(p, out)
+	stderr := in.Stderr
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	env := stdlib.NewEnv(out, stderr, in.Stdin, in.Args)
+	env.Color = in.Color
+	code, err := runtime.RunEnv(p, env)
 	return code, nil, err
 }
 

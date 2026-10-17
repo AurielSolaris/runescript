@@ -181,6 +181,7 @@ type frame struct {
 
 type interp struct {
 	out   io.Writer
+	env   *stdlib.Env
 	depth int
 	// raising is the error being thrown, from the throw (or failed
 	// operation) until a catch clause catches it, and fatal is set once an
@@ -201,11 +202,18 @@ type interp struct {
 // ir.Verify, and must not call extern (JavaScript) functions or use
 // rune:dom, which only the JavaScript target can run.
 func Run(p *ir.Program, out io.Writer) (code int, err error) {
+	return RunEnv(p, stdlib.NewEnv(out, io.Discard, nil, nil))
+}
+
+// RunEnv is Run with the program's environment: trace and io.print write
+// to env.Stdout, io.error and io.warn to env.Stderr, and so on.
+func RunEnv(p *ir.Program, env *stdlib.Env) (code int, err error) {
+	out := env.Stdout
 	if len(p.Externs) > 0 {
 		// The driver reports this as ASX-TARGET-002 before calling Run.
 		return 0, fmt.Errorf("the program calls extern function '%s'; only the JavaScript target can run it", p.Externs[0].Name)
 	}
-	in := &interp{out: out}
+	in := &interp{out: out, env: env}
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -956,7 +964,12 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 			in.fail(diagnostics.RunNativeFailed, e.Site, "%s failed: %v", name, r)
 		}
 	}()
-	out := f.Impl(goArgs)
+	var out any
+	if f.EnvImpl != nil {
+		out = f.EnvImpl(in.env, goArgs)
+	} else {
+		out = f.Impl(goArgs)
+	}
 	switch f.Result.Kind {
 	case types.Void:
 		return Value{Kind: types.Void}
@@ -980,7 +993,7 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 	if !types.InRange(f.Result, n) {
 		in.fail(diagnostics.RunOverflow, e.Site, "%s returned %d, which does not fit in '%s'", name, n, f.Result)
 	}
-	return Value{Kind: f.Result.Kind, Int: n}
+	return Value{Kind: f.Result.Kind, Int: n, Bits: f.Result.Bits}
 }
 
 // goFunc wraps the function value v, of type t, as the Go function a

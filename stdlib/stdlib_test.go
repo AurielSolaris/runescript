@@ -1,6 +1,7 @@
 package stdlib
 
 import (
+	"io"
 	"testing"
 
 	"github.com/AurielSolaris/runescript/internal/types"
@@ -38,7 +39,10 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 					t.Fatalf("std:%s.%s: unsupported parameter type %s", path, name, p)
 				}
 			}
-			out := f.Impl(args)
+			out, faulted := call(t, f, args)
+			if faulted {
+				continue // e.g. fs.readFile(""): a deliberate failure
+			}
 			ok := false
 			switch f.Result.Kind {
 			case types.String:
@@ -61,6 +65,26 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 			}
 		}
 	}
+}
+
+// call runs f with args in a test environment (an empty standard input,
+// and output discarded). faulted reports a Fault, a deliberate failure.
+func call(t *testing.T, f *Func, args []any) (out any, faulted bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(Fault); !ok {
+				panic(r)
+			}
+			faulted = true
+		}
+	}()
+	if f.EnvImpl != nil {
+		env := NewEnv(io.Discard, io.Discard, nil, nil)
+		dir := t.TempDir()
+		env.Getwd = func() (string, error) { return dir, nil }
+		return f.EnvImpl(env, args), false
+	}
+	return f.Impl(args), false
 }
 
 func TestStringPackageIsComplete(t *testing.T) {

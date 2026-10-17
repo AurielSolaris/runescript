@@ -79,7 +79,7 @@ func Generate(p *ir.Program, opts Options) (out []byte, diags []*diagnostics.Dia
 // used to test the runtime directly.
 func Runtime() string {
 	return fillRuntime(map[string]bool{"upper": true, "lower": true, "title": true, "fold": true},
-		map[string]bool{"extern": true, "dom": true, "string": true, "math": true})
+		sectionNames)
 }
 
 // helperSections names the optional runtime section (runtime.js,
@@ -121,7 +121,12 @@ func sections(src string, keep map[string]bool) string {
 	return out.String()
 }
 
-var sectionNames = map[string]bool{"extern": true, "dom": true, "string": true, "math": true}
+var sectionNames = map[string]bool{"extern": true, "dom": true, "string": true, "math": true,
+	"host": true, "io": true, "process": true, "fs": true, "path": true}
+
+// hostPackages are the std packages that use the program's environment,
+// in the runtime's host section.
+var hostPackages = []string{"io", "process", "fs", "path"}
 
 type gen struct {
 	b       strings.Builder
@@ -239,6 +244,11 @@ func (g *gen) module(p *ir.Program, opts Options, entrySite int) string {
 	for pkg := range g.stdPkgs { // each std package has a section
 		keep[pkg] = true
 	}
+	for _, pkg := range hostPackages {
+		if keep[pkg] {
+			keep["host"] = true
+		}
+	}
 	for h := range g.helpers {
 		if sec, ok := helperSections[h]; ok {
 			keep[sec] = true
@@ -297,15 +307,49 @@ const moduleFooter = `export { RuneScriptError };
 // return or throw them: new RSError("RangeError", "message", errorID).
 export const RSError = $rt.RSError;
 
-// run executes main and returns the exit code: main's int result. A runtime error is thrown as a RuneScriptError. options.trace
-// receives each line written by trace (default: console.log).
+// run executes main and returns the exit code: main's int result. A
+// runtime error is thrown as a RuneScriptError. The options are the
+// program's environment, all optional: stdout(text) and stderr(text), or
+// trace(line) for each line of output (default: console.log); stdin(),
+// returning Uint8Array chunks of input and then null; args, env, cwd(),
+// platform, color, fs (a Node.js-style fs module), and tempDir(). See the
+// runtime's run for details.
 export function run(options = {}) {
   return $rt.run($program, options);
 }
 
+// readStdin reads the next chunk of Node.js's standard input, or null at
+// its end.
+function readStdin(fs) {
+  const buf = new Uint8Array(65536);
+  for (;;) {
+    try {
+      const n = fs.readSync(0, buf, 0, buf.length, null);
+      return n === 0 ? null : buf.subarray(0, n);
+    } catch (e) {
+      if (e.code === "EOF") return null;
+      if (e.code !== "EAGAIN") throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10); // not ready yet
+    }
+  }
+}
+
 if (import.meta.main) {
+  const fs = process.getBuiltinModule("node:fs");
+  const os = process.getBuiltinModule("node:os");
   try {
-    process.exitCode = run({ trace: (line) => process.stdout.write(line + "\n") });
+    process.exitCode = run({
+      stdout: (text) => process.stdout.write(text),
+      stderr: (text) => process.stderr.write(text),
+      stdin: () => readStdin(fs),
+      args: process.argv.slice(2),
+      env: process.env,
+      cwd: () => process.cwd(),
+      platform: process.platform,
+      color: Boolean(process.stderr.isTTY) && !process.env.NO_COLOR && process.env.TERM !== "dumb",
+      fs,
+      tempDir: () => os.tmpdir(),
+    });
   } catch (e) {
     if (!(e instanceof RuneScriptError)) throw e;
     process.stderr.write(e.message + "\n");

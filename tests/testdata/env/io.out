@@ -1,0 +1,10 @@
+no newline, then a trace
+false
+[first line]
+[second line]
+65 66
+[]
+[rest
+of it]
+true -1 [] []
+ends without a newline
