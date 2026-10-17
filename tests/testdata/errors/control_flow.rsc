@@ -15,7 +15,7 @@ protected int main() {
     }
     break;               // expect: ASX-FLOW-001 16:5
     for (int i = 0; i < 3; i++) {
-        int i = 4;       // expect: ASX-NAME-002 18:13
+        int k = 4; int k = 5;   // expect: ASX-NAME-002 18:24
     }
     trace(i);            // expect: ASX-NAME-001 20:11
     return 0;

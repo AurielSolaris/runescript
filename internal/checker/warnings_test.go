@@ -59,6 +59,11 @@ func TestWarnings(t *testing.T) {
 		{"discarded result", program("    one();", "public int one() { return 1; }"), []string{"3:5 ASX-WARN-005"}},
 		{"discarded std result", "package p;\nuse \"std:string\";\nprotected int main() { string.toUpper(\"a\"); return 0; }", []string{"3:24 ASX-WARN-005"}},
 		{"void call", program("    trace(1);\n    v();", "public void v() { }"), nil},
+		{"shadowed variable", program("    int x = 1;\n    if (true) { int x = 2; trace(x); }\n    trace(x);", ""), []string{"4:21 ASX-WARN-009"}},
+		{"shadowed parameter", "package p;\npublic void f(int n) { if (n > 0) { int n = 1; trace(n); } }\nprotected int main() { f(1); return 0; }", []string{"2:41 ASX-WARN-009"}},
+		{"shadow in a for header", program("    int i = 9;\n    for (int i = 0; i < 1; i++) { }\n    trace(i);", ""), []string{"4:14 ASX-WARN-009"}},
+		{"sibling blocks", program("    if (true) { int x = 1; trace(x); }\n    if (true) { int x = 2; trace(x); }", ""), nil},
+		{"lambda parameter is not shadowing", program("    int n = 1;\n    int(int) f = (int n) => n;\n    trace(n, f(2));", ""), nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

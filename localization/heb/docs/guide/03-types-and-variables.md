@@ -27,8 +27,49 @@ protected int main() {
 
 <div dir="rtl">
 
-כל משתנה **חייב** לקבל ערך התחלתי כשהוא מוצהר. בגרסה 0.1 אין ערכי ברירת מחדל
-מובלעים.
+הצהרה בלי ערך התחלתי מתחילה ב**ערך האפס** של הטיפוס:
+
+</div>
+
+```actionscript
+package main;
+
+public struct Point {
+    int x;
+    int y;
+}
+
+protected int main() {
+    int count;            // 0
+    float ratio;          // 0
+    string name;          // ""
+    bool ready;           // false
+    char initial;         // the character U+0000
+    Array<string> names;  // a new, empty array
+    Point origin;         // Point{x: 0, y: 0}: every field at its zero value
+    trace(count, ratio, "[" + name + "]", ready, names.length, origin);
+    return 0;                            // 0 0 [] false 0 Point{x: 0, y: 0}
+}
+```
+
+<div dir="rtl">
+
+לטיפוסי פונקציות, לשגיאות ולרונות אין ערך אפס: ב-RuneScript אין `null` שיסמן
+"עוד לא נקבע" ([פרק 17](17-no-null-any-generics.md)). הצהרה עליהם בלי ערך היא שגיאה
+(`ASX-TYPE-028`):
+
+</div>
+
+```actionscript
+package main;
+
+protected int main() {
+    int(int) twice; // error: ASX-TYPE-028
+    return 0;
+}
+```
+
+<div dir="rtl">
 
 ## הטיפוסים הבסיסיים
 
@@ -127,8 +168,9 @@ protected int main() {
 
 <div dir="rtl">
 
-גרסה 0.1 אינה מתירה **הסתרה (shadowing)**. משתנה חדש אינו יכול להשתמש שוב בשם של
-משתנה, פרמטר או פונקציה הנראים במקום:
+משתנה ב**בלוק מקונן** יכול להשתמש שוב בשם של משתנה או פרמטר מבלוק חיצוני. זה נקרא
+**הסתרה (shadowing)**: בתוך הבלוק השם מציין את המשתנה החדש, והחיצוני חוזר כשהבלוק
+נגמר. המהדר מזהיר על כך (`ASX-WARN-009`), כי קל לעשות זאת בטעות:
 
 </div>
 
@@ -138,8 +180,27 @@ package main;
 protected int main() {
     int x = 1;
     if (true) {
-        int x = 2; // error: ASX-NAME-002
+        int x = x + 10;   // warning ASX-WARN-009; the initializer still reads the outer x
+        trace(x);         // 11
     }
+    trace(x);             // 1
+    return 0;
+}
+```
+
+<div dir="rtl">
+
+שימוש חוזר בשם **באותו בלוק** הוא עדיין שגיאה, וכך גם שימוש חוזר בשם של פונקציה, של
+מבנה, או של פרמטר בבלוק החיצוני ביותר של הפונקציה עצמה:
+
+</div>
+
+```actionscript
+package main;
+
+protected int main() {
+    int x = 1;
+    int x = 2; // error: ASX-NAME-002
     return 0;
 }
 ```

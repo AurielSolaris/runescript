@@ -1,0 +1,13 @@
+0 0 0 0 0 0 [] false 0
+Point{x: 0, y: 0}
+Point{x: 0, y: 0} [] 0 0 false 0
+1 0
+1 1
+n 0
+n 1
+n 2
+inner 11
+deepest
+inner again 12
+outer 1
+101

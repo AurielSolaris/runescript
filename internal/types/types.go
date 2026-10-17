@@ -294,6 +294,26 @@ func Identical(a, b *Type) bool {
 	return true
 }
 
+// HasZero reports whether t has a zero value, the value of `T x;`
+// (OQ-VAR-01): 0 for numbers, U+0000 for char, "" for string, false for
+// bool, an empty array, and a struct whose fields all have zero values.
+// Functions, errors, elements, and runes have none: RuneScript has no
+// null to stand for "not set yet".
+func HasZero(t *Type) bool {
+	switch t.Kind {
+	case Signed, Unsigned, Float, Char, String, Bool, Array:
+		return true
+	case Struct:
+		for _, f := range t.Fields {
+			if !HasZero(f.Type) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 // IsInteger reports whether t is a signed, unsigned, or untyped integer.
 func IsInteger(t *Type) bool {
 	return t.Kind == Signed || t.Kind == Unsigned || t.Kind == UntypedInt

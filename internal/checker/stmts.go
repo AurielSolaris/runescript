@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/AurielSolaris/runescript/internal/ast"
@@ -36,7 +37,12 @@ func (c *checker) stmt(s ast.Stmt) {
 			c.errorf(diagnostics.TypeVoidValue, s.Type.Span, "variable '%s' cannot have type 'void'", s.Name.Name)
 			t = types.InvalidT
 		}
-		c.assign(t, s.Init, "assign")
+		if s.Init != nil {
+			c.assign(t, s.Init, "assign")
+		} else if t.Kind != types.Invalid && !types.HasZero(t) {
+			c.errorf(diagnostics.TypeNoZeroValue, s.Name.Span, "variable '%s' needs an initial value: type '%s' has no zero value", s.Name.Name, t).
+				WithHelp(zeroHelp(t))
+		}
 		c.declareVar(s.Name, t, false)
 	case *ast.AssignStmt:
 		c.assignStmt(s)
@@ -228,4 +234,20 @@ func catchSpan(cl *ast.CatchClause) diagnostics.Span {
 		return cl.Type.Span
 	}
 	return cl.Name.Span
+}
+
+// zeroHelp suggests an initial value for a variable of type t, which has
+// no zero value.
+func zeroHelp(t *types.Type) string {
+	switch t.Kind {
+	case types.Func:
+		return "initialize it with a function or a lambda, e.g. `= (int n) => n;`"
+	case types.Error:
+		return fmt.Sprintf("initialize it, e.g. `= new %s(\"\");`", t.Name)
+	case types.Signal:
+		return "initialize it with signal(...)"
+	case types.Struct:
+		return "one of its fields has a type without a zero value; initialize it with a struct literal"
+	}
+	return "initialize it when declaring it"
 }

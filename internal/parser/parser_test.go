@@ -138,7 +138,7 @@ func TestParseErrors(t *testing.T) {
 		{"two values in a hole", "package p;\npublic void f() {\n    trace($\"{a b}\");\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"cast of nothing", "package p;\npublic void f() {\n    trace((int));\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"reserved type in body", "package p;\npublic void f() {\n    array x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
-		{"uninitialized var", "package p;\npublic void f() {\n    int x;\n}", diagnostics.ParseUnexpected, "3:10"},
+		{"declaration missing = or ;", "package p;\npublic void f() {\n    int x 5;\n}", diagnostics.ParseUnexpected, "3:11"},
 		{"expression statement", "package p;\npublic void f() {\n    1 + 2;\n}", diagnostics.ParseUnexpected, "3:5"},
 		{"standalone block", "package p;\npublic void f() {\n    { }\n}", diagnostics.ParseNotImplemented, "3:5"},
 		{"if without braces", "package p;\npublic void f() {\n    if (true) trace(1);\n}", diagnostics.ParseUnexpected, "3:15"},

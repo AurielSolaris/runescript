@@ -610,10 +610,14 @@ func (p *parser) simpleStmt(allowDecl bool) ast.Stmt {
 				"functions are declared `public|private|protected <return type> <name>(...)`, also inside other functions",
 				"function '%s' needs an access modifier", name.Name)
 		}
+		if p.is(lexer.Semicolon, "") {
+			// `int x;` starts at the type's zero value (OQ-VAR-01).
+			return &ast.VarDecl{Type: typ, Name: name, Span: span(typ.Span, name.Span)}
+		}
 		if !p.is(lexer.Assign, "") {
 			p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
-				"variables must be initialized when declared in v0.1, e.g. `int x = 0;`",
-				"expected '=' after variable name, found %s", p.tok().Describe())
+				"a declaration is `int x = 1;`, or `int x;` for the type's zero value",
+				"expected '=' or ';' after variable name, found %s", p.tok().Describe())
 		}
 		p.next()
 		init := p.expr()

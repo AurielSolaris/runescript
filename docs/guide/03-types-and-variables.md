@@ -17,8 +17,42 @@ protected int main() {
 }
 ```
 
-Every variable **must** be initialised when it's declared. There are no
-implicit default values in v0.1.
+A declaration without an initial value starts at the type's **zero
+value**:
+
+```actionscript
+package main;
+
+public struct Point {
+    int x;
+    int y;
+}
+
+protected int main() {
+    int count;            // 0
+    float ratio;          // 0
+    string name;          // ""
+    bool ready;           // false
+    char initial;         // the character U+0000
+    Array<string> names;  // a new, empty array
+    Point origin;         // Point{x: 0, y: 0}: every field at its zero value
+    trace(count, ratio, "[" + name + "]", ready, names.length, origin);
+    return 0;                            // 0 0 [] false 0 Point{x: 0, y: 0}
+}
+```
+
+Function types, errors, and runes have no zero value: RuneScript has no
+`null` to stand for "not set yet" ([chapter 17](17-no-null-any-generics.md)).
+Declaring one without a value is an error (`ASX-TYPE-028`):
+
+```actionscript
+package main;
+
+protected int main() {
+    int(int) twice; // error: ASX-TYPE-028
+    return 0;
+}
+```
 
 ## The basic types
 
@@ -108,8 +142,11 @@ protected int main() {
 }
 ```
 
-v0.1 doesn't allow **shadowing**. A new variable can't reuse the name of a
-visible variable, parameter, or function:
+A variable in a **nested block** may reuse the name of a variable or
+parameter from an enclosing block. This is called **shadowing**: inside the
+block, the name means the new variable, and the outer one comes back when
+the block ends. The compiler warns about it (`ASX-WARN-009`), because it's
+easy to do by accident:
 
 ```actionscript
 package main;
@@ -117,8 +154,24 @@ package main;
 protected int main() {
     int x = 1;
     if (true) {
-        int x = 2; // error: ASX-NAME-002
+        int x = x + 10;   // warning ASX-WARN-009; the initializer still reads the outer x
+        trace(x);         // 11
     }
+    trace(x);             // 1
+    return 0;
+}
+```
+
+Reusing a name **in the same block** is still an error, and so is reusing
+the name of a function, a struct, or a parameter in the function's own
+outermost block:
+
+```actionscript
+package main;
+
+protected int main() {
+    int x = 1;
+    int x = 2; // error: ASX-NAME-002
     return 0;
 }
 ```

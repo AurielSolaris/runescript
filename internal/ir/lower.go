@@ -196,8 +196,14 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 		}
 		return &FuncStmt{Func: l.funcDecl(s)}
 	case *ast.VarDecl:
-		init := l.expr(s.Init) // the initializer cannot see the new variable
-		return &Decl{Var: l.declare(s.Name.Name, l.typeOf(s.Type), false), Init: init}
+		t := l.typeOf(s.Type)
+		var init Expr
+		if s.Init != nil {
+			init = l.expr(s.Init) // the initializer cannot see the new variable
+		} else {
+			init = zero(t)
+		}
+		return &Decl{Var: l.declare(s.Name.Name, t, false), Init: init}
 	case *ast.AssignStmt:
 		v := l.lookup(s.Target.Name)
 		value := l.expr(s.Value)
@@ -624,4 +630,31 @@ func (l *lowerer) tnodes(nodes []ast.Markup) []TNode {
 		}
 	}
 	return out
+}
+
+// zero is the zero value of t, the initial value of `T x;` (OQ-VAR-01).
+// The checker allows that only for types.HasZero types. An array's zero
+// value is a new empty array each time the declaration runs.
+func zero(t *types.Type) Expr {
+	switch t.Kind {
+	case types.Signed, types.Unsigned:
+		return &IntConst{T: t}
+	case types.Float:
+		return &FloatConst{T: t}
+	case types.Char:
+		return &CharConst{}
+	case types.String:
+		return &StringConst{}
+	case types.Bool:
+		return &BoolConst{}
+	case types.Array:
+		return &ArrayLit{T: t}
+	case types.Struct:
+		lit := &StructLit{T: t}
+		for i, f := range t.Fields {
+			lit.Inits = append(lit.Inits, FieldInit{Index: i, Value: zero(f.Type)})
+		}
+		return lit
+	}
+	panic("ir: no zero value for " + t.String())
 }

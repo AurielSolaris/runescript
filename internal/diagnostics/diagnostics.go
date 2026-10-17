@@ -112,6 +112,7 @@ const (
 	TypeArgs            Code = "TYPE-025" // wrong type arguments, e.g. Signal<Error>
 	TypeStructLit       Code = "TYPE-026" // a struct literal with a missing, unknown, or repeated field
 	TypeRecursiveStruct Code = "TYPE-027" // a struct that contains itself by value
+	TypeNoZeroValue     Code = "TYPE-028" // `T x;` for a type without a zero value
 	RunNoMountTarget    Code = "RUN-009"  // dom.renderApp found no element
 	RunDOMValue         Code = "RUN-010"  // a {{ }} value an attribute cannot take
 	RunIndex            Code = "RUN-011"  // an array index out of range, or pop of an empty array
@@ -127,6 +128,7 @@ const (
 	WarnHostModule    Code = "WARN-006" // an extern from one host's module, e.g. node:fs
 	WarnObsolete      Code = "WARN-007" // an obsolete HTML4 or SVG 1.1 element or attribute
 	WarnMountSelector Code = "WARN-008" // dom.renderApp with a selector that is not an id
+	WarnShadow        Code = "WARN-009" // a variable in a nested block hiding one of an enclosing block
 )
 
 // Severity says whether a diagnostic is an error or a warning.

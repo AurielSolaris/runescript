@@ -36,9 +36,11 @@ protected int main() {
 **Without `null`, a type means what it says.** In a language with `null`,
 a `string` variable really means "a string, or nothing", and every use is a
 place the program can crash. Its inventor, Tony Hoare, called it his
-"billion-dollar mistake". In RuneScript a `string` is always a string: every
-variable must be initialised when it's declared, there are no default
-values, and no operation produces an empty reference. When a value really
+"billion-dollar mistake". In RuneScript a `string` is always a string: a
+variable declared without a value starts at its type's zero value (`""`
+for a string, [chapter 3](03-types-and-variables.md)), types without a
+zero value must be initialised, and no operation produces an empty
+reference. When a value really
 can be missing, the program says so with a separate `bool` you can see and
 check.
 

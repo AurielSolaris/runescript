@@ -403,8 +403,32 @@ func (c *checker) conflict(id *ast.Ident) bool {
 }
 
 func (c *checker) declareVar(id *ast.Ident, t *types.Type, isParam bool) {
-	c.conflict(id)
+	if !c.shadows(id) {
+		c.conflict(id)
+	}
 	c.top().add(id.Name, &symbol{typ: t, isParam: isParam, decl: id})
+}
+
+// shadows reports whether declaring the variable id in a nested block
+// hides a variable or parameter of an enclosing block of the same
+// function. That is allowed, with a warning (owner decision, OQ-SCOPE-01);
+// reusing a name in the same block, or the name of a function, struct, or
+// extern, is still an error (conflict).
+func (c *checker) shadows(id *ast.Ident) bool {
+	if _, here := c.top().syms[id.Name]; here || c.top().boundary {
+		return false
+	}
+	prev, crossed := c.lookup(id.Name)
+	if prev == nil || crossed || prev.decl == nil || prev.fn != nil || prev.ext != nil || prev.st != nil {
+		return false
+	}
+	what := "variable"
+	if prev.isParam {
+		what = "parameter"
+	}
+	c.warnf(diagnostics.WarnShadow, id.Span, "'%s' hides the %s declared at %s", id.Name, what, prev.decl.Span.Start.Where(c.file.Source)).
+		WithHelp("the outer one cannot be used in this block; rename one of them if that is not intended")
+	return true
 }
 
 // reportUndefined reports prototypes in s that never got a definition.

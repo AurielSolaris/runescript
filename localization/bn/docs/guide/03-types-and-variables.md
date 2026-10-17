@@ -21,8 +21,41 @@ protected int main() {
 }
 ```
 
-প্রতিটি ভেরিয়েবল ঘোষণার সময়েই **অবশ্যই** একটি প্রাথমিক মান পাবে। v0.1-এ নিজে থেকে
-কোনো ডিফল্ট মান বসে না।
+প্রাথমিক মান ছাড়া ঘোষিত ভেরিয়েবল তার টাইপের **শূন্য মান (zero value)** দিয়ে শুরু হয়:
+
+```actionscript
+package main;
+
+public struct Point {
+    int x;
+    int y;
+}
+
+protected int main() {
+    int count;            // 0
+    float ratio;          // 0
+    string name;          // ""
+    bool ready;           // false
+    char initial;         // the character U+0000
+    Array<string> names;  // a new, empty array
+    Point origin;         // Point{x: 0, y: 0}: every field at its zero value
+    trace(count, ratio, "[" + name + "]", ready, names.length, origin);
+    return 0;                            // 0 0 [] false 0 Point{x: 0, y: 0}
+}
+```
+
+ফাংশন টাইপ, এরর এবং রুনের কোনো শূন্য মান নেই: "এখনো সেট হয়নি" বোঝানোর জন্য
+RuneScript-এ কোনো `null` নেই ([অধ্যায় ১৭](17-no-null-any-generics.md))। এগুলোকে মান ছাড়া
+ঘোষণা করা একটি এরর (`ASX-TYPE-028`):
+
+```actionscript
+package main;
+
+protected int main() {
+    int(int) twice; // error: ASX-TYPE-028
+    return 0;
+}
+```
 
 ## মৌলিক টাইপগুলো
 
@@ -111,8 +144,10 @@ protected int main() {
 }
 ```
 
-v0.1 **শ্যাডোইং** অনুমোদন করে না। নতুন ভেরিয়েবল কোনো দৃশ্যমান ভেরিয়েবল, প্যারামিটার
-বা ফাংশনের নাম আবার ব্যবহার করতে পারে না:
+**নেস্টেড ব্লকের** একটি ভেরিয়েবল বাইরের কোনো ব্লকের ভেরিয়েবল বা প্যারামিটারের নাম আবার
+ব্যবহার করতে পারে। একে **শ্যাডোইং** বলে: ব্লকের ভেতরে নামটি নতুন ভেরিয়েবলকে বোঝায়, আর
+ব্লক শেষ হলে বাইরেরটি ফিরে আসে। কম্পাইলার এ নিয়ে সতর্ক করে (`ASX-WARN-009`), কারণ
+ভুল করে এটা করে ফেলা সহজ:
 
 ```actionscript
 package main;
@@ -120,8 +155,23 @@ package main;
 protected int main() {
     int x = 1;
     if (true) {
-        int x = 2; // error: ASX-NAME-002
+        int x = x + 10;   // warning ASX-WARN-009; the initializer still reads the outer x
+        trace(x);         // 11
     }
+    trace(x);             // 1
+    return 0;
+}
+```
+
+**একই ব্লকে** কোনো নাম আবার ব্যবহার করা এখনো একটি এরর, এবং কোনো ফাংশন, স্ট্রাক্ট,
+অথবা ফাংশনের নিজস্ব সবচেয়ে বাইরের ব্লকে কোনো প্যারামিটারের নাম আবার ব্যবহার করাও:
+
+```actionscript
+package main;
+
+protected int main() {
+    int x = 1;
+    int x = 2; // error: ASX-NAME-002
     return 0;
 }
 ```

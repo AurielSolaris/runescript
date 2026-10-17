@@ -58,7 +58,7 @@ func Generate(p *ir.Program, opts Options) (out []byte, diags []*diagnostics.Dia
 	}
 	g := &gen{indent: 1, sites: map[diagnostics.Pos]int{}, files: map[*diagnostics.Source]int{},
 		helpers: map[string]bool{}, tables: map[string]bool{}, stdPkgs: map[string]bool{},
-		formatters: map[*types.Type]string{}}
+		formatters: map[*types.Type]string{}, vnames: map[*ir.Var]string{}}
 	pkgs := map[string]bool{}
 	for _, f := range p.Funcs {
 		pkgs[f.Pkg] = true
@@ -148,6 +148,11 @@ type gen struct {
 	// adapters are the host-neutral modules used, with the namespace of
 	// the host module their functions are written against.
 	adapters []*adapter
+
+	// vnames are the JavaScript names of variables, and taken counts the
+	// variables of the current function that have each name.
+	vnames map[*ir.Var]string
+	taken  map[string]int
 }
 
 type jsImport struct{ module, ns string }
@@ -355,17 +360,43 @@ func ints(v []int64) string {
 // funcDecl emits a named function as a declaration. Function declarations
 // in blocks are block-scoped in strict mode, matching nested functions.
 func (g *gen) funcDecl(f *ir.Func) {
-	g.line("function %s(%s) {", g.funcName(f), params(f))
+	defer g.enterFunc()()
+	g.line("function %s(%s) {", g.funcName(f), g.params(f))
 	g.indent++
 	g.funcBody(f)
 	g.indent--
 	g.line("}")
 }
 
-func params(f *ir.Func) string {
+// enterFunc starts the variable names of a function or lambda body, and
+// returns a function that restores the enclosing function's.
+func (g *gen) enterFunc() func() {
+	saved := g.taken
+	g.taken = map[string]int{}
+	return func() { g.taken = saved }
+}
+
+// vname is the JavaScript name of variable v. A variable declared in a
+// nested block may reuse the name of one in an enclosing block
+// (OQ-SCOPE-01); it is renamed x$2, x$3, ... so that its initializer can
+// still read the outer one (`let x = x + 1` would read the new binding).
+func (g *gen) vname(v *ir.Var) string {
+	if name, ok := g.vnames[v]; ok {
+		return name
+	}
+	name := jsName(v.Name)
+	g.taken[name]++
+	if n := g.taken[name]; n > 1 {
+		name += "$" + strconv.Itoa(n)
+	}
+	g.vnames[v] = name
+	return name
+}
+
+func (g *gen) params(f *ir.Func) string {
 	var ps []string
 	for _, p := range f.Params {
-		ps = append(ps, jsName(p.Name))
+		ps = append(ps, g.vname(p))
 	}
 	return strings.Join(append(ps, "$site"), ", ")
 }
@@ -462,7 +493,7 @@ func (g *gen) try(s *ir.Try) {
 			}
 			g.line("%s (%s($x, %s)) {", kw, g.use("isA"), quote(c.T.Name))
 			g.indent++
-			g.line("const %s = $x;", jsName(c.Var.Name))
+			g.line("const %s = $x;", g.vname(c.Var))
 			g.stmts(c.Body.Stmts)
 			g.indent--
 		}
@@ -504,9 +535,9 @@ func (g *gen) ifRest(s *ir.If) {
 func (g *gen) simple(s ir.Stmt) string {
 	switch s := s.(type) {
 	case *ir.Decl:
-		return fmt.Sprintf("let %s = %s", jsName(s.Var.Name), g.expr(s.Init, precAssign))
+		return fmt.Sprintf("let %s = %s", g.vname(s.Var), g.expr(s.Init, precAssign))
 	case *ir.Assign:
-		return fmt.Sprintf("%s = %s", jsName(s.Var.Name), g.expr(s.Value, precAssign))
+		return fmt.Sprintf("%s = %s", g.vname(s.Var), g.expr(s.Value, precAssign))
 	case *ir.Eval:
 		return g.expr(s.X, precLowest)
 	case *ir.IndexSet:
@@ -647,7 +678,7 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 	case *ir.Field:
 		return g.expr(e.X, precCall) + "." + e.Name, precCall
 	case *ir.Load:
-		return jsName(e.Var.Name), precCall
+		return g.vname(e.Var), precCall
 	case *ir.FuncRef:
 		return g.funcName(e.Func), precCall
 	case *ir.Lambda:
@@ -828,6 +859,8 @@ func (g *gen) native(name string) {
 // lambda renders an arrow function. Its body is emitted at the current
 // indentation, so the arrow spans several lines.
 func (g *gen) lambda(f *ir.Func) string {
+	defer g.enterFunc()()
+	ps := g.params(f)
 	saved := g.b
 	g.b = strings.Builder{}
 	g.indent++
@@ -835,7 +868,7 @@ func (g *gen) lambda(f *ir.Func) string {
 	g.indent--
 	body := g.b.String()
 	g.b = saved
-	return fmt.Sprintf("(%s) => {\n%s%s}", params(f), body, strings.Repeat("  ", g.indent))
+	return fmt.Sprintf("(%s) => {\n%s%s}", ps, body, strings.Repeat("  ", g.indent))
 }
 
 // ---- names and literals ----
