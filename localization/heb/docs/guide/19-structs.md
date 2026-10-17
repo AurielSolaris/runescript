@@ -1,4 +1,4 @@
-<!-- source: docs/guide/19-structs.md @ 6704ceb -->
+<!-- source: docs/guide/19-structs.md @ 362a461 -->
 
 <div dir="rtl">
 

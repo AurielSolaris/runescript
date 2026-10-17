@@ -1,4 +1,4 @@
-<!-- source: docs/guide/11-javascript.md @ 920cb24 -->
+<!-- source: docs/guide/11-javascript.md @ 362a461 -->
 
 <div dir="rtl">
 

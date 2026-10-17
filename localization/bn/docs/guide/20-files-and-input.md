@@ -1,4 +1,4 @@
-<!-- source: docs/guide/20-files-and-input.md @ 0fdbc61 -->
+<!-- source: docs/guide/20-files-and-input.md @ 362a461 -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/20-files-and-input.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 

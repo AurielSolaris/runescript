@@ -1,4 +1,4 @@
-<!-- source: docs/guide/03-types-and-variables.md @ 6704ceb -->
+<!-- source: docs/guide/03-types-and-variables.md @ 362a461 -->
 
 <div dir="rtl">
 

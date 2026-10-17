@@ -1,4 +1,4 @@
-<!-- source: docs/guide/10-std-string.md @ 34d09ef -->
+<!-- source: docs/guide/10-std-string.md @ 362a461 -->
 
 <div dir="rtl">
 

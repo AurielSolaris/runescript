@@ -1,4 +1,4 @@
-<!-- source: docs/guide/08-diagnostics.md @ 6704ceb -->
+<!-- source: docs/guide/08-diagnostics.md @ 362a461 -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/08-diagnostics.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 

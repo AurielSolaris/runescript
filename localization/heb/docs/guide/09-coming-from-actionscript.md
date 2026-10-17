@@ -1,4 +1,4 @@
-<!-- source: docs/guide/09-coming-from-actionscript.md @ 3cd2c1f -->
+<!-- source: docs/guide/09-coming-from-actionscript.md @ 362a461 -->
 
 <div dir="rtl">
 

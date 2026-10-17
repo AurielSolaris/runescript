@@ -1,4 +1,4 @@
-<!-- source: docs/guide/01-getting-started.md @ 920cb24 -->
+<!-- source: docs/guide/01-getting-started.md @ 362a461 -->
 
 <div dir="rtl">
 

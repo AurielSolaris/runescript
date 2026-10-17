@@ -1,4 +1,4 @@
-<!-- source: docs/guide/11-javascript.md @ 920cb24 -->
+<!-- source: docs/guide/11-javascript.md @ 362a461 -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/11-javascript.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 

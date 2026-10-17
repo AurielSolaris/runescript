@@ -1,4 +1,4 @@
-<!-- source: docs/guide/09-coming-from-actionscript.md @ 3cd2c1f -->
+<!-- source: docs/guide/09-coming-from-actionscript.md @ 362a461 -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/09-coming-from-actionscript.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 

@@ -1,4 +1,4 @@
-<!-- source: docs/guide/18-numbers.md @ 6704ceb -->
+<!-- source: docs/guide/18-numbers.md @ 362a461 -->
 
 <div dir="rtl">
 
