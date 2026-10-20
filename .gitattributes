@@ -1,9 +1,16 @@
 * text=auto eol=lf
 *.png binary
 
-# RuneScript sources. GitHub Linguist has no RuneScript language (only
-# Linguist's own list can define a language and its color), so .rsc and
-# .rsm files are counted and highlighted as ActionScript, the syntax family
-# RuneScript comes from. The docs' code blocks use ```actionscript too.
-*.rsc linguist-language=ActionScript linguist-detectable
-*.rsm linguist-language=ActionScript linguist-detectable
+# RuneScript source files, as a custom attribute type (gitattributes(5):
+# a macro may only be defined in this top-level file).
+#   text eol=lf  always text, with LF line endings
+#   diff=java    git's built-in Java hunk-header pattern, which finds
+#                RuneScript declarations such as `protected int main() {`
+[attr]runescript text eol=lf diff=java
+
+# GitHub Linguist has no RuneScript language (only Linguist's own list can
+# define a language and its color), so the files are counted and
+# highlighted as ActionScript, the syntax family RuneScript comes from. The
+# docs' code blocks use ```actionscript too.
+*.rsc runescript linguist-language=ActionScript linguist-detectable
+*.rsm runescript linguist-language=ActionScript linguist-detectable
