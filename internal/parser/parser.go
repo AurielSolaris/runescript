@@ -353,7 +353,9 @@ func (p *parser) isTypeStart() bool {
 		(t.Kind == lexer.Ident && p.isNamedFuncType()) ||
 		(t.Kind == lexer.Ident && p.genericEnd(1) > 0 && p.peekTok(p.genericEnd(1)).Kind == lexer.Ident) ||
 		// a type of another package: geom.Point p
-		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Dot && p.peekTok(2).Kind == lexer.Ident && p.peekTok(3).Kind == lexer.Ident)
+		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Dot && p.peekTok(2).Kind == lexer.Ident && p.peekTok(3).Kind == lexer.Ident) ||
+		// a function type returning one: json.Value(json.Value) f
+		(t.Kind == lexer.Ident && p.peekTok(1).Kind == lexer.Dot && p.peekTok(2).Kind == lexer.Ident && p.isNamedFuncTypeAt(3))
 }
 
 // genericEnd returns the index, relative to the current token, of the
@@ -395,8 +397,12 @@ func (p *parser) isOp(i int, op string) bool {
 // whose result is a named type, followed by a variable name, such as
 // `Error(string) make`. A call is never followed by a name, so this does
 // not mistake `f(x)` for a type.
-func (p *parser) isNamedFuncType() bool {
-	i := 1
+func (p *parser) isNamedFuncType() bool { return p.isNamedFuncTypeAt(1) }
+
+// isNamedFuncTypeAt is isNamedFuncType for parameter lists starting at
+// token i.
+func (p *parser) isNamedFuncTypeAt(start int) bool {
+	i := start
 	for p.peekTok(i).Kind == lexer.LParen {
 		depth := 0
 		for {
@@ -414,7 +420,7 @@ func (p *parser) isNamedFuncType() bool {
 			}
 		}
 	}
-	return i > 1 && p.peekTok(i).Kind == lexer.Ident
+	return i > start && p.peekTok(i).Kind == lexer.Ident
 }
 
 // isQualifiedStart reports whether the next tokens begin `pkg.name`. A type

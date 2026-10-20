@@ -451,6 +451,9 @@ func (c *checker) resolveType(ref *ast.TypeRef) *types.Type {
 
 func (c *checker) resolveTypeRef(ref *ast.TypeRef) *types.Type {
 	if ref.Pkg != nil {
+		if b := c.quals[ref.Pkg.Name]; b != nil && b.std != nil {
+			return c.stdType(ref, b)
+		}
 		if t := c.structType(ref); t != nil {
 			return t
 		}
@@ -489,6 +492,22 @@ func (c *checker) resolveTypeRef(ref *ast.TypeRef) *types.Type {
 		case "T", "U", "K", "V":
 			d.WithHelp("RuneScript has no user-defined generics: write the function for each concrete type (guide, chapter 17)")
 		}
+		return types.InvalidT
+	}
+	return t
+}
+
+// stdType resolves a type a standard library package defines, such as
+// json.Value.
+func (c *checker) stdType(ref *ast.TypeRef, b *binding) *types.Type {
+	b.used = true
+	t := b.std.Types[ref.Name]
+	if t == nil {
+		c.errorf(diagnostics.NameNotInPackage, ref.Span, "package std:%s has no type '%s'", b.std.Path, ref.Name)
+		return types.InvalidT
+	}
+	if len(ref.Args) > 0 {
+		c.errorf(diagnostics.TypeArgs, ref.Span, "type '%s' takes no type arguments", t)
 		return types.InvalidT
 	}
 	return t

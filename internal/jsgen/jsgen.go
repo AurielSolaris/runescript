@@ -122,7 +122,7 @@ func sections(src string, keep map[string]bool) string {
 }
 
 var sectionNames = map[string]bool{"extern": true, "dom": true, "string": true, "math": true,
-	"host": true, "io": true, "process": true, "fs": true, "path": true}
+	"host": true, "io": true, "process": true, "fs": true, "path": true, "json": true}
 
 // hostPackages are the std packages that use the program's environment,
 // in the runtime's host section.
@@ -826,12 +826,17 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		return g.expr(e.Callee, precCall) + g.args(e.Args, e.Site), precCall
 	case *ir.CallNative:
 		g.native(e.Func.Name)
+		// The runtime range-checks int and uint (32-bit) results, as the
+		// interpreter does. A 64-bit result is a BigInt that cannot be out
+		// of range; no std function returns another explicit width.
 		result := "null"
-		switch e.Func.Result.Kind {
-		case types.Signed:
+		switch r := e.Func.Result; {
+		case r.Kind == types.Signed && (r.Bits == 0 || r.Bits == 32):
 			result = `"int"`
-		case types.Unsigned:
+		case r.Kind == types.Unsigned && (r.Bits == 0 || r.Bits == 32):
 			result = `"uint"`
+		case (r.Kind == types.Signed || r.Kind == types.Unsigned) && r.Bits != 64:
+			panic(fmt.Sprintf("jsgen: no range check for %s.%s's result type %s", e.Pkg, e.Func.Name, r))
 		}
 		parts := []string{strconv.Itoa(g.site(e.Site)), quote(e.Pkg + "." + e.Func.Name), result,
 			g.use("std") + "." + e.Func.Package + "." + e.Func.JSName}

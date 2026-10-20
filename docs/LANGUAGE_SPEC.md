@@ -515,6 +515,21 @@ StructLit  = [ Ident "." ] Ident "{" [ Ident ":" Expr { "," Ident ":" Expr } ] "
 - **[undecided]** Methods, constructors, field visibility, and passing
   structs across the JavaScript boundary.
 
+### 5.1f Opaque standard library types **[decided 2026-10-20, details provisional]**
+A standard library package may define opaque types, named with the
+package's qualifier: `json.Value` after `use "std:json";`. A program can
+declare variables, parameters, results, struct fields, and array elements
+of an opaque type, and pass its values around; it sees inside them only
+through the package's functions. Each opaque type is its own type.
+
+- Values are never changed once made, so sharing one is the same as
+  copying it.
+- Opaque types have no zero value (`json.Value v;` is `ASX-TYPE-028`), are
+  not comparable (`==`), not traceable, not convertible, not interpolable,
+  and cannot cross the JavaScript boundary.
+- `json.Value(json.Value) f` declares a function value whose types are
+  qualified, as for structs of other packages.
+
 ### 5.2 Planned types **[planned/undecided]**
 `matrix` and `class`.
 None of these are implemented. Their names are reserved.
@@ -785,6 +800,7 @@ of it. A NaN's sign is not observable:
 | `std:io` | [2026-10-17] `print` (no newline), `error` and `warn` (a line on standard error, red or yellow when standard error is a terminal and `NO_COLOR` is unset), and standard input: `readLine`, `readByte` (`-1` at the end), `readAll`, `atEnd`. Input is decoded as UTF-8 the WHATWG way (invalid bytes become U+FFFD). `trace` and `print` share standard output. |
 | `std:process` | [2026-10-17] `args()` (a new array each call), `env(name)` (`""` if unset), `hasEnv(name)`, `cwd()`, `platform()` (`"windows"`, `"linux"`, `"macos"`, or the system's own name; `"browser"` where the JavaScript host gives none) |
 | `std:fs` | [2026-10-17] `readFile writeFile appendFile` [2026-10-20] `readBytes writeBytes appendBytes` (bytes as `Array<uint8>`, unchanged) `exists isFile isDir size copyFile rename remove removeAll mkdir mkdirAll readDir walk tempDir`. Paths are relative to the working directory; text is UTF-8. A failure throws an `Error` whose message is `<qualifier>.<function>: cannot <operation> <path>: <reason>`, with the reasons "no such file or directory", "already exists", "is a directory", "not a directory", "directory not empty", and "permission denied" worded the same on every target and platform. `readDir` sorts by code point; `walk` lists a directory before its contents and does not follow symbolic links. |
+| `std:json` | [2026-10-20] The opaque `json.Value` (§5.1f). `parse stringify stringifyIndent`; reading: `kind isNull asBool asString asInt asInt64 asFloat length at items has get keys`; building: `nullValue fromBool fromString fromInt fromInt64 fromFloat fromArray fromObject`. RFC 8259 JSON only, nesting at most 1,000 deep, parsed by one algorithm on both targets with the same messages (`json.parse: <reason> at byte <UTF-8 offset>`). Numbers keep their text (`asInt`/`asInt64` need integer syntax and range, else `TypeError`/`RangeError`; `asFloat` rounds, `RangeError` if infinite); objects keep key order, a repeated key keeping its first position and last value; lone surrogate escapes become U+FFFD. Wrong kinds are `TypeError`s, `at` out of range a `RangeError`, a missing key in `get` an `Error`, NaN/infinite `fromFloat` and mismatched `fromObject` lengths `ArgumentError`s. Output escapes as `JSON.stringify`. |
 | `std:path` | [2026-10-17] Node.js's `path` semantics, implemented in RuneScript's runtimes: `join joinAll resolve resolveAll normalize isAbsolute relative dirname basename extname root sep delimiter`, with `basename(p, suffix)` as an overload. The plain names follow the running platform's rules (Windows or POSIX); `posix…` and `win32…` versions (`path.posixJoin`) choose. Differences from Node.js: Windows paths compare ignoring ASCII case only, and resolving a path on another drive starts at that drive's root instead of reading cmd.exe's `=D:` variables. |
 | `std:symrs` | [planned] Symbolic mathematics, a port of the owner's SympJS library; needs objects, floats, and arrays |
 

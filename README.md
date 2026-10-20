@@ -83,6 +83,9 @@ protected int main() {
   (arguments, environment), `std:fs` (text and binary files, directories), and `std:path`
   (Node.js's path rules, implemented in RuneScript's runtimes)
   ([guide](docs/guide/20-files-and-input.md))
+- JSON with `std:json`: `json.parse`, checked reading (`json.get`,
+  `json.asInt`, …), building, and `json.stringify`, with the same parser and
+  error messages on both targets ([guide](docs/guide/21-json.md))
 - Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
   in browsers and Node.js and behaves exactly like the interpreter for every
   program the interpreter can run ([guide](docs/guide/11-javascript.md))
@@ -192,6 +195,7 @@ test suite; the web examples run on a fake DOM under Node.js.
 - [Numbers in depth: widths, literals, bits, std:math](docs/guide/18-numbers.md)
 - [Structs](docs/guide/19-structs.md)
 - [Files, input, and output: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
+- [JSON: std:json](docs/guide/21-json.md)
 - [Compiling to JavaScript](docs/guide/11-javascript.md)
 - [Web pages with rune:dom](docs/guide/15-web-pages.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)
@@ -221,7 +225,7 @@ internal/driver/       wires the stages together
 internal/watch/        file watcher for run --watch and dev
 internal/devserver/    the runescript dev server and its browser client
 stdlib/                standard library packages (std:string, std:math, std:io, std:process,
-                       std:fs, std:path), implemented in Go; their JavaScript twins are in
+                       std:fs, std:path, std:json), implemented in Go; their JavaScript twins are in
                        internal/jsgen/runtime.js
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests

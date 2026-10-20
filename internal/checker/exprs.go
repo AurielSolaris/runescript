@@ -652,6 +652,9 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 				c.errorf(diagnostics.TypeVoidValue, a.NodeSpan(), "expression has type 'void' and cannot be traced")
 			} else if t.Kind == types.Func {
 				c.errorf(diagnostics.TypeBadOperand, a.NodeSpan(), "function values cannot be traced")
+			} else if t.Kind == types.Opaque {
+				c.errorf(diagnostics.TypeBadOperand, a.NodeSpan(), "values of type %s cannot be traced", t).
+					WithHelp("turn it into text with its package's functions, e.g. trace(json.stringify(v))")
 			}
 		}
 		return types.VoidT

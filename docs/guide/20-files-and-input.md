@@ -270,4 +270,4 @@ RuneScript before printing with `io.print`, so a Brainfuck program can
 print any character. Errors go to `io.error`, and `main` returns the exit
 status.
 
-Next: back to the [guide index](README.md)
+Next: [JSON: std:json](21-json.md)

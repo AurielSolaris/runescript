@@ -93,6 +93,8 @@ protected int main() {
   בצהוב, קלט סטנדרטי), `std:process` (ארגומנטים, סביבה), `std:fs` (קבצי טקסט וקבצים בינאריים, תיקיות)
   ו-`std:path` (הכללים של path ב-Node.js, ממומשים בזמני הריצה של RuneScript)
   ([מדריך](docs/guide/20-files-and-input.md))
+- ‏JSON עם `std:json`: ‏`json.parse`, קריאה בדוקה (`json.get`, `json.asInt`, …), בנייה
+  ו-`json.stringify`, עם אותו מפענח ואותן הודעות שגיאה בשני היעדים ([מדריך](docs/guide/21-json.md))
 - הידור ל-JavaScript (`runescript build`): מודול ES2015 (בתוספת BigInt ו-`??`) שרץ בדפדפנים וב-Node.js
   ומתנהג בדיוק כמו המפרש בכל תוכנית שהמפרש יכול להריץ ([מדריך](docs/guide/11-javascript.md))
 - דפי רשת עם `rune:dom`: רכיבים עם תבניות HTML ו-SVG שכל אלמנט ומאפיין בהן נבדק בזמן
@@ -205,6 +207,7 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [מספרים לעומק: רוחב, ליטרלים, סיביות, std:math](docs/guide/18-numbers.md)
 - [מבנים](docs/guide/19-structs.md)
 - [קבצים, קלט ופלט: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
+- [JSON: ‏std:json](docs/guide/21-json.md)
 - [הידור ל-JavaScript](docs/guide/11-javascript.md)
 - [מדריך הודעות האבחון](docs/guide/08-diagnostics.md)
 - [למי שמגיע מ-ActionScript 3](docs/guide/09-coming-from-actionscript.md)
@@ -235,7 +238,7 @@ internal/driver/       wires the stages together
 internal/watch/        file watcher for run --watch and dev
 internal/devserver/    the runescript dev server and its browser client
 stdlib/                standard library packages (std:string, std:math, std:io, std:process,
-                       std:fs, std:path), implemented in Go; their JavaScript twins are in
+                       std:fs, std:path, std:json), implemented in Go; their JavaScript twins are in
                        internal/jsgen/runtime.js
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests

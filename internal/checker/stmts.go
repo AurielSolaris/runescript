@@ -250,6 +250,8 @@ func zeroHelp(t *types.Type) string {
 		return "initialize it with signal(...)"
 	case types.Struct:
 		return "one of its fields has a type without a zero value; initialize it with a struct literal"
+	case types.Opaque:
+		return "initialize it with a value made by one of its package's functions"
 	}
 	return "initialize it when declaring it"
 }

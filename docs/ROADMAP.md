@@ -195,7 +195,7 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [x] `for each (T x in a)` loops, nested arrays (`Array<Array<T>>`), and the methods `insert`, `removeAt`, `slice`, `indexOf`, `contains`, `reverse`, `sort()`, `sort(less)` (stable, same comparator calls on both targets) (2026-10-20)
 - [x] `std:fs` binary files (`Array<uint8>`), see v0.4 (2026-10-20)
 - [ ] `std:csv`: parse and format `Array<Array<string>>`
-- [ ] `std:json`: an opaque `json.Value` read with checked functions, and `json.stringify`
+- [x] `std:json`: an opaque `json.Value` (the first opaque std type) read with checked functions, built with `from…` functions, and written with `json.stringify`/`stringifyIndent`; one parser on both targets, tested against random valid and broken texts (2026-10-20)
 - [ ] `std:matrix`: functions over `Array<Array<float64>>` (owner chose a library, no new type)
 - [x] `struct`: value semantics (copy on assignment), named-field literals, nested field writes, `==` by field (2026-10-17)
 - [ ] Struct methods and constructors

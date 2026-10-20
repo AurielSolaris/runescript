@@ -50,7 +50,15 @@ const (
 	// Struct is a user-defined struct: a value type with named Fields
 	// (OQ-STRUCT-01). Each declaration is its own type.
 	Struct
+	// Opaque is a type a standard library package defines, such as
+	// json.Value (OQ-JSON-01). Programs hold, store, and pass its values,
+	// but see inside them only through the package's functions. Each one
+	// is its own type, held by reference and never changed once made.
+	Opaque
 )
+
+// NewOpaque returns a new opaque type, e.g. NewOpaque("json.Value").
+func NewOpaque(name string) *Type { return &Type{Kind: Opaque, Name: name} }
 
 // Type is a semantic type. Name preserves the spelling used in source so
 // that diagnostics can say 'sint' when the programmer wrote 'sint'.
@@ -143,7 +151,7 @@ func NewArray(elem *Type) *Type {
 // value type except the rune:dom types, which belong to the web layer.
 func IsElemType(t *Type) bool {
 	switch t.Kind {
-	case Signed, Unsigned, Float, Bool, String, Char, Func, Error, Array, Struct:
+	case Signed, Unsigned, Float, Bool, String, Char, Func, Error, Array, Struct, Opaque:
 		return true
 	}
 	return false
@@ -275,7 +283,7 @@ func Identical(a, b *Type) bool {
 	switch a.Kind {
 	case Float, Signed, Unsigned:
 		return a.Bits == b.Bits
-	case Error, Struct:
+	case Error, Struct, Opaque:
 		return a == b
 	case Signal, Array:
 		return Identical(a.Elem, b.Elem)

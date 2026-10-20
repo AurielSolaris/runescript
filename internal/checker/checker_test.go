@@ -14,6 +14,11 @@ func program(body, extra string) string {
 	return "package p;\nprotected int main() {\n" + body + "\n    return 0;\n}\n" + extra
 }
 
+// jsonProgram is program with `use "std:json";`: body starts on line 4.
+func jsonProgram(body, extra string) string {
+	return "package p;\nuse \"std:json\";\nprotected int main() {\n" + body + "\n    return 0;\n}\n" + extra
+}
+
 func check(t *testing.T, src string) []*diagnostics.Diagnostic {
 	t.Helper()
 	prog, diags := loader.LoadSource(diagnostics.NewSource("t.rsc", []byte(src)), t.TempDir())
@@ -44,6 +49,7 @@ func TestAccepted(t *testing.T) {
 		"uint arithmetic":      program("    uint a = 3;\n    uint b = a * 2 + 1;\n    bool c = a < b;", ""),
 		"bitwise":              program("    uint32 a = 0xFF00;\n    a |= 0x0F;\n    a &= ~((uint32) 1);\n    a ^= a >> 4;\n    a <<= 2;\n    int8 n = -8;\n    int k = 2;\n    trace(a, n >> 1, n << k, ~n, 1 << 4, (int64) (1 << 40), a & 0xF);", ""),
 		"widths":               program("    int8 a = -128;\n    uint64 b = 18446744073709551615;\n    int64 c = (int64) a * 2;\n    uint16 d = (uint16) b % 7;\n    int32 e = (int32) 5;\n    trace(a, b, c, d, e, (int) e + 1, b > 0);", ""),
+		"json values":          jsonProgram("    json.Value doc = json.parse(\"{}\");\n    Array<json.Value> parts = [doc, json.fromInt(1), json.fromString(\"x\")];\n    json.Value all = json.fromObject([\"a\", \"b\"], [json.fromArray(parts), json.nullValue()]);\n    for each (json.Value p in json.items(json.get(all, \"a\"))) { trace(json.kind(p)); }\n    Holder h = Holder{v: all};\n    json.Value(json.Value) id = (json.Value x) => x;\n    trace(json.stringify(id(h.v)), json.asInt(json.at(json.fromArray(parts), 1)), json.asInt64(json.fromInt64((int64) 2)));", "public struct Holder {\n    json.Value v;\n}\n"),
 		"for each":             program("    Array<Array<int>> g = [[1, 2], [3]];\n    int t = 0;\n    for each (Array<int> row in g) {\n        for each (int v in row) {\n            if (v == 2) { continue; }\n            t += v;\n        }\n        break;\n    }\n    for each (int v in [4, 5]) { t += v; }\n    trace(t);", ""),
 		"for each shadows":     program("    int x = 1;\n    Array<int> a = [2];\n    for each (int x in a) { trace(x); }\n    trace(x);", ""),
 		"each and in as names": program("    int each = 1;\n    int in = 2;\n    Array<int> a = [each, in];\n    for each (int e in a) { trace(e); }\n    for (int i = 0; i < in; i++) { trace(i); }", ""),
@@ -141,6 +147,20 @@ func TestRejected(t *testing.T) {
 		{"array element types", program("    Array<int> a = [1];\n    Array<uint> b = a;", ""), diagnostics.TypeMismatch, "4:21"},
 		{"push wrong type", program("    Array<int> a = [];\n    a.push(\"x\");", ""), diagnostics.TypeMismatch, "4:12"},
 		{"push arity", program("    Array<int> a = [];\n    a.push();", ""), diagnostics.TypeArgCount, "4:5"},
+		{"json value traced", jsonProgram("    json.Value v = json.nullValue();\n    trace(v);", ""), diagnostics.TypeBadOperand, "5:11"},
+		{"json value compared", jsonProgram("    json.Value v = json.nullValue();\n    trace(v == v);", ""), diagnostics.TypeBadOperand, "5:13"},
+		{"json value converted", jsonProgram("    json.Value v = json.nullValue();\n    string s = (string) v;", ""), diagnostics.TypeBadConversion, "5:16"},
+		{"json value interpolated", jsonProgram("    json.Value v = json.nullValue();\n    trace($\"{v}\");", ""), diagnostics.TypeBadConversion, "5:14"},
+		{"json value without init", jsonProgram("    json.Value v;", ""), diagnostics.TypeNoZeroValue, "4:16"},
+		{"json unknown type", jsonProgram("    json.Thing v = json.nullValue();", ""), diagnostics.NameNotInPackage, "4:5"},
+		{"json type arguments", jsonProgram("    Array<json.Value<int>> a = [];", ""), diagnostics.TypeArgs, "4:11"},
+		{"json value from int", jsonProgram("    json.Value v = 1;", ""), diagnostics.TypeMismatch, "4:20"},
+		{"json value as string", jsonProgram("    string s = json.parse(\"1\");", ""), diagnostics.TypeMismatch, "4:16"},
+		{"json without use", program("    json.Value v = json.parse(\"1\");", ""), diagnostics.NamePackageNotUsed, "3:5"},
+		{"json value sorted", jsonProgram("    Array<json.Value> a = [];\n    a.sort();", ""), diagnostics.TypeBadOperand, "5:7"},
+		{"json value searched", jsonProgram("    Array<json.Value> a = [];\n    bool b = a.contains(json.nullValue());", ""), diagnostics.TypeBadOperand, "5:16"},
+		{"json value extern", "package p;\nuse \"std:json\";\nextern \"rune:fs\" void f(json.Value v);\nprotected int main() {\n    return 0;\n}\n", diagnostics.TypeExternType, "3:25"},
+		{"json fromObject types", jsonProgram("    json.Value v = json.fromObject([\"a\"], [1]);", ""), diagnostics.TypeMismatch, "4:44"},
 		{"unknown method", program("    Array<int> a = [];\n    a.shuffle();", ""), diagnostics.TypeNoField, "4:7"},
 		{"for each over int", program("    int n = 3;\n    for each (int x in n) { trace(x); }", ""), diagnostics.TypeMismatch, "4:24"},
 		{"for each over string", program("    for each (char c in \"ab\") { trace(c); }", ""), diagnostics.TypeMismatch, "3:25"},

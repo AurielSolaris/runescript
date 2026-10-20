@@ -3,7 +3,9 @@
 //
 // Native functions exchange values with the runtime as plain Go values:
 // int64 for every integer type, float64, string, bool, rune for char,
-// []string for Array<string>, and Go functions for callbacks. The runtime
+// []string for Array<string>, []byte for Array<uint8>, the package's own Go
+// values for its opaque types (json.Value) and []any for arrays of them,
+// and Go functions for callbacks. The runtime
 // converts arguments and range-checks integer results against the
 // declared types.
 package stdlib
@@ -55,6 +57,9 @@ type Package struct {
 	// order calls try them (OQ-MATH-01: math.max on ints, then floats).
 	Overloads map[string][]*Func
 	Consts    map[string]Const
+	// Types are the opaque types the package defines, by name: json's
+	// Value is written json.Value.
+	Types map[string]*types.Type
 }
 
 // All returns every function of p, each overload included, sorted by

@@ -1,0 +1,61 @@
+{store:string open:bool items:[{name:string count:number price:number} {name:string count:number price:number}] note:null id:number}
+Rune & Co true true
+true false 5
+2 rug 159
+12345678901234567890 12345678901234567000
+id as int64 -> RangeError json.asInt64: 12345678901234567890 does not fit in 'int64'
+price as int -> TypeError json.asInt: 19.5 is not an integer
+-9223372036854775808 0 1e-7
+{"store":"Rune & Co","items":[{"name":"LAMP","total":39},{"name":"RUG","total":120}],"count":2,"big":9007199254740993,"ok":true,"none":null,"text":"tab\tquote\" é 😀 \u0001"}
+{
+  "store": "Rune & Co",
+  "items": [
+    {
+      "name": "LAMP",
+      "total": 39
+    },
+    {
+      "name": "RUG",
+      "total": 120
+    }
+  ],
+  "count": 2,
+  "big": 9007199254740993,
+  "ok": true,
+  "none": null,
+  "text": "tab\tquote\" é 😀 \u0001"
+}
+[
+	[],
+	{},
+	[
+		1
+	],
+	{
+		"a": []
+	}
+]
+{"b":3,"a":2,"10":4,"2":5} b,a,10,2
+{"x":3,"y":2}
+é€😀 �! "/\b\f\n\r\t"
+object
+1 2
+trailing comma -> Error json.parse: unexpected character ']' at byte 6
+bare word -> Error json.parse: unexpected character '}' at byte 9
+single quotes -> Error json.parse: unexpected character ''' at byte 1
+unclosed -> Error json.parse: unexpected end of input at byte 11
+leading zero -> Error json.parse: unexpected character '1' at byte 1
+bad number -> Error json.parse: invalid number at byte 1
+control char -> Error json.parse: control character U+000A in a string at byte 2
+bad escape -> Error json.parse: invalid escape sequence at byte 1
+after é -> Error json.parse: unexpected character 'x' at byte 6
+empty -> Error json.parse: unexpected end of input at byte 0
+asString of number -> TypeError json.asString: expected a string, found a number
+get on array -> TypeError json.get: expected an object, found an array
+missing key -> Error json.get: no key "phone"
+at out of range -> RangeError json.at: index 2 is out of range for an array of length 2
+length of null -> TypeError json.length: expected an array or object, found null
+huge float -> RangeError json.asFloat: 1e400 is out of range for float64
+int range -> RangeError json.asInt: 2147483648 does not fit in 'int'
+NaN -> ArgumentError json.fromFloat: NaN cannot be written in JSON
+keys and values -> ArgumentError json.fromObject: 1 key but 0 values

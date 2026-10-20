@@ -2466,6 +2466,365 @@ const $rt = (() => {
   std.path = path;
   //@end
 
+  //@section json
+  // ---- std:json (OQ-JSON-01) ----
+  //
+  // A line-by-line twin of stdlib/json.go: the same parser, run over the
+  // text's UTF-8 bytes, so both targets accept the same texts and fail with
+  // the same messages and byte offsets. A json.Value is a frozen object
+  // { k: kind, b, t: number text or string, e: elements or values, keys,
+  // index: Map from key to position }.
+  const JSON_MAX_DEPTH = 1000;
+  const jNull = Object.freeze({ k: "null" });
+  const jTrue = Object.freeze({ k: "bool", b: true });
+  const jFalse = Object.freeze({ k: "bool", b: false });
+  const jNumber = (t) => Object.freeze({ k: "number", t });
+  const jString = (t) => Object.freeze({ k: "string", t });
+  const jArray = (e) => Object.freeze({ k: "array", e });
+  // jObject builds an object; a repeated key keeps its first position and
+  // takes its last value.
+  function jObject(keys, vals) {
+    const o = { k: "object", e: [], keys: [], index: new Map() };
+    for (let i = 0; i < keys.length; i++) {
+      const at = o.index.get(keys[i]);
+      if (at !== undefined) {
+        o.e[at] = vals[i];
+        continue;
+      }
+      o.index.set(keys[i], o.keys.length);
+      o.keys.push(keys[i]);
+      o.e.push(vals[i]);
+    }
+    return Object.freeze(o);
+  }
+
+  let jEncoder = null, jDecoder = null;
+  // hex4 is n (below 0x10000) in four hex digits; padStart is ES2017.
+  const hex4 = (n) => ("000" + n.toString(16).toUpperCase()).slice(-4);
+  // jRune decodes the character at b[i] (b is valid UTF-8).
+  function jRune(b, i) {
+    const c = b[i];
+    if (c < 0x80) return c;
+    if (c < 0xE0) return ((c & 0x1F) << 6) | (b[i + 1] & 0x3F);
+    if (c < 0xF0) return ((c & 0x0F) << 12) | ((b[i + 1] & 0x3F) << 6) | (b[i + 2] & 0x3F);
+    return ((c & 0x07) << 18) | ((b[i + 1] & 0x3F) << 12) | ((b[i + 2] & 0x3F) << 6) | (b[i + 3] & 0x3F);
+  }
+  const jDescribe = (r) => (r < 0x20 || (r >= 0x7F && r < 0xA0) ? "U+" + hex4(r) : "'" + String.fromCodePoint(r) + "'");
+  const isHex = (c) => (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
+
+  function jParse(text) {
+    if (jEncoder === null) jEncoder = new TextEncoder();
+    if (jDecoder === null) jDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
+    const s = jEncoder.encode(text), n = s.length;
+    let i = 0, depth = 0;
+    const fail = (at, reason) => {
+      throw new Fault("Error", `${reason} at byte ${at}`);
+    };
+    const unexpected = () => {
+      if (i >= n) fail(i, "unexpected end of input");
+      fail(i, "unexpected character " + jDescribe(jRune(s, i)));
+    };
+    const space = () => {
+      while (i < n && (s[i] === 0x20 || s[i] === 0x09 || s[i] === 0x0A || s[i] === 0x0D)) i++;
+    };
+    const word = (w) => {
+      for (let j = 0; j < w.length; j++) {
+        if (i >= n || s[i] !== w.charCodeAt(j)) unexpected();
+        i++;
+      }
+    };
+    const nest = () => {
+      if (++depth > JSON_MAX_DEPTH) fail(i, `more than ${JSON_MAX_DEPTH} nested arrays and objects`);
+    };
+    const readHex4 = (at) => {
+      if (i + 4 > n) fail(n, "unexpected end of input");
+      let u = 0;
+      for (let j = 0; j < 4; j++) {
+        const c = s[i + j];
+        if (!isHex(c)) fail(at, "invalid escape sequence");
+        u = u * 16 + parseInt(String.fromCharCode(c), 16);
+      }
+      i += 4;
+      return u;
+    };
+    const escape = () => {
+      const at = i;
+      i++;
+      if (i >= n) fail(i, "unexpected end of input");
+      const c = s[i];
+      i++;
+      switch (c) {
+        case 0x22: return 0x22;
+        case 0x5C: return 0x5C;
+        case 0x2F: return 0x2F;
+        case 0x62: return 0x08;
+        case 0x66: return 0x0C;
+        case 0x6E: return 0x0A;
+        case 0x72: return 0x0D;
+        case 0x74: return 0x09;
+        case 0x75: {
+          const u = readHex4(at);
+          if (u < 0xD800 || u > 0xDFFF) return u;
+          if (u < 0xDC00 && i + 1 < n && s[i] === 0x5C && s[i + 1] === 0x75) {
+            const save = i;
+            i += 2;
+            const lo = readHex4(save);
+            if (lo >= 0xDC00 && lo <= 0xDFFF) return 0x10000 + ((u - 0xD800) << 10) + (lo - 0xDC00);
+            i = save;
+          }
+          return 0xFFFD;
+        }
+      }
+      return fail(at, "invalid escape sequence");
+    };
+    const string = () => {
+      i++;
+      const parts = [];
+      let run = i; // the start of the bytes not yet copied
+      for (;;) {
+        if (i >= n) fail(i, "unexpected end of input");
+        const c = s[i];
+        if (c === 0x22) {
+          parts.push(jDecoder.decode(s.subarray(run, i)));
+          i++;
+          return parts.join("");
+        } else if (c === 0x5C) {
+          parts.push(jDecoder.decode(s.subarray(run, i)));
+          parts.push(String.fromCodePoint(escape()));
+          run = i;
+        } else if (c < 0x20) {
+          fail(i, `control character U+${hex4(c)} in a string`);
+        } else {
+          i++;
+        }
+      }
+    };
+    const number = () => {
+      const start = i;
+      const digits = () => {
+        let k = 0;
+        while (i < n && s[i] >= 0x30 && s[i] <= 0x39) {
+          i++;
+          k++;
+        }
+        return k;
+      };
+      if (s[i] === 0x2D) i++;
+      if (i < n && s[i] === 0x30) i++;
+      else if (digits() === 0) fail(start, "invalid number");
+      if (i < n && s[i] === 0x2E) {
+        i++;
+        if (digits() === 0) fail(start, "invalid number");
+      }
+      if (i < n && (s[i] === 0x65 || s[i] === 0x45)) {
+        i++;
+        if (i < n && (s[i] === 0x2B || s[i] === 0x2D)) i++;
+        if (digits() === 0) fail(start, "invalid number");
+      }
+      return jDecoder.decode(s.subarray(start, i));
+    };
+    const value = () => {
+      space();
+      if (i >= n) unexpected();
+      const c = s[i];
+      if (c === 0x7B) return object();
+      if (c === 0x5B) return array();
+      if (c === 0x22) return jString(string());
+      if (c === 0x74) {
+        word("true");
+        return jTrue;
+      }
+      if (c === 0x66) {
+        word("false");
+        return jFalse;
+      }
+      if (c === 0x6E) {
+        word("null");
+        return jNull;
+      }
+      if (c === 0x2D || (c >= 0x30 && c <= 0x39)) return jNumber(number());
+      return unexpected();
+    };
+    const array = () => {
+      nest();
+      i++;
+      const e = [];
+      space();
+      if (i < n && s[i] === 0x5D) {
+        i++;
+        depth--;
+        return jArray(e);
+      }
+      for (;;) {
+        e.push(value());
+        space();
+        if (i < n && s[i] === 0x2C) {
+          i++;
+          continue;
+        }
+        if (i < n && s[i] === 0x5D) {
+          i++;
+          depth--;
+          return jArray(e);
+        }
+        unexpected();
+      }
+    };
+    const object = () => {
+      nest();
+      i++;
+      const keys = [], vals = [];
+      space();
+      if (i < n && s[i] === 0x7D) {
+        i++;
+        depth--;
+        return jObject(keys, vals);
+      }
+      for (;;) {
+        space();
+        if (i >= n || s[i] !== 0x22) unexpected();
+        keys.push(string());
+        space();
+        if (i >= n || s[i] !== 0x3A) unexpected();
+        i++;
+        vals.push(value());
+        space();
+        if (i < n && s[i] === 0x2C) {
+          i++;
+          continue;
+        }
+        if (i < n && s[i] === 0x7D) {
+          i++;
+          depth--;
+          return jObject(keys, vals);
+        }
+        unexpected();
+      }
+    };
+    const v = value();
+    space();
+    if (i < n) unexpected();
+    return v;
+  }
+
+  // jQuote writes s as a JSON string literal, escaping as JSON.stringify.
+  function jQuote(s) {
+    let out = "\"";
+    for (const ch of s) {
+      const r = ch.codePointAt(0);
+      if (r === 0x22) out += "\\\"";
+      else if (r === 0x5C) out += "\\\\";
+      else if (r === 0x08) out += "\\b";
+      else if (r === 0x0C) out += "\\f";
+      else if (r === 0x0A) out += "\\n";
+      else if (r === 0x0D) out += "\\r";
+      else if (r === 0x09) out += "\\t";
+      else if (r < 0x20) out += "\\u" + hex4(r).toLowerCase();
+      else out += ch;
+    }
+    return out + "\"";
+  }
+  function jWrite(v, indent, prefix) {
+    switch (v.k) {
+      case "null": return "null";
+      case "bool": return v.b ? "true" : "false";
+      case "number": return v.t;
+      case "string": return jQuote(v.t);
+    }
+    const obj = v.k === "object", inner = prefix + indent;
+    let out = obj ? "{" : "[";
+    for (let i = 0; i < v.e.length; i++) {
+      if (i > 0) out += ",";
+      if (indent !== "") out += "\n" + inner;
+      if (obj) out += jQuote(v.keys[i]) + (indent !== "" ? ": " : ":");
+      out += jWrite(v.e[i], indent, inner);
+    }
+    if (indent !== "" && v.e.length > 0) out += "\n" + prefix;
+    return out + (obj ? "}" : "]");
+  }
+
+  const jArticle = (kind) =>
+    kind === "null" ? "null" : kind === "array" || kind === "object" || kind === "array or object" ? "an " + kind : "a " + kind;
+  function jWant(v, want) {
+    if (v.k === want || (want === "array or object" && (v.k === "array" || v.k === "object"))) return;
+    throw new Fault("TypeError", `expected ${jArticle(want)}, found ${jArticle(v.k)}`);
+  }
+  // jInt reads an integer number that fits in name's range lo to hi.
+  function jInt(v, name, lo, hi) {
+    jWant(v, "number");
+    if (/[.eE]/.test(v.t)) throw new Fault("TypeError", `${v.t} is not an integer`);
+    const x = BigInt(v.t);
+    if (x < lo || x > hi) throw new Fault("RangeError", `${v.t} does not fit in '${name}'`);
+    return x;
+  }
+
+  const json = {
+    parse: (s) => jParse(s),
+    stringify: (v) => jWrite(v, "", ""),
+    stringifyIndent: (v, indent) => jWrite(v, indent, ""),
+    kind: (v) => v.k,
+    isNull: (v) => v.k === "null",
+    asBool(v) {
+      jWant(v, "bool");
+      return v.b;
+    },
+    asString(v) {
+      jWant(v, "string");
+      return v.t;
+    },
+    asInt: (v) => Number(jInt(v, "int", -2147483648n, 2147483647n)),
+    asInt64: (v) => jInt(v, "int64", -9223372036854775808n, 9223372036854775807n),
+    asFloat(v) {
+      jWant(v, "number");
+      const f = Number(v.t);
+      if (!Number.isFinite(f)) throw new Fault("RangeError", `${v.t} is out of range for float64`);
+      return f;
+    },
+    length(v) {
+      jWant(v, "array or object");
+      return v.e.length;
+    },
+    at(v, i) {
+      jWant(v, "array");
+      if (!(i >= 0 && i < v.e.length)) throw new Fault("RangeError", `index ${i} is out of range for an array of length ${v.e.length}`);
+      return v.e[Number(i)];
+    },
+    items(v) {
+      jWant(v, "array");
+      return v.e.slice();
+    },
+    has(v, key) {
+      jWant(v, "object");
+      return v.index.has(key);
+    },
+    get(v, key) {
+      jWant(v, "object");
+      const at = v.index.get(key);
+      if (at === undefined) throw new Fault("Error", "no key " + jQuote(key));
+      return v.e[at];
+    },
+    keys(v) {
+      jWant(v, "object");
+      return v.keys.slice();
+    },
+    nullValue: () => jNull,
+    fromBool: (b) => (b ? jTrue : jFalse),
+    fromString: (s) => jString(s),
+    fromInt: (n) => jNumber(String(n)),
+    fromInt64: (n) => jNumber(String(n)),
+    fromFloat(f) {
+      if (!Number.isFinite(f)) throw new Fault("ArgumentError", `${String(f)} cannot be written in JSON`);
+      return jNumber(String(f));
+    },
+    fromArray: (a) => jArray(a.slice()),
+    fromObject(keys, vals) {
+      if (keys.length !== vals.length) throw new Fault("ArgumentError", `${keys.length} ${keys.length === 1 ? "key" : "keys"} but ${vals.length} ${vals.length === 1 ? "value" : "values"}`);
+      return jObject(keys, vals);
+    },
+  };
+  std.json = json;
+  //@end
+
   // lineWriter collects text and passes each complete line to emit;
   // flush passes on the rest.
   function lineWriter(emit) {

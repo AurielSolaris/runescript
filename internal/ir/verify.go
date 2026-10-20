@@ -77,7 +77,7 @@ func (v *verifier) fn(f *Func) {
 func (v *verifier) storable(t *types.Type, what string) {
 	switch t.Kind {
 	case types.Signed, types.Unsigned, types.Bool, types.String, types.Func, types.Float, types.Error,
-		types.Element, types.Signal, types.Char, types.Array, types.Struct:
+		types.Element, types.Signal, types.Char, types.Array, types.Struct, types.Opaque:
 		return
 	}
 	v.fail("%s has type %s, which cannot hold a value", what, t)

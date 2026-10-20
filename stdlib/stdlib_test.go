@@ -27,10 +27,15 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 					args[i] = rune('a')
 				case types.Float:
 					args[i] = 0.0
+				case types.Opaque:
+					args[i] = jsonNull // the only opaque type so far
 				case types.Array:
-					if p.Elem.Kind == types.String {
+					switch p.Elem.Kind {
+					case types.String:
 						args[i] = []string{}
-					} else {
+					case types.Opaque:
+						args[i] = []any{}
+					default:
 						args[i] = []byte{}
 					}
 				case types.Func:
@@ -59,10 +64,15 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 				_, ok = out.(rune)
 			case types.Float:
 				_, ok = out.(float64)
+			case types.Opaque:
+				_, ok = out.(*jsonValue)
 			case types.Array:
-				if f.Result.Elem.Kind == types.String {
+				switch f.Result.Elem.Kind {
+				case types.String:
 					_, ok = out.([]string)
-				} else {
+				case types.Opaque:
+					_, ok = out.([]any)
+				default:
 					_, ok = out.([]byte)
 				}
 			case types.Void:

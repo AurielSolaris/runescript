@@ -266,4 +266,4 @@ $ runescript run examples/brainfuck.rsc -e "+[>+]"
 RuneScript-এর ভেতরেই সেগুলোকে UTF-8 হিসেবে ডিকোড করে, তাই একটি Brainfuck প্রোগ্রাম যেকোনো
 অক্ষর প্রিন্ট করতে পারে। এররগুলো যায় `io.error`-এ, আর `main` এক্সিট স্ট্যাটাস ফেরত দেয়।
 
-পরবর্তী: আবার [গাইডের সূচিপত্রে](README.md)
+পরবর্তী: [JSON: std:json](21-json.md)

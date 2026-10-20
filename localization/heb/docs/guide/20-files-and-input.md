@@ -293,6 +293,6 @@ $ runescript run examples/brainfuck.rsc -e "+[>+]"
 בתוך RuneScript לפני ההדפסה עם `io.print`, כך שתוכנית Brainfuck יכולה להדפיס כל תו.
 שגיאות הולכות ל-`io.error`, ו-`main` מחזירה את קוד היציאה.
 
-הבא: חזרה ל[תוכן העניינים של המדריך](README.md)
+הבא: [JSON: ‏std:json](21-json.md)
 
 </div>

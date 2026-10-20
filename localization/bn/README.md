@@ -84,6 +84,8 @@ protected int main() {
   হলুদ সতর্কবার্তার লাইন, স্ট্যান্ডার্ড ইনপুট), `std:process` (আর্গুমেন্ট, এনভায়রনমেন্ট),
   `std:fs` (লেখা ও বাইনারি ফাইল, ডিরেক্টরি), এবং `std:path` (Node.js-এর path-এর নিয়ম, RuneScript-এর
   রানটাইমে বাস্তবায়িত) ([গাইড](docs/guide/20-files-and-input.md))
+- `std:json` দিয়ে JSON: `json.parse`, যাচাই করা পড়া (`json.get`, `json.asInt`, …), তৈরি
+  করা ও `json.stringify`, দুই টার্গেটেই একই পার্সার ও একই এরর বার্তা ([গাইড](docs/guide/21-json.md))
 - JavaScript-এ কম্পাইল (`runescript build`): একটি ES2015 মডিউল (সাথে BigInt ও `??`), যা ব্রাউজার ও
   Node.js-এ চলে এবং ইন্টারপ্রেটার যে প্রোগ্রাম চালাতে পারে তার প্রতিটিতে
   ইন্টারপ্রেটারের মতো হুবহু আচরণ করে ([গাইড](docs/guide/11-javascript.md))
@@ -188,6 +190,7 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [সংখ্যার গভীরে: প্রস্থ, লিটারাল, বিট, std:math](docs/guide/18-numbers.md)
 - [স্ট্রাক্ট](docs/guide/19-structs.md)
 - [ফাইল, ইনপুট ও আউটপুট: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
+- [JSON: std:json](docs/guide/21-json.md)
 - [JavaScript-এ কম্পাইল](docs/guide/11-javascript.md)
 - [ডায়াগনস্টিক তালিকা](docs/guide/08-diagnostics.md)
 - [ActionScript 3 থেকে আসছেন?](docs/guide/09-coming-from-actionscript.md)
@@ -216,7 +219,7 @@ internal/driver/       wires the stages together
 internal/watch/        file watcher for run --watch and dev
 internal/devserver/    the runescript dev server and its browser client
 stdlib/                standard library packages (std:string, std:math, std:io, std:process,
-                       std:fs, std:path), implemented in Go; their JavaScript twins are in
+                       std:fs, std:path, std:json), implemented in Go; their JavaScript twins are in
                        internal/jsgen/runtime.js
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests

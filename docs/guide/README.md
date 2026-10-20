@@ -24,6 +24,7 @@ complete program in these pages is compiled by the test suite
 18. [Numbers in depth](18-numbers.md): `int8` … `uint64`, hex and binary literals, bit operations, `std:math`
 19. [Structs](19-structs.md): declaring, building, and copying value types
 20. [Files, input, and output](20-files-and-input.md): `std:io`, `std:process`, `std:fs`, `std:path`, and a Brainfuck interpreter
+21. [JSON](21-json.md): `std:json`: parsing, reading with checked functions, building, and writing JSON
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).

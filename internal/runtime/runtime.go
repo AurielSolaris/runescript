@@ -53,6 +53,10 @@ type Value struct {
 	// (a field assignment builds a changed copy), so sharing one between
 	// Values is the same as copying it.
 	St *StructValue
+	// Opq is a value of an opaque type (types.Opaque), such as a
+	// json.Value: whatever the standard library package made. It is
+	// never changed, so sharing it is the same as copying it.
+	Opq any
 }
 
 // StructValue holds the fields of a struct of type T.
@@ -934,7 +938,18 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 	goArgs := make([]any, len(args))
 	for i, a := range args {
 		switch a.Kind {
-		case types.Array: // Array<string> as []string, Array<uint8> as []byte
+		case types.Opaque:
+			goArgs[i] = a.Opq
+		case types.Array: // Array<string> as []string, Array<uint8> as []byte, Array<opaque> as []any
+			switch f.Params[i].Elem.Kind {
+			case types.Opaque:
+				vals := make([]any, len(a.Arr.Elems))
+				for j, v := range a.Arr.Elems {
+					vals[j] = v.Opq
+				}
+				goArgs[i] = vals
+				continue
+			}
 			if f.Params[i].Elem.Kind == types.String {
 				strs := make([]string, len(a.Arr.Elems))
 				for j, v := range a.Arr.Elems {
@@ -991,7 +1006,16 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 		return Value{Kind: types.Char, Int: int64(out.(rune))}
 	case types.Float:
 		return Value{Kind: types.Float, F: out.(float64), Bits: f.Result.Bits}
-	case types.Array: // Array<string> from []string, Array<uint8> from []byte
+	case types.Opaque:
+		return Value{Kind: types.Opaque, Opq: out}
+	case types.Array: // Array<string> from []string, Array<uint8> from []byte, Array<opaque> from []any
+		if vals, ok := out.([]any); ok {
+			arr := &ArrayValue{Elems: make([]Value, len(vals))}
+			for i, x := range vals {
+				arr.Elems[i] = Value{Kind: types.Opaque, Opq: x}
+			}
+			return Value{Kind: types.Array, Arr: arr}
+		}
 		if b, ok := out.([]byte); ok {
 			arr := &ArrayValue{Elems: make([]Value, len(b))}
 			for i, x := range b {
