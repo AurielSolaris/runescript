@@ -1,2 +1,9 @@
 * text=auto eol=lf
 *.png binary
+
+# RuneScript sources. GitHub Linguist has no RuneScript language (only
+# Linguist's own list can define a language and its color), so .rsc and
+# .rsm files are counted and highlighted as ActionScript, the syntax family
+# RuneScript comes from. The docs' code blocks use ```actionscript too.
+*.rsc linguist-language=ActionScript linguist-detectable
+*.rsm linguist-language=ActionScript linguist-detectable
