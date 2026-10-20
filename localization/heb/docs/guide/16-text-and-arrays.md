@@ -1,4 +1,4 @@
-<!-- source: docs/guide/16-text-and-arrays.md @ 362a461 -->
+<!-- source: docs/guide/16-text-and-arrays.md @ c142fe7 -->
 
 <div dir="rtl">
 
