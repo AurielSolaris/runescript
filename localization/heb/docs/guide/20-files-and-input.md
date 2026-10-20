@@ -125,7 +125,8 @@ protected int main() {
 
 ## קבצים ותיקיות
 
-נתיבים הם יחסיים לתיקיית העבודה. קבצים נקראים ונכתבים כטקסט UTF-8.
+נתיבים הם יחסיים לתיקיית העבודה. `readFile`, `writeFile` ו-`appendFile` עובדות עם
+טקסט UTF-8; לנתונים אחרים, ראו [קבצים בינאריים](#קבצים-בינאריים) בהמשך.
 
 | פונקציה | מה היא עושה |
 |---|---|
@@ -174,6 +175,47 @@ protected int main() {
     }
     fs.removeAll(dir);
     trace(fs.exists(dir));                                 // false
+    return 0;
+}
+```
+
+<div dir="rtl">
+
+### קבצים בינאריים
+
+תמונות, ארכיונים ונתונים אחרים שאינם טקסט נקראים ונכתבים כבתים, `Array<uint8>`.
+הבתים עוברים אל הקובץ וממנו בלי שינוי.
+
+| פונקציה | מה היא עושה |
+|---|---|
+| `fs.readBytes(string path)` | מחזירה את הבתים של הקובץ, `Array<uint8>` |
+| `fs.writeBytes(string path, Array<uint8> bytes)` | יוצרת קובץ או מחליפה אותו |
+| `fs.appendBytes(string path, Array<uint8> bytes)` | מוסיפה לסוף קובץ, ויוצרת אותו אם צריך |
+
+הן נכשלות כמו גרסאות הטקסט שלהן, עם אותן הודעות. `string.bytes(s)` ו-`string.fromBytes(b)`
+([פרק 10](10-std-string.md#בתים)) ממירות בין טקסט לבין הבתים שלו ב-UTF-8.
+
+</div>
+
+```actionscript
+package main;
+
+use "std:fs";
+use "std:path";
+use "std:string";
+
+protected int main() {
+    string file = path.join(fs.tempDir(), "runescript-guide.bin");
+    Array<uint8> header = [0x89, 0x50, 0x4E, 0x47];   // the start of a PNG file
+    fs.writeBytes(file, header);
+    fs.appendBytes(file, string.bytes("hi"));
+    Array<uint8> data = fs.readBytes(file);
+    trace(data.length, data[0], data[1]);             // 6 137 80
+    trace(fs.size(file));                             // 6
+    bool png = data.length >= 4 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47;
+    trace(png);                                       // true
+    trace(string.fromBytes(data.slice(4, 6)));        // hi
+    fs.remove(file);
     return 0;
 }
 ```

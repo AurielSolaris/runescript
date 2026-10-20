@@ -161,6 +161,35 @@ protected int main() {
 
 Combine `index` and `slice` to take a string apart, as you would in Go.
 
+### Bytes
+
+Go converts with `[]byte(s)` and `string(b)`. RuneScript has two functions
+that convert between a string and its UTF-8 bytes, an `Array<uint8>`:
+
+| Function | Returns | Description |
+|---|---|---|
+| `bytes(string s)` | `Array<uint8>` | The UTF-8 encoding of `s`, `len(s)` bytes |
+| `fromBytes(Array<uint8> b)` | `string` | The text in `b`; invalid UTF-8 becomes `�` (U+FFFD), as when `fs.readFile` reads a file |
+
+```actionscript
+package main;
+
+use "std:string";
+
+protected int main() {
+    Array<uint8> b = string.bytes("hé");
+    trace(b.length, b[0], b[1], b[2]);           // 3 104 195 169
+    trace(string.fromBytes(b));                  // hé
+    Array<uint8> broken = [0x61, 0xFF, 0x62];
+    trace(string.fromBytes(broken));             // a�b
+    return 0;
+}
+```
+
+Use them with `fs.readBytes` and `fs.writeBytes` ([chapter
+20](20-files-and-input.md#binary-files)) for files that mix text and binary
+data.
+
 ### Characters and callbacks
 
 These functions take a [`char`](16-text-and-arrays.md#characters-char),

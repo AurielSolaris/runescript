@@ -165,6 +165,34 @@ protected int main() {
 
 Go-তে যেমন, তেমনি `index` ও `slice` মিলিয়ে একটি স্ট্রিংকে টুকরো করুন।
 
+### বাইট
+
+Go রূপান্তর করে `[]byte(s)` ও `string(b)` দিয়ে। RuneScript-এ দুটি ফাংশন আছে, যা একটি
+স্ট্রিং ও তার UTF-8 বাইটের, একটি `Array<uint8>`-এর, মধ্যে রূপান্তর করে:
+
+| ফাংশন | ফেরত দেয় | বিবরণ |
+|---|---|---|
+| `bytes(string s)` | `Array<uint8>` | `s`-এর UTF-8 এনকোডিং, `len(s)`টি বাইট |
+| `fromBytes(Array<uint8> b)` | `string` | `b`-তে থাকা লেখা; অবৈধ UTF-8 হয়ে যায় `�` (U+FFFD), যেমন `fs.readFile` ফাইল পড়ার সময় করে |
+
+```actionscript
+package main;
+
+use "std:string";
+
+protected int main() {
+    Array<uint8> b = string.bytes("hé");
+    trace(b.length, b[0], b[1], b[2]);           // 3 104 195 169
+    trace(string.fromBytes(b));                  // hé
+    Array<uint8> broken = [0x61, 0xFF, 0x62];
+    trace(string.fromBytes(broken));             // a�b
+    return 0;
+}
+```
+
+যে ফাইলে লেখা ও বাইনারি ডেটা মেশানো থাকে, তার জন্য এগুলো `fs.readBytes` ও
+`fs.writeBytes`-এর সঙ্গে ব্যবহার করুন ([অধ্যায় ২০](20-files-and-input.md#বাইনারি-ফাইল))।
+
 ### অক্ষর ও কলব্যাক
 
 এই ফাংশনগুলো একটি [`char`](16-text-and-arrays.md) নেয়, অথবা এমন

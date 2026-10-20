@@ -937,7 +937,18 @@ const $rt = (() => {
     return s.slice(i, j);
   }
 
+  // utf8 encodes and decodes for string.bytes and string.fromBytes; the
+  // decoder matches std:fs's readFile (WHATWG UTF-8, the BOM kept).
+  let utf8Encoder = null, utf8Decoder = null;
   const string = {
+    bytes(s) {
+      if (utf8Encoder === null) utf8Encoder = new TextEncoder();
+      return Array.from(utf8Encoder.encode(s));
+    },
+    fromBytes(b) {
+      if (utf8Decoder === null) utf8Decoder = new TextDecoder("utf-8", { ignoreBOM: true });
+      return utf8Decoder.decode(Uint8Array.from(b));
+    },
     clone: (s) => s,
     compare(a, b) {
       const n = Math.min(a.length, b.length);
@@ -1918,6 +1929,19 @@ const $rt = (() => {
     appendFile(path, data) {
       notDir("append to", path);
       attempt("append to", path, () => nodeFs().appendFileSync(path, data));
+    },
+    // Bytes cross as arrays of numbers (Array<uint8>).
+    readBytes(path) {
+      mustFile("read", path);
+      return Array.from(attempt("read", path, () => nodeFs().readFileSync(path)));
+    },
+    writeBytes(path, bytes) {
+      notDir("write", path);
+      attempt("write", path, () => nodeFs().writeFileSync(path, Uint8Array.from(bytes)));
+    },
+    appendBytes(path, bytes) {
+      notDir("append to", path);
+      attempt("append to", path, () => nodeFs().appendFileSync(path, Uint8Array.from(bytes)));
     },
     exists: (path) => statOf("check", path) !== null,
     isFile(path) {

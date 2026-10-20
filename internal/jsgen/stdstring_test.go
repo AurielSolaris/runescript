@@ -108,7 +108,18 @@ func TestStdStringMatchesGo(t *testing.T) {
 				switch p.Kind {
 				case types.String:
 					args[j] = randomString(r)
-				case types.Array: // Array<string>
+				case types.Array:
+					if p.Elem.Kind == types.Unsigned { // Array<uint8>: any bytes, valid UTF-8 or not
+						var b []byte
+						if r.Intn(2) == 0 {
+							b = []byte(randomString(r))
+						}
+						for n := r.Intn(4); n > 0; n-- {
+							b = append(b, byte(r.Intn(256)))
+						}
+						args[j], goArgs[j] = byteList(b), append([]byte{}, b...)
+						continue
+					}
 					list := []string{}
 					for n := r.Intn(4); n > 0; n-- {
 						list = append(list, randomString(r))
@@ -195,5 +206,17 @@ func goCase(f *stdlib.Func, args, goArgs []any) (c stdCase) {
 		}
 	}()
 	c.Want = f.Impl(goArgs)
+	if b, ok := c.Want.([]byte); ok {
+		c.Want = byteList(b) // JSON would make []byte base64
+	}
 	return c
+}
+
+// byteList is b as numbers, the form of Array<uint8> in JavaScript.
+func byteList(b []byte) []int {
+	out := make([]int, len(b))
+	for i, x := range b {
+		out[i] = int(x)
+	}
+	return out
 }

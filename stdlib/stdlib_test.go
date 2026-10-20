@@ -28,7 +28,11 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 				case types.Float:
 					args[i] = 0.0
 				case types.Array:
-					args[i] = []string{}
+					if p.Elem.Kind == types.String {
+						args[i] = []string{}
+					} else {
+						args[i] = []byte{}
+					}
 				case types.Func:
 					if p.Result.Kind == types.Char {
 						args[i] = func(r rune) rune { return r }
@@ -56,7 +60,11 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 			case types.Float:
 				_, ok = out.(float64)
 			case types.Array:
-				_, ok = out.([]string)
+				if f.Result.Elem.Kind == types.String {
+					_, ok = out.([]string)
+				} else {
+					_, ok = out.([]byte)
+				}
 			case types.Void:
 				ok = out == nil
 			}
@@ -90,9 +98,10 @@ func call(t *testing.T, f *Func, args []any) (out any, faulted bool) {
 func TestStringPackageIsComplete(t *testing.T) {
 	// The functions of Go's strings package expressible so far, plus len,
 	// runeCount, and slice, which stand in for Go's len(s),
-	// utf8.RuneCountInString, and s[i:j] (OQ-STR-03).
+	// utf8.RuneCountInString, and s[i:j] (OQ-STR-03), and bytes/fromBytes
+	// for []byte(s) and string(b) (OQ-FS-01).
 	want := []string{
-		"len", "runeCount", "slice",
+		"len", "runeCount", "slice", "bytes", "fromBytes",
 		"containsFunc", "containsRune", "indexFunc", "indexRune", "lastIndexFunc", "map",
 		"trimFunc", "trimLeftFunc", "trimRightFunc",
 		"fields", "fieldsFunc", "join", "split", "splitAfter", "splitAfterN", "splitN",

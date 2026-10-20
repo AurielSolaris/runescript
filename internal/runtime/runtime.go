@@ -934,12 +934,20 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 	goArgs := make([]any, len(args))
 	for i, a := range args {
 		switch a.Kind {
-		case types.Array: // Array<string>, the only array a native takes
-			strs := make([]string, len(a.Arr.Elems))
-			for j, v := range a.Arr.Elems {
-				strs[j] = v.Str
+		case types.Array: // Array<string> as []string, Array<uint8> as []byte
+			if f.Params[i].Elem.Kind == types.String {
+				strs := make([]string, len(a.Arr.Elems))
+				for j, v := range a.Arr.Elems {
+					strs[j] = v.Str
+				}
+				goArgs[i] = strs
+				break
 			}
-			goArgs[i] = strs
+			b := make([]byte, len(a.Arr.Elems))
+			for j, v := range a.Arr.Elems {
+				b[j] = byte(v.Int)
+			}
+			goArgs[i] = b
 		case types.String:
 			goArgs[i] = a.Str
 		case types.Bool:
@@ -983,7 +991,14 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 		return Value{Kind: types.Char, Int: int64(out.(rune))}
 	case types.Float:
 		return Value{Kind: types.Float, F: out.(float64), Bits: f.Result.Bits}
-	case types.Array: // Array<string>
+	case types.Array: // Array<string> from []string, Array<uint8> from []byte
+		if b, ok := out.([]byte); ok {
+			arr := &ArrayValue{Elems: make([]Value, len(b))}
+			for i, x := range b {
+				arr.Elems[i] = Value{Kind: types.Unsigned, Int: int64(x), Bits: 8}
+			}
+			return Value{Kind: types.Array, Arr: arr}
+		}
 		strs := out.([]string)
 		arr := &ArrayValue{Elems: make([]Value, len(strs))}
 		for i, s := range strs {

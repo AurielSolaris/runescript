@@ -110,8 +110,9 @@ protected int main() {
 
 ## Files and directories
 
-Paths are relative to the working directory. Files are read and written as
-UTF-8 text.
+Paths are relative to the working directory. `readFile`, `writeFile`, and
+`appendFile` work with UTF-8 text; for other data, see [binary
+files](#binary-files) below.
 
 | Function | Does |
 |---|---|
@@ -159,6 +160,44 @@ protected int main() {
     }
     fs.removeAll(dir);
     trace(fs.exists(dir));                                 // false
+    return 0;
+}
+```
+
+### Binary files
+
+Images, archives, and other data that isn't text are read and written as
+bytes, an `Array<uint8>`. The bytes go to and from the file unchanged.
+
+| Function | Does |
+|---|---|
+| `fs.readBytes(string path)` | Returns the file's bytes, an `Array<uint8>` |
+| `fs.writeBytes(string path, Array<uint8> bytes)` | Creates or replaces a file |
+| `fs.appendBytes(string path, Array<uint8> bytes)` | Adds to the end of a file, creating it if needed |
+
+They fail like their text versions, with the same messages.
+`string.bytes(s)` and `string.fromBytes(b)` ([chapter
+10](10-std-string.md#bytes)) convert between text and its UTF-8 bytes.
+
+```actionscript
+package main;
+
+use "std:fs";
+use "std:path";
+use "std:string";
+
+protected int main() {
+    string file = path.join(fs.tempDir(), "runescript-guide.bin");
+    Array<uint8> header = [0x89, 0x50, 0x4E, 0x47];   // the start of a PNG file
+    fs.writeBytes(file, header);
+    fs.appendBytes(file, string.bytes("hi"));
+    Array<uint8> data = fs.readBytes(file);
+    trace(data.length, data[0], data[1]);             // 6 137 80
+    trace(fs.size(file));                             // 6
+    bool png = data.length >= 4 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47;
+    trace(png);                                       // true
+    trace(string.fromBytes(data.slice(4, 6)));        // hi
+    fs.remove(file);
     return 0;
 }
 ```

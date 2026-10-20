@@ -177,7 +177,7 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [x] `std:fs` on both targets: files, directories (`mkdir`, `mkdirAll`, `readDir`, `walk`, `remove`, `removeAll`), `copyFile`, `rename`, `size`, `tempDir`, with the same error messages everywhere (2026-10-17)
 - [x] `std:path`: Node.js's path semantics, implemented rather than wrapped, with platform, `posix…`, and `win32…` versions; tested against Node.js (2026-10-17)
 - [x] Example: a Brainfuck interpreter with 32,768 cells (`examples/brainfuck.rsc`) (2026-10-17)
-- [ ] Binary files (`Array<uint8>` in and out of `std:fs`)
+- [x] Binary files: `fs.readBytes`, `fs.writeBytes`, `fs.appendBytes` with `Array<uint8>`, and `string.bytes`/`string.fromBytes` (2026-10-20)
 
 ## v0.5: Numbers ✅
 
@@ -193,7 +193,7 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 
 - [x] `Array<T>`: literals, bounds-checked indexing, `length`, `push`, `pop`, reference semantics (2026-10-16, details provisional)
 - [x] `for each (T x in a)` loops, nested arrays (`Array<Array<T>>`), and the methods `insert`, `removeAt`, `slice`, `indexOf`, `contains`, `reverse`, `sort()`, `sort(less)` (stable, same comparator calls on both targets) (2026-10-20)
-- [ ] `std:fs` binary files (`Array<uint8>`) and line helpers
+- [x] `std:fs` binary files (`Array<uint8>`), see v0.4 (2026-10-20)
 - [ ] `std:csv`: parse and format `Array<Array<string>>`
 - [ ] `std:json`: an opaque `json.Value` read with checked functions, and `json.stringify`
 - [ ] `std:matrix`: functions over `Array<Array<float64>>` (owner chose a library, no new type)

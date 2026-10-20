@@ -80,7 +80,7 @@ protected int main() {
   `big * big / big` works ([guide](docs/guide/04-operators.md#overflow-never-wraps-silently))
 - Files, input, and output on both targets: `std:io` (print without a
   newline, red error and yellow warning lines, standard input), `std:process`
-  (arguments, environment), `std:fs` (files and directories), and `std:path`
+  (arguments, environment), `std:fs` (text and binary files, directories), and `std:path`
   (Node.js's path rules, implemented in RuneScript's runtimes)
   ([guide](docs/guide/20-files-and-input.md))
 - Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
@@ -107,7 +107,7 @@ TypeScript, which trusts its declarations and erases them, RuneScript
 checks every value that crosses in from JavaScript, and it has no `any`, no
 implicit conversions, and no unchecked casts.
 
-**Not yet implemented:** classes, binary files, `go:`
+**Not yet implemented:** classes, `go:`
 packages, `std:symrs`, objects, arrays, structs, and callbacks across the
 JavaScript boundary, `$foreach` and component tags in templates, and the
 planned native graphics package. See the [roadmap](docs/ROADMAP.md).

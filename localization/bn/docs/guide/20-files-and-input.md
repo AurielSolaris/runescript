@@ -112,7 +112,8 @@ protected int main() {
 
 ## ফাইল ও ডিরেক্টরি
 
-পাথগুলো ওয়ার্কিং ডিরেক্টরির সাপেক্ষে। ফাইল UTF-8 লেখা হিসেবে পড়া ও লেখা হয়।
+পাথগুলো ওয়ার্কিং ডিরেক্টরির সাপেক্ষে। `readFile`, `writeFile` ও `appendFile` UTF-8
+লেখা নিয়ে কাজ করে; অন্য ডেটার জন্য নিচের [বাইনারি ফাইল](#বাইনারি-ফাইল) দেখুন।
 
 | ফাংশন | কাজ |
 |---|---|
@@ -159,6 +160,44 @@ protected int main() {
     }
     fs.removeAll(dir);
     trace(fs.exists(dir));                                 // false
+    return 0;
+}
+```
+
+### বাইনারি ফাইল
+
+ছবি, আর্কাইভ এবং লেখা নয় এমন অন্য ডেটা বাইট হিসেবে, একটি `Array<uint8>` হিসেবে,
+পড়া ও লেখা হয়। বাইটগুলো কোনো বদল ছাড়াই ফাইলে যায় ও ফাইল থেকে আসে।
+
+| ফাংশন | কী করে |
+|---|---|
+| `fs.readBytes(string path)` | ফাইলের বাইটগুলো ফেরত দেয়, একটি `Array<uint8>` |
+| `fs.writeBytes(string path, Array<uint8> bytes)` | একটি ফাইল তৈরি করে বা বদলে দেয় |
+| `fs.appendBytes(string path, Array<uint8> bytes)` | ফাইলের শেষে যোগ করে, দরকার হলে ফাইলটি তৈরি করে |
+
+এগুলো তাদের লেখার সংস্করণের মতোই, একই বার্তা দিয়ে, ব্যর্থ হয়। `string.bytes(s)` ও
+`string.fromBytes(b)` ([অধ্যায় ১০](10-std-string.md#বাইট)) লেখা ও তার UTF-8 বাইটের
+মধ্যে রূপান্তর করে।
+
+```actionscript
+package main;
+
+use "std:fs";
+use "std:path";
+use "std:string";
+
+protected int main() {
+    string file = path.join(fs.tempDir(), "runescript-guide.bin");
+    Array<uint8> header = [0x89, 0x50, 0x4E, 0x47];   // the start of a PNG file
+    fs.writeBytes(file, header);
+    fs.appendBytes(file, string.bytes("hi"));
+    Array<uint8> data = fs.readBytes(file);
+    trace(data.length, data[0], data[1]);             // 6 137 80
+    trace(fs.size(file));                             // 6
+    bool png = data.length >= 4 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47;
+    trace(png);                                       // true
+    trace(string.fromBytes(data.slice(4, 6)));        // hi
+    fs.remove(file);
     return 0;
 }
 ```

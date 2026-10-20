@@ -3,6 +3,7 @@ package stdlib
 import (
 	"errors"
 	"io"
+
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -12,7 +13,8 @@ import (
 
 // std:fs: files and directories. Relative paths are relative to the
 // working directory. Text is read and written as UTF-8; invalid UTF-8
-// read from a file becomes U+FFFD (decodeUTF8).
+// read from a file becomes U+FFFD (decodeUTF8). readBytes, writeBytes, and
+// appendBytes move bytes (Array<uint8>) unchanged.
 //
 // A failure throws an Error whose message names the operation, the path,
 // and one of a few reasons with the same wording on every target and
@@ -91,6 +93,43 @@ func notDir(op, path string) {
 	}
 }
 
+// readAll reads the file path. readFile decodes it as UTF-8; readBytes
+// returns the bytes as they are.
+func readAll(path string) []byte {
+	mustFile("read", path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fsErr("read", path, err)
+	}
+	return data
+}
+
+// writeAll creates or replaces the file path with data.
+func writeAll(path string, data []byte) any {
+	notDir("write", path)
+	if err := os.WriteFile(path, data, 0o666); err != nil {
+		fsErr("write", path, err)
+	}
+	return nil
+}
+
+// appendAll adds data to the end of the file path, creating it if needed.
+func appendAll(path string, data []byte) any {
+	notDir("append to", path)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o666)
+	if err != nil {
+		fsErr("append to", path, err)
+	}
+	_, err = f.Write(data)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		fsErr("append to", path, err)
+	}
+	return nil
+}
+
 // names lists the entries of directory path, sorted by name.
 func names(op, path string) []string {
 	mustDir(op, path)
@@ -128,42 +167,15 @@ func walk(root, rel string, out []string) []string {
 
 func init() {
 	S, B, V := types.StringT, types.BoolT, types.VoidT
-	SA := types.NewArray(S)
+	SA, BA := types.NewArray(S), types.NewArray(types.Uint8)
 	p := &Package{Path: "fs", Qualifier: "fs"}
 	p.add(
-		fn("readFile", S, func(a []any) any {
-			path := str(a[0])
-			mustFile("read", path)
-			data, err := os.ReadFile(path)
-			if err != nil {
-				fsErr("read", path, err)
-			}
-			return decodeUTF8(data)
-		}, S),
-		fn("writeFile", V, func(a []any) any {
-			path := str(a[0])
-			notDir("write", path)
-			if err := os.WriteFile(path, []byte(str(a[1])), 0o666); err != nil {
-				fsErr("write", path, err)
-			}
-			return nil
-		}, S, S),
-		fn("appendFile", V, func(a []any) any {
-			path := str(a[0])
-			notDir("append to", path)
-			f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o666)
-			if err != nil {
-				fsErr("append to", path, err)
-			}
-			_, err = io.WriteString(f, str(a[1]))
-			if cerr := f.Close(); err == nil {
-				err = cerr
-			}
-			if err != nil {
-				fsErr("append to", path, err)
-			}
-			return nil
-		}, S, S),
+		fn("readFile", S, func(a []any) any { return decodeUTF8(readAll(str(a[0]))) }, S),
+		fn("writeFile", V, func(a []any) any { return writeAll(str(a[0]), []byte(str(a[1]))) }, S, S),
+		fn("appendFile", V, func(a []any) any { return appendAll(str(a[0]), []byte(str(a[1]))) }, S, S),
+		fn("readBytes", BA, func(a []any) any { return readAll(str(a[0])) }, S),
+		fn("writeBytes", V, func(a []any) any { return writeAll(str(a[0]), a[1].([]byte)) }, S, BA),
+		fn("appendBytes", V, func(a []any) any { return appendAll(str(a[0]), a[1].([]byte)) }, S, BA),
 		fn("exists", B, func(a []any) any { return statOf("check", str(a[0])) != nil }, S),
 		fn("isFile", B, func(a []any) any {
 			info := statOf("check", str(a[0]))

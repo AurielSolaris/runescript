@@ -185,6 +185,38 @@ protected int main() {
 
 שלבו את `index` ו-`slice` כדי לפרק מחרוזת, כמו ב-Go.
 
+### בתים
+
+ב-Go ממירים עם `[]byte(s)` ו-`string(b)`. ב-RuneScript יש שתי פונקציות שממירות בין
+מחרוזת לבין הבתים שלה ב-UTF-8, `Array<uint8>`:
+
+| פונקציה | מחזירה | תיאור |
+|---|---|---|
+| `bytes(string s)` | `Array<uint8>` | קידוד ה-UTF-8 של `s`, ‏`len(s)` בתים |
+| `fromBytes(Array<uint8> b)` | `string` | הטקסט שב-`b`; UTF-8 לא תקין הופך ל-`�` (U+FFFD), כמו כש-`fs.readFile` קוראת קובץ |
+
+</div>
+
+```actionscript
+package main;
+
+use "std:string";
+
+protected int main() {
+    Array<uint8> b = string.bytes("hé");
+    trace(b.length, b[0], b[1], b[2]);           // 3 104 195 169
+    trace(string.fromBytes(b));                  // hé
+    Array<uint8> broken = [0x61, 0xFF, 0x62];
+    trace(string.fromBytes(broken));             // a�b
+    return 0;
+}
+```
+
+<div dir="rtl">
+
+השתמשו בהן עם `fs.readBytes` ו-`fs.writeBytes` ([פרק 20](20-files-and-input.md#קבצים-בינאריים))
+לקבצים שמערבבים טקסט ונתונים בינאריים.
+
 ### תווים ו-callbacks
 
 הפונקציות האלה מקבלות [`char`](16-text-and-arrays.md), או פונקציה

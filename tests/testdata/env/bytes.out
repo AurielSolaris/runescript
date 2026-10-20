@@ -1,0 +1,14 @@
+round trip 256 true 256
+89 50 4e 47 0d 0a 1a 0a  ff 
+empty 0 0
+10 68 c3 a9 6c 6c 6f 20 e2 82 ac 
+héllo €
+héllo €
+61 c3 b1 
+a�b� a�b� 61 ff 62 c3 
+0 true
+read missing -> fs.readBytes: cannot read missing.bin: no such file or directory
+read dir -> fs.readBytes: cannot read dir: is a directory
+write dir -> fs.writeBytes: cannot write dir: is a directory
+append dir -> fs.appendBytes: cannot append to dir: is a directory
+write in missing dir -> fs.writeBytes: cannot write nope/x.bin: no such file or directory
