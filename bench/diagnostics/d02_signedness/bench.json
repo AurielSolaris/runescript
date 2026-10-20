@@ -1,0 +1,2 @@
+{"id": "D02", "title": "Signed value into an unsigned variable", "rs_line": 6, "ts_line": 0,
+ "note": "TypeScript has one number type, so it has no equivalent check: ts_line 0 means the program is expected to be accepted."}

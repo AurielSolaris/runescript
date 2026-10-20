@@ -1,0 +1,9 @@
+{
+  "id": "C13",
+  "name": "strings",
+  "title": "String units: bytes, code points, UTF-16",
+  "categories": ["conformance"],
+  "measures": "Length, slicing, search, and equality on \"\", ASCII, accented (precomposed and combining), emoji, and Japanese text.",
+  "sizes": {"test": "0"},
+  "notes": "Intended divergence (expected/test.ts.out): RuneScript strings are UTF-8, and string.len, string.slice, and string.index count bytes; TypeScript's length, substring, and indexOf count UTF-16 code units. Both versions also print the code-point count, which agrees. Precomposed é and e + combining accent are different strings in both."
+}

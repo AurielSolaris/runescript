@@ -1,0 +1,8 @@
+{
+  "id": "S02",
+  "name": "one_function",
+  "title": "One function",
+  "categories": ["size"],
+  "measures": "Function wrapper and module overhead of the smallest program that does something.",
+  "sizes": {"test": "0"}
+}

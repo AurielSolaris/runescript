@@ -1,0 +1,8 @@
+[] native=0 codepoints=0 head=[] e@-1
+[hello] native=5 codepoints=5 head=[h] e@1
+[café] native=4 codepoints=4 head=[c] e@-1
+[é] native=1 codepoints=1 head=[é] e@-1
+[😀] native=2 codepoints=1 head=[<lone surrogate d83d>] e@-1
+[こんにちは] native=5 codepoints=5 head=[こ] e@-1
+[é] native=2 codepoints=2 head=[e] e@0
+precomposed == combining: false

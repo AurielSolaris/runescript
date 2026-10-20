@@ -1,0 +1,9 @@
+{
+  "id": "S10",
+  "name": "errors",
+  "title": "Error handling",
+  "categories": ["runtime", "size"],
+  "measures": "Size: the error constructors and propagation support a program pulls in. Runtime (B10): the cost of throwing and catching a recoverable error, separately from the successful checked path.",
+  "sizes": {"test": "100", "small": "20000", "medium": "200000", "large": "1000000"},
+  "notes": "RuneScript raises RangeError from its own overflow check; the TypeScript version performs the same check by hand and throws a RangeError, so both pay for the check and the throw."
+}

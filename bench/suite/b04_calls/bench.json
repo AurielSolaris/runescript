@@ -1,0 +1,8 @@
+{
+  "id": "B04",
+  "name": "calls",
+  "title": "Function calls",
+  "categories": ["runtime", "size"],
+  "measures": "Direct calls, nested calls, calls through a function value, and a lambda.",
+  "sizes": {"test": "1000", "small": "200000", "medium": "2000000", "large": "10000000"}
+}

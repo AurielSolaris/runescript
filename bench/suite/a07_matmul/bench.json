@@ -1,0 +1,9 @@
+{
+  "id": "A07",
+  "name": "matmul",
+  "title": "Matrix multiplication",
+  "categories": ["runtime", "size"],
+  "measures": "float64 throughput and data layout: C = A x B for n x n matrices stored row-major in flat arrays (i-k-j loop order).",
+  "sizes": {"test": "8", "small": "64", "medium": "160", "large": "256"},
+  "notes": "Both sides add the same float64 products in the same order, so the printed sums are bit-identical."
+}

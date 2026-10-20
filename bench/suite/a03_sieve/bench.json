@@ -1,0 +1,8 @@
+{
+  "id": "A03",
+  "name": "sieve",
+  "title": "Sieve of Eratosthenes",
+  "categories": ["runtime", "size"],
+  "measures": "Array writes and integer arithmetic: counts the primes up to n.",
+  "sizes": {"test": "1000", "small": "100000", "medium": "1000000", "large": "5000000"}
+}

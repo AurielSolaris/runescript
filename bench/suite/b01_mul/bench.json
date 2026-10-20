@@ -1,0 +1,9 @@
+{
+  "id": "B01b",
+  "name": "arith_mul",
+  "title": "Integer multiply and remainder throughput",
+  "categories": ["runtime", "size"],
+  "measures": "A multiply-add-remainder hash in a counted loop. Intermediate products exceed int32 (RuneScript widens them; TypeScript numbers are exact below 2^53).",
+  "sizes": {"test": "1000", "small": "1000000", "medium": "10000000", "large": "50000000"},
+  "notes": "acc * 31 + i exceeds int32 for large acc: RuneScript's generic int widens the intermediate (no error), and only the stored result is checked. ts-checked checks the stored result the same way."
+}

@@ -1,0 +1,9 @@
+{
+  "id": "S11",
+  "name": "json",
+  "title": "JSON parse, read, and write",
+  "categories": ["runtime", "size"],
+  "measures": "Size: the library code a JSON program imports (RuneScript's std:json section vs the host's built-in JSON). Runtime (B08): parsing and serializing a generated document of n records.",
+  "sizes": {"test": "5", "small": "2000", "medium": "20000", "large": "100000"},
+  "notes": "TypeScript uses the engine's native JSON.parse/JSON.stringify (C++ in V8); RuneScript's std:json is implemented in the language runtime on both targets, with checked reads. Expect TypeScript to win this one; the point is to measure by how much."
+}

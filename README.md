@@ -175,6 +175,58 @@ The suite includes:
 - a check that every program in the documentation compiles, and that the
   translations keep every code block of the English pages.
 
+## Benchmarks
+
+[`bench/`](bench/README.md) compares RuneScript with **TypeScript 1.0 RC**
+(npm `typescript@0.9.7`, installed locally by `npm install` in `bench/`).
+Each program runs three ways: on the interpreter (RS-VM), compiled to
+JavaScript (RS-JS), and as the same algorithm in TypeScript (TS). All
+three run on Node.js except RS-VM. Every benchmark is a self-contained
+directory. Run a category with `go run ./bench/rsbench run`, `size`,
+`compile`, or `diag`, and check correctness with `go run ./bench/rsbench
+verify`.
+
+First results, 2026-10-20 (v0.6.0-dev, Windows 10 x64, Node 24.16, small
+inputs, median of 5 runs). These are early numbers. Small inputs keep the
+interpreter runs short, so several TypeScript times are only a few
+milliseconds above Node's startup time.
+
+| | RS-VM | RS-JS | TS |
+|---|---:|---:|---:|
+| Three-body simulation, 100k steps (net ms) | 1276 | 65 | 8 |
+| Merge sort, 50k integers (net ms) | 1040 | 66 | 23 |
+| Matrix multiply, 64×64 float64 (net ms) | 172 | 28 | 8 |
+| Recursive Fibonacci, n = 24 (net ms) | 115 | 10 | 5 |
+| Throw and catch 20k errors (net ms) | 97 | 39 | 182 |
+| Empty program, minified + gzip (bytes) | – | 4,823 | 20 |
+| Compile a 2,000-function file (ms) | – | 171 | 1,464 |
+
+- **Correctness.** Every benchmark gives the same output on all three
+  implementations. Three conformance programs differ from TypeScript on
+  purpose: overflow, float32 printing, and string units (bytes vs UTF-16).
+  Each difference is recorded and explained in that program's notes.
+- **Speed.** RuneScript's generated JavaScript is slower than plain
+  TypeScript, by 1.2× to 25× across the suite. Most of that is the price
+  of checked integer arithmetic. A TypeScript version with the same int32
+  checks (`ts-checked`) closes most of the gap on the addition benchmark.
+  RuneScript was faster only where TypeScript has to check by hand:
+  throwing and catching errors (4.6×). The interpreter is 2.5× to 33×
+  slower than RS-JS, except on JSON, where it is faster: its `std:json`
+  is native Go code.
+- **Size.** Each RuneScript module carries about 4.8 KB (minified +
+  gzip) of runtime. Using `std:math` adds about 6 KB more, even for just
+  `math.sqrt`. That makes the runtime the main size target.
+- **Compiler.** `runescript build` was 9× to 51× faster than TypeScript
+  1.0's `tsc` on the generated projects. `tsc` spends almost a second
+  starting up on modern Node.
+- **Diagnostics.** On six paired mistakes, both compilers put the first
+  error on the right line. TypeScript has no equivalent of RuneScript's
+  signed-to-unsigned check.
+
+The method, the full tables, and how to add a benchmark are in
+[`bench/README.md`](bench/README.md). Benchmark results are published
+only here, not on the website.
+
 ## Examples
 
 [`examples/`](examples/README.md) has programs for every feature: the
@@ -229,6 +281,7 @@ stdlib/                standard library packages (std:string, std:math, std:io, 
                        internal/jsgen/runtime.js
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests
+bench/                 benchmark and conformance suite vs TypeScript 1.0 RC (go run ./bench/rsbench)
 assets/                logo: SVG source and PNGs generated from it
 scripts/               render-logo.sh: SVG → PNG via headless Edge/Chrome
 ```

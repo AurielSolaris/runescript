@@ -1,0 +1,8 @@
+{
+  "id": "S01",
+  "name": "empty",
+  "title": "Empty program",
+  "categories": ["runtime", "size"],
+  "measures": "Fixed startup cost (I01) and the minimum generated output. Its median is each implementation's startup baseline: run reports net times by subtracting it.",
+  "sizes": {"test": "0", "small": "0", "medium": "0", "large": "0"}
+}

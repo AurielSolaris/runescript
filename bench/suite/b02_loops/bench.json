@@ -1,0 +1,8 @@
+{
+  "id": "B02",
+  "name": "loops",
+  "title": "Loop overhead",
+  "categories": ["runtime", "size"],
+  "measures": "Counted, nested, while, and multi-update loops with almost no work in the body: the cost per iteration.",
+  "sizes": {"test": "10", "small": "300", "medium": "1000", "large": "3000"}
+}

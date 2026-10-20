@@ -1,0 +1,9 @@
+{
+  "id": "A11",
+  "name": "three_body",
+  "title": "Three-body simulation",
+  "categories": ["runtime", "size"],
+  "measures": "float64 arithmetic, square roots, and state updates: n steps of a softened, symplectic-Euler three-body integration, with the total energy before and after.",
+  "sizes": {"test": "100", "small": "100000", "medium": "1000000", "large": "5000000"},
+  "notes": "math.sqrt and Math.sqrt are both correctly rounded, and the operations happen in the same order, so the energies are bit-identical."
+}

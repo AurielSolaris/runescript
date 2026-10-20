@@ -1,0 +1,8 @@
+[] native=0 codepoints=0 head=[] e@-1
+[hello] native=5 codepoints=5 head=[h] e@1
+[café] native=5 codepoints=4 head=[c] e@-1
+[é] native=2 codepoints=1 head=[string.slice: byte offset 1 is inside a character] e@-1
+[😀] native=4 codepoints=1 head=[string.slice: byte offset 1 is inside a character] e@-1
+[こんにちは] native=15 codepoints=5 head=[string.slice: byte offset 1 is inside a character] e@-1
+[é] native=3 codepoints=2 head=[e] e@0
+precomposed == combining: false

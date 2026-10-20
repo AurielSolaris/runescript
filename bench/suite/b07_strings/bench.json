@@ -1,0 +1,9 @@
+{
+  "id": "B07",
+  "name": "strings",
+  "title": "String processing",
+  "categories": ["runtime", "size"],
+  "measures": "Concatenation, searching, prefix checks, splitting, joining, and replacing, on ASCII text.",
+  "sizes": {"test": "50", "small": "5000", "medium": "20000", "large": "60000"},
+  "notes": "ASCII only, so RuneScript's byte lengths and offsets equal TypeScript's UTF-16 ones (C13 covers non-ASCII text). TypeScript 1.0's library has no startsWith or repeat: the TS version uses indexOf/lastIndexOf and split/join, as 2014 code would."
+}

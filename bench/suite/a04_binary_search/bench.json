@@ -1,0 +1,8 @@
+{
+  "id": "A04",
+  "name": "binary_search",
+  "title": "Binary search",
+  "categories": ["runtime", "size"],
+  "measures": "Branching and array reads: n pseudo-random lookups in a sorted array of n elements.",
+  "sizes": {"test": "100", "small": "100000", "medium": "1000000", "large": "3000000"}
+}

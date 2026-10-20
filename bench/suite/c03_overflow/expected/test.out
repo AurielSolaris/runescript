@@ -1,0 +1,11 @@
+intermediate 2147483647 0
+max+1 integer overflow: 2147483647 + 1 = 2147483648 does not fit in 'int'
+min-1 integer overflow: -2147483648 - 1 = -2147483649 does not fit in 'int'
+max*2 integer overflow: 2147483647 * 2 = 4294967294 does not fit in 'int'
+-min integer overflow: 0 - -2147483648 = 2147483648 does not fit in 'int'
+max+max integer overflow: 2147483647 + 2147483647 = 4294967294 does not fit in 'int'
+1/0 integer division by zero
+1%0 integer division by zero
+uint8 integer overflow: 255 + 1 = 256 does not fit in 'uint8'
+int64 integer overflow: 9223372036854775807 + 1 = 9223372036854775808 does not fit in 'int64'
+2^53+1 9007199254740993

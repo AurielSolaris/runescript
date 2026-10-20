@@ -1,0 +1,8 @@
+{
+  "id": "A02",
+  "name": "fib_rec",
+  "title": "Fibonacci, recursive",
+  "categories": ["runtime", "size"],
+  "measures": "Function-call and return overhead: naive recursive Fibonacci (about 1.6^n calls).",
+  "sizes": {"test": "15", "small": "24", "medium": "28", "large": "32"}
+}

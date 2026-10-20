@@ -1,0 +1,9 @@
+{
+  "name": "runescript-bench",
+  "private": true,
+  "description": "Pinned TypeScript-side toolchain for the RuneScript benchmark suite: TypeScript 0.9.7 (npm build of the 1.0 RC, 2014-02-25) and esbuild for minification. See README.md.",
+  "devDependencies": {
+    "esbuild": "0.25.9",
+    "typescript": "0.9.7"
+  }
+}

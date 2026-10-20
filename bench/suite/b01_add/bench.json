@@ -1,0 +1,9 @@
+{
+  "id": "B01a",
+  "name": "arith_add",
+  "title": "Integer addition throughput",
+  "categories": ["runtime", "size"],
+  "measures": "Additions and subtractions in a counted loop. ts-checked adds RuneScript's int32 store check to every assignment (the equivalent-semantics variant).",
+  "sizes": {"test": "1000", "small": "1000000", "medium": "10000000", "large": "50000000"},
+  "notes": "RuneScript int arithmetic is checked: a result that does not fit int32 when stored throws RangeError. Plain TypeScript numbers never overflow at 2^31; ts-checked emulates the check."
+}

@@ -1,0 +1,9 @@
+{
+  "id": "B01c",
+  "name": "arith_div",
+  "title": "Integer division throughput",
+  "categories": ["runtime", "size"],
+  "measures": "Truncating integer division and remainder in a counted loop.",
+  "sizes": {"test": "1000", "small": "1000000", "medium": "10000000", "large": "50000000"},
+  "notes": "RuneScript's int / int truncates toward zero and checks for division by zero. TypeScript has only float division: the TS version truncates explicitly with Math.floor (operands are non-negative), and does not check for zero (the divisor is never zero)."
+}

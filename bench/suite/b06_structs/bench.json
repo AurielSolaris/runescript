@@ -1,0 +1,9 @@
+{
+  "id": "B06",
+  "name": "structs",
+  "title": "Struct copy and mutation",
+  "categories": ["runtime", "size"],
+  "measures": "Copying small and nested structs, updating fields, and passing and returning them by value.",
+  "sizes": {"test": "100", "small": "100000", "medium": "1000000", "large": "5000000"},
+  "notes": "RuneScript structs are values: assignment, arguments, and returns copy. TypeScript objects are references, so the TS version copies explicitly ({x: p.x, ...}) wherever RuneScript copies implicitly, to keep the same algorithm."
+}

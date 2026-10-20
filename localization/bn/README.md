@@ -223,6 +223,7 @@ stdlib/                standard library packages (std:string, std:math, std:io, 
                        internal/jsgen/runtime.js
 examples/              example programs
 tests/                 end-to-end, golden, and documentation tests
+bench/                 benchmark and conformance suite vs TypeScript 1.0 RC (go run ./bench/rsbench)
 assets/                logo: SVG source and PNGs generated from it
 scripts/               render-logo.sh: SVG → PNG via headless Edge/Chrome
 ```

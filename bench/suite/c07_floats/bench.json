@@ -1,0 +1,9 @@
+{
+  "id": "C07",
+  "name": "floats",
+  "title": "Floating-point behavior",
+  "categories": ["conformance"],
+  "measures": "0.1 + 0.2, large plus small magnitudes, repeated accumulation, float32 rounding, signed zero, infinities, NaN comparisons, and number formatting.",
+  "sizes": {"test": "0"},
+  "notes": "float64 is IEEE double on both sides and every float64 line agrees. TypeScript has no float32: the TS version rounds with Math.fround (ES2015; TypeScript 1.0's library doesn't declare it, so it is reached through any) wherever RuneScript computes in float32. Intended divergence (expected/test.ts.out): RuneScript prints a float32 as the shortest text that reads back as the same float32 (0.1), while TypeScript can only print the double it holds (0.10000000149011612). The values are equal."
+}

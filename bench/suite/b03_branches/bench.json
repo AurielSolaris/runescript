@@ -1,0 +1,8 @@
+{
+  "id": "B03",
+  "name": "branches",
+  "title": "Branch patterns",
+  "categories": ["runtime", "size"],
+  "measures": "Predictable, alternating, and pseudo-random branches over the same number of iterations. The random stream is the Park-Miller generator, whose products stay below 2^53.",
+  "sizes": {"test": "1000", "small": "300000", "medium": "3000000", "large": "20000000"}
+}

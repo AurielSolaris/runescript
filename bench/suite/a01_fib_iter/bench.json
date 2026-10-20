@@ -1,0 +1,8 @@
+{
+  "id": "A01",
+  "name": "fib_iter",
+  "title": "Fibonacci, iterative",
+  "categories": ["runtime", "size"],
+  "measures": "A tight loop of integer additions and remainders (Fibonacci modulo 1,000,003).",
+  "sizes": {"test": "100", "small": "1000000", "medium": "10000000", "large": "50000000"}
+}

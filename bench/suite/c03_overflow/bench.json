@@ -1,0 +1,9 @@
+{
+  "id": "C03",
+  "name": "overflow",
+  "title": "Overflow, boundaries, and division by zero",
+  "categories": ["conformance"],
+  "measures": "MAX + 1, MIN - 1, MAX * 2, -MIN, MAX + MAX, overflow in an intermediate whose final result fits, fixed-width boundaries, and integer division by zero (C02, C03, C06, C08).",
+  "sizes": {"test": "0"},
+  "notes": "Intended divergence (expected/test.ts.out): RuneScript checks every integer result and throws RangeError when a stored value does not fit; TypeScript numbers are doubles, so the same expressions give exact larger values (or Infinity for division by zero) and never fail. Where RuneScript prints an error, TypeScript prints a number."
+}

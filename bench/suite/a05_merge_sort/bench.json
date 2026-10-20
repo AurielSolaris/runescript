@@ -1,0 +1,8 @@
+{
+  "id": "A05",
+  "name": "merge_sort",
+  "title": "Merge sort",
+  "categories": ["runtime", "size"],
+  "measures": "Arrays, recursion, and copying: a top-down merge sort (written out, not the library sort) of n pseudo-random integers.",
+  "sizes": {"test": "100", "small": "50000", "medium": "300000", "large": "1000000"}
+}

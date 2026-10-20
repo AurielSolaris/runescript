@@ -1,0 +1,8 @@
+{
+  "id": "A14",
+  "name": "mandelbrot",
+  "title": "Mandelbrot set",
+  "categories": ["runtime", "size"],
+  "measures": "float64 arithmetic and data-dependent branches: an n x n grid over [-2, 1] x [-1.5, 1.5], at most 100 iterations per point.",
+  "sizes": {"test": "16", "small": "200", "medium": "600", "large": "1200"}
+}

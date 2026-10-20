@@ -1,0 +1,9 @@
+{
+  "id": "B05",
+  "name": "arrays",
+  "title": "Array access",
+  "categories": ["runtime", "size"],
+  "measures": "Appends, sequential reads, sequential writes, and pseudo-random reads, all bounds-checked in RuneScript.",
+  "sizes": {"test": "100", "small": "100000", "medium": "1000000", "large": "5000000"},
+  "notes": "RuneScript checks every index (RangeError when out of bounds); JavaScript arrays return undefined instead. All indexes here are in bounds."
+}

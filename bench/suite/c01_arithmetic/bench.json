@@ -1,0 +1,9 @@
+{
+  "id": "C01",
+  "name": "arithmetic",
+  "title": "Basic arithmetic and division edge cases",
+  "categories": ["conformance"],
+  "measures": "+, -, *, /, and % on positive and negative integers, including truncating division and the sign of the remainder (C01, C06).",
+  "sizes": {"test": "0"},
+  "notes": "RuneScript's int / int truncates toward zero; TypeScript's / is float division. The TS version truncates explicitly (trunc), so both print the same values: this checks that RuneScript matches the C/ActionScript-style integer rules a TS developer would write by hand."
+}
