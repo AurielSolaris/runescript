@@ -1,6 +1,8 @@
 package checker
 
 import (
+	"fmt"
+
 	"github.com/AurielSolaris/runescript/internal/ast"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/types"
@@ -98,32 +100,123 @@ func (c *checker) arrayField(e *ast.SelectorExpr, t *types.Type) *types.Type {
 		return types.Int
 	}
 	c.errorf(diagnostics.TypeNoField, e.Name.Span, "'%s' has no field '%s'", t, e.Name.Name).
-		WithHelp("arrays have the field length and the methods push and pop")
+		WithHelp(arrayHelp)
 	return types.InvalidT
 }
 
-// arrayMethod checks a.push(v) and a.pop() on an array of type t.
+// arrayHelp lists what arrays have, for diagnostics.
+const arrayHelp = "arrays have the field length and the methods push, pop, insert, removeAt, slice, indexOf, contains, reverse, and sort"
+
+// arrayMethod checks a method call on an array of type t:
+//
+//	push(v)          append v                       void
+//	pop()            remove and return the last     T
+//	insert(i, v)     insert v before index i        void (0 <= i <= length)
+//	removeAt(i)      remove and return element i    T
+//	slice(start, end) copy of [start, end)           Array<T>
+//	indexOf(v)       first index of v, or -1        int (T comparable)
+//	contains(v)      whether v is an element        bool (T comparable)
+//	reverse()        reverse in place               void
+//	sort()           sort in place, ascending       void (T a number, char, or string)
+//	sort(less)       sort in place by less          void (less is bool(T, T))
 func (c *checker) arrayMethod(e *ast.CallExpr, name *ast.Ident, t *types.Type) *types.Type {
 	c.info.ArrayCalls[e] = name.Name
+	argc := func(n int, what string) bool {
+		if len(e.Args) == n {
+			return true
+		}
+		c.errorf(diagnostics.TypeArgCount, e.Span, "%s expects %s, found %d", name.Name, what, len(e.Args))
+		c.exprs(e.Args)
+		return false
+	}
+	comparable := func() bool {
+		if types.Comparable(t.Elem) {
+			return true
+		}
+		c.errorf(diagnostics.TypeBadOperand, name.Span, "%s needs elements that can be compared with ==, but '%s' cannot", name.Name, t.Elem).
+			WithHelp("search with a loop instead")
+		c.exprs(e.Args)
+		return false
+	}
 	switch name.Name {
 	case "push":
-		if len(e.Args) != 1 {
-			c.errorf(diagnostics.TypeArgCount, e.Span, "push expects 1 argument, the element to append, found %d", len(e.Args))
-			c.exprs(e.Args)
-			return types.VoidT
+		if argc(1, "1 argument, the element to append") {
+			c.assign(t.Elem, e.Args[0], "pass")
 		}
-		c.assign(t.Elem, e.Args[0], "pass")
 		return types.VoidT
-	case "pop":
-		if len(e.Args) != 0 {
-			c.errorf(diagnostics.TypeArgCount, e.Span, "pop takes no arguments, found %d", len(e.Args))
-			c.exprs(e.Args)
+	case "pop", "reverse":
+		argc(0, "no arguments")
+		if name.Name == "pop" {
+			return t.Elem
+		}
+		return types.VoidT
+	case "insert":
+		if argc(2, "2 arguments, an index and the element") {
+			c.indexValue(e.Args[0])
+			c.assign(t.Elem, e.Args[1], "pass")
+		}
+		return types.VoidT
+	case "removeAt":
+		if argc(1, "1 argument, the index of the element to remove") {
+			c.indexValue(e.Args[0])
 		}
 		return t.Elem
+	case "slice":
+		if argc(2, "2 arguments, the start and end indexes") {
+			c.indexValue(e.Args[0])
+			c.indexValue(e.Args[1])
+		}
+		return t
+	case "indexOf", "contains":
+		if argc(1, "1 argument, the element to look for") && comparable() {
+			c.assign(t.Elem, e.Args[0], "pass")
+		}
+		if name.Name == "indexOf" {
+			return types.Int
+		}
+		return types.BoolT
+	case "sort":
+		switch len(e.Args) {
+		case 0:
+			if !types.IsNumeric(t.Elem) && t.Elem.Kind != types.Char && t.Elem.Kind != types.String {
+				c.errorf(diagnostics.TypeBadOperand, name.Span, "sort() needs numbers, chars, or strings, but the elements have type '%s'", t.Elem).
+					WithHelp(fmt.Sprintf("pass a function that orders them: a.sort((%s x, %s y) => ...)", t.Elem, t.Elem))
+			}
+		case 1:
+			c.assign(types.NewFunc([]*types.Type{t.Elem, t.Elem}, types.BoolT), e.Args[0], "pass")
+		default:
+			argc(1, "no arguments, or 1, a function telling whether one element goes before another")
+		}
+		return types.VoidT
 	}
 	delete(c.info.ArrayCalls, e)
-	c.errorf(diagnostics.TypeNoField, name.Span, "'%s' has no method '%s'", t, name.Name).
-		WithHelp("arrays have the field length and the methods push and pop")
+	c.errorf(diagnostics.TypeNoField, name.Span, "'%s' has no method '%s'", t, name.Name).WithHelp(arrayHelp)
 	c.exprs(e.Args)
 	return types.InvalidT
+}
+
+// forEach checks `for each (T x in a) { }`. a must be an array whose
+// elements can be assigned to T; x is a new variable of the loop body.
+func (c *checker) forEach(s *ast.ForEachStmt) {
+	at := c.defaulted(s.X).typ
+	t := c.resolveType(s.Type)
+	if t.Kind == types.Void {
+		c.errorf(diagnostics.TypeVoidValue, s.Type.Span, "variable '%s' cannot have type 'void'", s.Name.Name)
+		t = types.InvalidT
+	}
+	switch {
+	case at.Kind == types.Invalid || t.Kind == types.Invalid:
+	case at.Kind != types.Array:
+		d := c.errorf(diagnostics.TypeMismatch, s.X.NodeSpan(), "for each needs an array, found '%s'", describe(at))
+		if at.Kind == types.String {
+			d.WithHelp("split the string first, e.g. string.split(s, \"\")")
+		}
+	case !types.IsSubtype(at.Elem, t):
+		c.errorf(diagnostics.TypeMismatch, s.Type.Span, "the elements of '%s' have type '%s', not '%s'", at, at.Elem, t).
+			WithHelp(fmt.Sprintf("declare the loop variable as %s %s", at.Elem, s.Name.Name))
+	}
+	c.push(false)
+	c.declareVar(s.Name, t, false)
+	c.loopBody(s.Body)
+	c.pop()
 }

@@ -257,6 +257,8 @@ func (v *verifier) expr(e Expr) *types.Type {
 		v.same(t.Elem, e.V, "pushed element")
 	case *ArrayPop:
 		v.array(e.X, "pop")
+	case *ArrayCall:
+		v.arrayCall(e)
 	case *CharConst:
 		if !types.ValidChar(int64(e.Value)) {
 			v.fail("char constant %d is not a Unicode scalar value", e.Value)
@@ -491,5 +493,51 @@ func (v *verifier) tnodes(nodes []TNode) {
 			}
 			v.tnodes(n.Else)
 		}
+	}
+}
+
+// arrayCall checks the receiver and arguments of an array method.
+func (v *verifier) arrayCall(e *ArrayCall) {
+	t := v.array(e.X, e.Method)
+	want := func(n int) {
+		if len(e.Args) != n {
+			v.fail("%s: %d arguments, expected %d", e.Method, len(e.Args), n)
+		}
+	}
+	switch e.Method {
+	case "insert":
+		want(2)
+		v.index(e.Args[0])
+		v.same(t.Elem, e.Args[1], "inserted element")
+	case "removeAt":
+		want(1)
+		v.index(e.Args[0])
+	case "slice":
+		want(2)
+		v.index(e.Args[0])
+		v.index(e.Args[1])
+	case "indexOf", "contains":
+		want(1)
+		if !types.Comparable(t.Elem) {
+			v.fail("%s on %s, whose elements are not comparable", e.Method, t)
+		}
+		v.same(t.Elem, e.Args[0], e.Method+" argument")
+	case "reverse":
+		want(0)
+	case "sort":
+		if len(e.Args) == 0 {
+			if !types.IsNumeric(t.Elem) && t.Elem.Kind != types.Char && t.Elem.Kind != types.String {
+				v.fail("sort() on %s, whose elements are not ordered", t)
+			}
+			return
+		}
+		want(1)
+		less := v.expr(e.Args[0])
+		if less.Kind != types.Func || len(less.Params) != 2 || !types.Identical(less.Params[0], t.Elem) ||
+			!types.Identical(less.Params[1], t.Elem) || less.Result.Kind != types.Bool {
+			v.fail("sort function of type %s for %s", less, t)
+		}
+	default:
+		v.fail("unknown array method %q", e.Method)
 	}
 }

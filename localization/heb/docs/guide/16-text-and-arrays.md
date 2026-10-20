@@ -220,6 +220,31 @@ protected int main() {
 
 <div dir="rtl">
 
+**או עברו בלולאה עם `for each`**, שעוברת על כל האיברים לפי הסדר. המשתנה שלפני
+`in` הוא משתנה חדש שמחזיק איבר אחד בכל פעם:
+
+</div>
+
+```actionscript
+package main;
+
+protected int main() {
+    Array<string> names = ["Ada", "Grace", "Linus"];
+    for each (string name in names) {
+        trace("hello", name);
+    }
+    return 0;
+}
+```
+
+<div dir="rtl">
+
+הטיפוס של משתנה הלולאה חייב להתאים לטיפוס האיברים: `for each (uint x in ints)` היא
+שגיאה, כמו ש-`uint x = ints[0];` הייתה. `break` ו-`continue` עובדות כמו בלולאות
+אחרות. ביטוי המערך מחושב פעם אחת; האורך נבדק לפני כל צעד, כך שגם איברים שנוספו
+ב-push בתוך הלולאה מבוקרים. `each` ו-`in` אינן מילים שמורות: יש להן משמעות רק במקום
+הזה, ולכן `in` הוא עדיין שם משתנה תקין.
+
 **מערכים משותפים, לא מועתקים.** השמת מערך למשתנה אחר, או העברתו לפונקציה, נותנת שם
 שני לאותו מערך *עצמו*, כמו ב-ActionScript 3 וב-JavaScript. שינוי דרך שם אחד נראה
 דרך כל השמות:
@@ -263,9 +288,112 @@ protected int main() {
 
 <div dir="rtl">
 
-> **עדיין לא זמין:** לולאת for-each, חיתוך, מיון, `a[i]++`, השוואת מערכים והעברת
-> מערכים לפונקציות `extern` של JavaScript. `main` עדיין לא יכולה לקבל ארגומנטים משורת
-> הפקודה.
+## מערכים מקוננים
+
+מערך יכול להכיל מערכים: `Array<Array<int>>` הוא רשימה של שורות, וכל שורה היא
+`Array<int>` משלה. כדי להגיע לאיבר, משתמשים באינדקס פעמיים. לשורות יכולים להיות
+אורכים שונים:
+
+</div>
+
+```actionscript
+package main;
+
+protected int main() {
+    Array<Array<int>> grid = [[1, 2, 3], [4, 5], []];
+    grid[1][0] = 40;
+    grid[2].push(6);
+    int total = 0;
+    for each (Array<int> row in grid) {
+        for each (int v in row) {
+            total += v;
+        }
+    }
+    trace(grid.length, grid[1][0], total);   // 3 40 57
+    return 0;
+}
+```
+
+<div dir="rtl">
+
+גם השורות הן מערכים, ולכן גם הן משותפות: `Array<int> row = grid[0];` נותן שם לאותה
+שורה כמו `grid[0]`. כדי לבנות טבלה בגודל נתון, מוסיפים שורות חדשות ב-push בתוך
+לולאה:
+
+</div>
+
+```actionscript
+package main;
+
+protected int main() {
+    Array<Array<string>> table = [];
+    for (int r = 0; r < 2; r++) {
+        Array<string> row = [];
+        for (int c = 0; c < 3; c++) {
+            row.push($"{r},{c}");
+        }
+        table.push(row);
+    }
+    trace(table.length, table[0].length, table[1][2]);   // 2 3 1,2
+    return 0;
+}
+```
+
+<div dir="rtl">
+
+## מתודות של מערכים
+
+| מתודה | תוצאה | משמעות |
+|---|---|---|
+| `a.insert(i, v)` | `void` | הכנסת `v` לפני אינדקס `i` (מ-`0` עד `length`) |
+| `a.removeAt(i)` | `T` | הסרת האיבר באינדקס `i` והחזרתו |
+| `a.slice(start, end)` | `Array<T>` | מערך חדש עם האיברים מ-`start` ועד `end`, לא כולל |
+| `a.indexOf(v)` | `int` | האינדקס של האיבר הראשון ששווה ל-`v`, או `-1` |
+| `a.contains(v)` | `bool` | האם יש איבר ששווה ל-`v` |
+| `a.reverse()` | `void` | היפוך הסדר, במקום |
+| `a.sort()` | `void` | מיון במקום, מהקטן לגדול |
+| `a.sort(less)` | `void` | מיון במקום, לפי פונקציה `bool less(T x, T y)` |
+
+</div>
+
+```actionscript
+package main;
+
+use "std:string";
+
+protected int main() {
+    Array<string> fruit = ["pear", "fig", "apple"];
+    fruit.insert(1, "kiwi");
+    trace(string.join(fruit, " "));             // pear kiwi fig apple
+    trace(fruit.indexOf("fig"), fruit.contains("plum"));   // 2 false
+    string gone = fruit.removeAt(0);
+    Array<string> firstTwo = fruit.slice(0, 2);
+    trace(gone, string.join(firstTwo, " "));    // pear kiwi fig
+    fruit.sort();
+    trace(string.join(fruit, " "));             // apple fig kiwi
+    fruit.sort((string x, string y) => string.len(x) > string.len(y));
+    trace(string.join(fruit, " "));             // apple kiwi fig
+    return 0;
+}
+```
+
+<div dir="rtl">
+
+- **אינדקס שגוי זורק שגיאה.** `insert` מקבלת `0` עד `length`, `removeAt` אינדקס
+  קיים, ו-`slice` דורשת `0 <= start <= end <= length`; כל דבר אחר זורק `RangeError`.
+- **`slice` מעתיקה.** שינוי המערך החדש לא משנה את הישן.
+- **`indexOf` ו-`contains` משוות עם `==`**, ולכן הן עובדות על הטיפוסים ש-`==` עובד
+  עליהם: מספרים, `bool`, `string`, `char` ומבנים (struct) שבנויים מהם. הן לא זמינות
+  על מערכים של מערכים, של פונקציות או של שגיאות.
+- **`sort()` בלי פונקציה** עובדת על מספרים, `char` ומחרוזות. מחרוזות ממוינות לפי
+  הבתים שלהן ב-UTF-8 (`string.compare`), ולכן `"Z"` בא לפני `"a"`.
+- **`sort(less)`** עובדת על כל טיפוס איבר. `less(x, y)` מחזירה `true` כש-`x` צריך
+  לבוא לפני `y`. המיון *יציב*: איברים שאף אחד מהם אינו קטן מהשני שומרים על הסדר
+  שלהם. אם `less` זורקת שגיאה, המערך נשאר כפי שהיה.
+
+> **עדיין לא זמין:** `a[i]++`, השוואת מערכים עם `==`, העברת מערך ישירות ל-trace
+> והעברת מערכים לפונקציות `extern` של JavaScript. `main` לא יכולה לקבל ארגומנטים
+> משורת הפקודה; השתמשו ב-`process.args()` ([פרק 20](20-files-and-input.md)).
 
 הבא: [בלי `null`, בלי `any`, בלי גנריות](17-no-null-any-generics.md)
 

@@ -65,7 +65,8 @@ protected int main() {
 - Structs: value types built with `Point{x: 1, y: 2}`, copied on
   assignment, compared field by field ([guide](docs/guide/19-structs.md))
 - Text and lists for scripting: `+` and `$"{count} files"` for strings,
-  `char`, and `Array<T>` with bounds-checked indexing
+  `char`, and `Array<T>` with bounds-checked indexing, nested arrays,
+  `for each (T x in a)` loops, slicing, searching, and stable sorting
   ([guide](docs/guide/16-text-and-arrays.md)); `std:string` covers Go's
   `strings` package, including `split`, `fields`, `join`, and callbacks
   ([guide](docs/guide/10-std-string.md))
@@ -106,7 +107,7 @@ TypeScript, which trusts its declarations and erases them, RuneScript
 checks every value that crosses in from JavaScript, and it has no `any`, no
 implicit conversions, and no unchecked casts.
 
-**Not yet implemented:** classes, for-each loops, binary files, `go:`
+**Not yet implemented:** classes, binary files, `go:`
 packages, `std:symrs`, objects, arrays, structs, and callbacks across the
 JavaScript boundary, `$foreach` and component tags in templates, and the
 planned native graphics package. See the [roadmap](docs/ROADMAP.md).

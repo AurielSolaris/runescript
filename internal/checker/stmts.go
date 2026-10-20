@@ -82,6 +82,8 @@ func (c *checker) stmt(s ast.Stmt) {
 		}
 		c.loopBody(s.Body)
 		c.pop()
+	case *ast.ForEachStmt:
+		c.forEach(s)
 	case *ast.BranchStmt:
 		if c.loopDepth == 0 {
 			c.errorf(diagnostics.FlowBranchOutsideLoop, s.Span, "'%s' is only allowed inside a loop", s.Keyword).

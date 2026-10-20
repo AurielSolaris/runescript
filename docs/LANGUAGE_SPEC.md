@@ -146,7 +146,7 @@ Stmt         = FuncDecl                 (* nested function or prototype *)
              | "return" [ Expr ] ";"
              | "break" ";" | "continue" ";"
              | "throw" Expr ";"
-             | IfStmt | WhileStmt | ForStmt | TryStmt
+             | IfStmt | WhileStmt | ForStmt | ForEachStmt | TryStmt
              | TemplateStmt ;                               (* §13 *)
 SimpleStmt   = VarDecl | Assignment | IncDec | Call ;
 VarDecl      = Type Ident [ "=" Expr ] ;      (* without "=": the zero value, §7.1 *)
@@ -158,6 +158,8 @@ IfStmt       = "if" "(" Expr ")" Block [ "else" ( IfStmt | Block ) ] ;
 WhileStmt    = "while" "(" Expr ")" Block ;
 ForStmt      = "for" "(" [ SimpleStmt ] ";" [ Expr ] ";" [ ForPost ] ")" Block ;
 ForPost      = Assignment | IncDec | Call ;
+ForEachStmt  = "for" "each" "(" Type Ident "in" Expr ")" Block ;
+               (* "each" and "in" are contextual, not keywords; §5.1c *)
 TryStmt      = "try" Block { "catch" "(" Type Ident ")" Block } [ "finally" Block ] ;
                (* at least one catch clause or a finally block *)
 
@@ -440,7 +442,29 @@ another array (not `Element` or `Signal`).
 - Arrays cannot be compared, traced, converted, interpolated, held in a
   rune, or passed across the JavaScript boundary **[provisional]**. Use
   `string.join` to show them.
-- **[undecided]** for-each loops, slicing, sorting, `a[i]++`, `Array<T>`
+- **Nested arrays:** `Array<Array<T>>` holds rows that are arrays of
+  their own (shared references), possibly of different lengths;
+  `g[i][j]` indexes twice.
+- **for each [decided 2026-10-20, owner; details provisional]:**
+  `for each (T x in a) { }` evaluates `a` once, then visits indexes
+  `0, 1, …` while the index is below `a.length`, read before every step:
+  elements pushed in the body are visited, removed ones are not, and the
+  loop never goes out of range. `x` is a new variable of the body, a copy
+  of the element; the element type must be assignable to `T` (no
+  conversions). `break` and `continue` apply. `each` and `in` keep being
+  valid identifiers elsewhere.
+- **Methods [provisional, 2026-10-20]:** `insert(i, v)` (`0 <= i <=
+  length`), `removeAt(i)` → `T`, `slice(start, end)` → a new array
+  (`0 <= start <= end <= length`), `indexOf(v)` → `int` (`-1` if absent)
+  and `contains(v)` → `bool` for comparable `T` (`==`), `reverse()`,
+  `sort()` for numbers, `char`, and strings (UTF-8 byte order), and
+  `sort(less)` with a `bool(T, T)`. Bad indexes throw `RangeError`
+  (`ASX-RUN-011`). Sorting is a stable top-down merge sort, specified
+  step by step so that `less` is called with the same arguments in the
+  same order on every target; it sorts a copy that replaces the contents
+  only when it finishes, so an error thrown by `less` leaves the array
+  unchanged.
+- **[undecided]** `a[i]++`, sized construction (`n` zeros), `Array<T>`
   for user generic types, and whether `array` (reserved) means the same.
 
 ### 5.1d Explicit-width integers **[decided 2026-10-17, details provisional]**

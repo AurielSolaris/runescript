@@ -505,6 +505,10 @@ func (g *gen) stmt(s ir.Stmt) {
 		g.line("for (%s;%s;%s) {", init, cond, post)
 		g.block(s.Body)
 		g.line("}")
+	case *ir.Block:
+		g.line("{")
+		g.block(s)
+		g.line("}")
 	case *ir.Break:
 		g.line("break;")
 	case *ir.Continue:
@@ -679,6 +683,8 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		return g.expr(e.X, precCall) + ".push(" + g.expr(e.V, precAssign) + ")", precCall
 	case *ir.ArrayPop:
 		return fmt.Sprintf("%s(%s, %d)", g.use("apop"), g.expr(e.X, precAssign), g.site(e.Site)), precCall
+	case *ir.ArrayCall:
+		return g.arrayCall(e), precCall
 	case *ir.CharConst:
 		// A char is its code point; the comment shows the character.
 		return fmt.Sprintf("%d /* %s */", e.Value, charComment(e.Value)), precCall
@@ -1216,4 +1222,39 @@ func (g *gen) tnodes(b *strings.Builder, nodes []ir.TNode, parent, pad string) {
 func isWide(e ir.Expr) bool {
 	a, ok := e.(*ir.Arith)
 	return ok && a.Wide
+}
+
+// arrayCall emits an array method (ir.ArrayCall) as a call of its runtime
+// helper: the array, then the arguments, then the site.
+func (g *gen) arrayCall(e *ir.ArrayCall) string {
+	args := []string{g.expr(e.X, precAssign)}
+	for _, a := range e.Args {
+		args = append(args, g.expr(a, precAssign))
+	}
+	elem := e.X.Type().Elem
+	helper := map[string]string{
+		"insert": "ainsert", "removeAt": "aremove", "slice": "aslice",
+		"indexOf": "aindex", "contains": "aindex", "reverse": "areverse", "sort": "asort",
+	}[e.Method]
+	switch e.Method {
+	case "indexOf", "contains":
+		eq := "null" // ===
+		if elem.Kind == types.Struct {
+			eq = g.use("structEq")
+		}
+		args = append(args, eq)
+	case "sort":
+		if len(e.Args) == 0 {
+			less := "null" // <
+			if elem.Kind == types.String {
+				less = g.use("strLess")
+			}
+			args = append(args, less)
+		}
+	}
+	call := g.use(helper) + "(" + strings.Join(append(args, strconv.Itoa(g.site(e.Site))), ", ") + ")"
+	if e.Method == "contains" {
+		return "(" + call + " >= 0)"
+	}
+	return call
 }

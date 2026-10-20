@@ -254,6 +254,8 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 		}
 		f.Body = l.block(s.Body)
 		return f
+	case *ast.ForEachStmt:
+		return l.forEach(s)
 	case *ast.BranchStmt:
 		if s.Keyword == "break" {
 			return &Break{}
@@ -515,10 +517,17 @@ func (l *lowerer) call(e *ast.CallExpr) Expr {
 		} else {
 			recv = l.expr(e.Callee.(*ast.SelectorExpr).X)
 		}
-		if method == "push" {
+		switch method {
+		case "push":
 			return &ArrayPush{X: recv, V: l.expr(e.Args[0])}
+		case "pop":
+			return &ArrayPop{X: recv, Site: e.Span}
 		}
-		return &ArrayPop{X: recv, Site: e.Span}
+		call := &ArrayCall{Method: method, X: recv, Site: e.Span}
+		for _, a := range e.Args {
+			call.Args = append(call.Args, l.expr(a))
+		}
+		return call
 	}
 	var callee Expr
 	if e.Callee != nil {
@@ -677,4 +686,32 @@ func zero(t *types.Type) Expr {
 		return lit
 	}
 	panic("ir: no zero value for " + t.String())
+}
+
+// forEach lowers `for each (T x in a) body` to an indexed loop over a copy
+// of the reference a, evaluated once:
+//
+//	{ Array<E> each$a = a; for (int each$i = 0; each$i < each$a.length; each$i = each$i + 1) { T x = each$a[each$i]; body } }
+//
+// The length is read before every iteration, so elements pushed in the
+// body are visited and popped ones are not; the index never goes out of
+// range. The hidden names contain '$', so they cannot clash with names in
+// the source.
+func (l *lowerer) forEach(s *ast.ForEachStmt) Stmt {
+	l.scopes = append(l.scopes, map[string]*Var{})
+	defer func() { l.scopes = l.scopes[:len(l.scopes)-1] }()
+	x := l.expr(s.X)
+	arr := l.declare("each$a", x.Type(), false)
+	i := l.declare("each$i", types.Int, false)
+	elem := l.declare(s.Name.Name, l.typeOf(s.Type), false)
+	loop := &For{
+		Init: &Decl{Var: i, Init: &IntConst{T: types.Int, Value: 0}},
+		Cond: &Compare{Op: "<", X: &Load{Var: i}, Y: &ArrayLen{X: &Load{Var: arr}}},
+		Post: &Assign{Var: i, Value: &Arith{Op: "+", T: types.Int, X: &Load{Var: i}, Y: &IntConst{T: types.Int, Value: 1}, Site: s.Span}},
+		Body: &Block{Stmts: []Stmt{
+			&Decl{Var: elem, Init: &Index{X: &Load{Var: arr}, I: &Load{Var: i}, Site: s.Span}},
+			l.block(s.Body),
+		}},
+	}
+	return &Block{Stmts: []Stmt{&Decl{Var: arr, Init: x}, loop}}
 }

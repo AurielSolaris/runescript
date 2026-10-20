@@ -234,6 +234,16 @@ type ForStmt struct {
 	Span Span
 }
 
+// ForEachStmt is `for each (T name in x) { }`, a loop over the elements
+// of the array x. `each` and `in` are contextual words, not keywords.
+type ForEachStmt struct {
+	Type *TypeRef
+	Name *Ident
+	X    Expr
+	Body *Block
+	Span Span
+}
+
 // BranchStmt is `break;` or `continue;`.
 type BranchStmt struct {
 	Keyword string
@@ -264,35 +274,37 @@ type CatchClause struct {
 	Span Span
 }
 
-func (s *FuncDecl) NodeSpan() Span   { return s.Span }
-func (s *Block) NodeSpan() Span      { return s.Span }
-func (s *VarDecl) NodeSpan() Span    { return s.Span }
-func (s *AssignStmt) NodeSpan() Span { return s.Span }
-func (s *IncDecStmt) NodeSpan() Span { return s.Span }
-func (s *SetStmt) NodeSpan() Span    { return s.Span }
-func (s *ExprStmt) NodeSpan() Span   { return s.Call.Span }
-func (s *ReturnStmt) NodeSpan() Span { return s.Span }
-func (s *IfStmt) NodeSpan() Span     { return s.Span }
-func (s *WhileStmt) NodeSpan() Span  { return s.Span }
-func (s *ForStmt) NodeSpan() Span    { return s.Span }
-func (s *BranchStmt) NodeSpan() Span { return s.Span }
-func (s *ThrowStmt) NodeSpan() Span  { return s.Span }
-func (s *TryStmt) NodeSpan() Span    { return s.Span }
+func (s *FuncDecl) NodeSpan() Span    { return s.Span }
+func (s *Block) NodeSpan() Span       { return s.Span }
+func (s *VarDecl) NodeSpan() Span     { return s.Span }
+func (s *AssignStmt) NodeSpan() Span  { return s.Span }
+func (s *IncDecStmt) NodeSpan() Span  { return s.Span }
+func (s *SetStmt) NodeSpan() Span     { return s.Span }
+func (s *ExprStmt) NodeSpan() Span    { return s.Call.Span }
+func (s *ReturnStmt) NodeSpan() Span  { return s.Span }
+func (s *IfStmt) NodeSpan() Span      { return s.Span }
+func (s *WhileStmt) NodeSpan() Span   { return s.Span }
+func (s *ForStmt) NodeSpan() Span     { return s.Span }
+func (s *ForEachStmt) NodeSpan() Span { return s.Span }
+func (s *BranchStmt) NodeSpan() Span  { return s.Span }
+func (s *ThrowStmt) NodeSpan() Span   { return s.Span }
+func (s *TryStmt) NodeSpan() Span     { return s.Span }
 
-func (*FuncDecl) stmt()   {}
-func (*Block) stmt()      {}
-func (*VarDecl) stmt()    {}
-func (*AssignStmt) stmt() {}
-func (*IncDecStmt) stmt() {}
-func (*SetStmt) stmt()    {}
-func (*ExprStmt) stmt()   {}
-func (*ReturnStmt) stmt() {}
-func (*IfStmt) stmt()     {}
-func (*WhileStmt) stmt()  {}
-func (*ForStmt) stmt()    {}
-func (*BranchStmt) stmt() {}
-func (*ThrowStmt) stmt()  {}
-func (*TryStmt) stmt()    {}
+func (*FuncDecl) stmt()    {}
+func (*Block) stmt()       {}
+func (*VarDecl) stmt()     {}
+func (*AssignStmt) stmt()  {}
+func (*IncDecStmt) stmt()  {}
+func (*SetStmt) stmt()     {}
+func (*ExprStmt) stmt()    {}
+func (*ReturnStmt) stmt()  {}
+func (*IfStmt) stmt()      {}
+func (*WhileStmt) stmt()   {}
+func (*ForStmt) stmt()     {}
+func (*ForEachStmt) stmt() {}
+func (*BranchStmt) stmt()  {}
+func (*ThrowStmt) stmt()   {}
+func (*TryStmt) stmt()     {}
 
 // ---- expressions ----
 

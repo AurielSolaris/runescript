@@ -542,6 +542,9 @@ func (p *parser) stmt() ast.Stmt {
 		body := p.block()
 		return &ast.WhileStmt{Cond: cond, Body: body, Span: span(t.Span, body.Span)}
 	case t.Kind == lexer.Keyword && t.Text == "for":
+		if n := p.peekTok(1); n.Kind == lexer.Ident && n.Text == "each" {
+			return p.forEachStmt()
+		}
 		return p.forStmt()
 	case t.Kind == lexer.Keyword && t.Text == "throw":
 		p.next()
@@ -747,6 +750,27 @@ func (p *parser) forStmt() *ast.ForStmt {
 		s.Post = p.simpleStmt(false)
 	}
 	p.expect(lexer.RParen, "')' after for-loop clauses")
+	s.Body = p.block()
+	s.Span = span(start.Span, s.Body.Span)
+	return s
+}
+
+// forEachStmt parses `for each (T name in x) { }`.
+func (p *parser) forEachStmt() *ast.ForEachStmt {
+	start := p.expectKeyword("for")
+	p.next() // each
+	p.expect(lexer.LParen, "'(' after 'for each'")
+	s := &ast.ForEachStmt{Type: p.typeRef("the element type of a for-each loop")}
+	if t := p.tok(); t.Kind == lexer.Ident && t.Text == "in" && !(p.peekTok(1).Kind == lexer.Ident && p.peekTok(1).Text == "in") {
+		p.fail(diagnostics.ParseUnexpected, s.Type.Span, "expected a type and a variable name before 'in', e.g. for each (int x in a)")
+	}
+	s.Name = p.ident("a variable name after the element type")
+	if t := p.tok(); t.Kind != lexer.Ident || t.Text != "in" {
+		p.fail(diagnostics.ParseUnexpected, t.Span, "expected 'in' after the for-each variable, found %s", t.Describe())
+	}
+	p.next()
+	s.X = p.expr()
+	p.expect(lexer.RParen, "')' after the array of a for-each loop")
 	s.Body = p.block()
 	s.Span = span(start.Span, s.Body.Span)
 	return s

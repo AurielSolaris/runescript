@@ -77,7 +77,8 @@ protected int main() {
 - מבנים: טיפוסי ערך שנבנים עם `Point{x: 1, y: 2}`, מועתקים בהשמה ומושווים שדה אחר שדה
   ([מדריך](docs/guide/19-structs.md))
 - טקסט ורשימות לסקריפטים: `+` ו-`$"{count} files"` למחרוזות, `char`, ו-`Array<T>`
-  עם גישה לפי אינדקס שנבדקת ([מדריך](docs/guide/16-text-and-arrays.md)); `std:string`
+  עם גישה לפי אינדקס שנבדקת, מערכים מקוננים, לולאות `for each (T x in a)`, חיתוך,
+  חיפוש ומיון יציב ([מדריך](docs/guide/16-text-and-arrays.md)); `std:string`
   מכסה את חבילת `strings` של Go, כולל `split`, `fields`, `join` ו-callbacks
   ([מדריך](docs/guide/10-std-string.md))
 - שגיאות בסגנון ActionScript: `throw new RangeError("…")`,
@@ -110,7 +111,7 @@ protected int main() {
 RuneScript בודקת כל ערך שנכנס מ-JavaScript, ואין בה `any`, המרות מרומזות או
 המרות לא בדוקות.
 
-**עדיין לא מומש:** מחלקות, לולאות for-each, קבצים בינאריים, חבילות `go:`,
+**עדיין לא מומש:** מחלקות, קבצים בינאריים, חבילות `go:`,
 `std:symrs`, אובייקטים, מערכים, מבנים ו-callbacks שחוצים את הגבול עם JavaScript,
 `$foreach` ותגי רכיבים בתבניות, וחבילת הגרפיקה המקורית המתוכננת. ראו את
 [מפת הדרכים](../../docs/ROADMAP.md) (באנגלית).

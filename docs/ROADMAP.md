@@ -192,10 +192,13 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 ## v0.6: Aggregates (current)
 
 - [x] `Array<T>`: literals, bounds-checked indexing, `length`, `push`, `pop`, reference semantics (2026-10-16, details provisional)
-- [ ] For-each loops, slicing, sorting (arguments come from `process.args()`)
+- [x] `for each (T x in a)` loops, nested arrays (`Array<Array<T>>`), and the methods `insert`, `removeAt`, `slice`, `indexOf`, `contains`, `reverse`, `sort()`, `sort(less)` (stable, same comparator calls on both targets) (2026-10-20)
+- [ ] `std:fs` binary files (`Array<uint8>`) and line helpers
+- [ ] `std:csv`: parse and format `Array<Array<string>>`
+- [ ] `std:json`: an opaque `json.Value` read with checked functions, and `json.stringify`
+- [ ] `std:matrix`: functions over `Array<Array<float64>>` (owner chose a library, no new type)
 - [x] `struct`: value semantics (copy on assignment), named-field literals, nested field writes, `==` by field (2026-10-17)
 - [ ] Struct methods and constructors
-- [ ] `matrix` (design first)
 
 ## v0.7: Graphics package (native window, drawing, input, UI)
 

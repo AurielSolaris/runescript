@@ -236,6 +236,26 @@ type (
 		X    Expr
 		Site Span
 	}
+	// ArrayCall is a method of the array X other than push and pop. The
+	// array, then Args, are evaluated once, in order. A bad index is a
+	// RangeError reported at Site, which is also the call site of a sort
+	// function.
+	//
+	//	insert(i, v)       void, 0 <= i <= length
+	//	removeAt(i)        the removed element
+	//	slice(start, end)  a new array, 0 <= start <= end <= length
+	//	indexOf(v)         int, -1 if absent (elements compared with ==)
+	//	contains(v)        bool
+	//	reverse()          void
+	//	sort()             void, ascending: numbers and chars by <, strings
+	//	                   by byte; a stable merge sort (see runtime)
+	//	sort(less)         void, by less(a, b), a bool(T, T); stable
+	ArrayCall struct {
+		Method string
+		X      Expr
+		Args   []Expr
+		Site   Span
+	}
 	// FloatConst is a floating-point constant of float type T, exactly
 	// representable in T.
 	FloatConst struct {
@@ -390,32 +410,45 @@ func (e *IndexOld) Type() *types.Type    { return e.T }
 func (e *ArrayLen) Type() *types.Type    { return types.Int }
 func (e *ArrayPush) Type() *types.Type   { return types.VoidT }
 func (e *ArrayPop) Type() *types.Type    { return e.X.Type().Elem }
-func (e *Load) Type() *types.Type        { return e.Var.Type }
-func (e *FuncRef) Type() *types.Type     { return e.Func.Type }
-func (e *Lambda) Type() *types.Type      { return e.Func.Type }
-func (e *Arith) Type() *types.Type       { return e.T }
-func (e *Compare) Type() *types.Type     { return types.BoolT }
-func (e *Concat) Type() *types.Type      { return types.StringT }
-func (e *Bits) Type() *types.Type        { return e.T }
-func (e *Complement) Type() *types.Type  { return e.X.Type() }
-func (e *Shift) Type() *types.Type       { return e.X.Type() }
-func (e *Logic) Type() *types.Type       { return types.BoolT }
-func (e *Not) Type() *types.Type         { return types.BoolT }
-func (e *CallFunc) Type() *types.Type    { return e.Func.Type.Result }
-func (e *CallValue) Type() *types.Type   { return e.Callee.Type().Result }
-func (e *CallNative) Type() *types.Type  { return e.Func.Result }
-func (e *Trace) Type() *types.Type       { return types.VoidT }
-func (e *CallExtern) Type() *types.Type  { return e.Extern.Type.Result }
-func (e *NewSignal) Type() *types.Type   { return e.T }
-func (e *SignalGet) Type() *types.Type   { return e.X.Type().Elem }
-func (e *SignalSet) Type() *types.Type   { return types.VoidT }
-func (e *RenderApp) Type() *types.Type   { return types.VoidT }
-func (e *FloatConst) Type() *types.Type  { return e.T }
-func (e *Neg) Type() *types.Type         { return e.X.Type() }
-func (e *Convert) Type() *types.Type     { return e.To }
-func (e *NewError) Type() *types.Type    { return e.T }
-func (e *Field) Type() *types.Type       { return e.T }
-func (e *FloatTest) Type() *types.Type   { return types.BoolT }
+func (e *ArrayCall) Type() *types.Type {
+	switch e.Method {
+	case "removeAt":
+		return e.X.Type().Elem
+	case "slice":
+		return e.X.Type()
+	case "indexOf":
+		return types.Int
+	case "contains":
+		return types.BoolT
+	}
+	return types.VoidT
+}
+func (e *Load) Type() *types.Type       { return e.Var.Type }
+func (e *FuncRef) Type() *types.Type    { return e.Func.Type }
+func (e *Lambda) Type() *types.Type     { return e.Func.Type }
+func (e *Arith) Type() *types.Type      { return e.T }
+func (e *Compare) Type() *types.Type    { return types.BoolT }
+func (e *Concat) Type() *types.Type     { return types.StringT }
+func (e *Bits) Type() *types.Type       { return e.T }
+func (e *Complement) Type() *types.Type { return e.X.Type() }
+func (e *Shift) Type() *types.Type      { return e.X.Type() }
+func (e *Logic) Type() *types.Type      { return types.BoolT }
+func (e *Not) Type() *types.Type        { return types.BoolT }
+func (e *CallFunc) Type() *types.Type   { return e.Func.Type.Result }
+func (e *CallValue) Type() *types.Type  { return e.Callee.Type().Result }
+func (e *CallNative) Type() *types.Type { return e.Func.Result }
+func (e *Trace) Type() *types.Type      { return types.VoidT }
+func (e *CallExtern) Type() *types.Type { return e.Extern.Type.Result }
+func (e *NewSignal) Type() *types.Type  { return e.T }
+func (e *SignalGet) Type() *types.Type  { return e.X.Type().Elem }
+func (e *SignalSet) Type() *types.Type  { return types.VoidT }
+func (e *RenderApp) Type() *types.Type  { return types.VoidT }
+func (e *FloatConst) Type() *types.Type { return e.T }
+func (e *Neg) Type() *types.Type        { return e.X.Type() }
+func (e *Convert) Type() *types.Type    { return e.To }
+func (e *NewError) Type() *types.Type   { return e.T }
+func (e *Field) Type() *types.Type      { return e.T }
+func (e *FloatTest) Type() *types.Type  { return types.BoolT }
 
 // ---- templates (rune:dom) ----
 

@@ -195,6 +195,28 @@ protected int main() {
 }
 ```
 
+**অথবা `for each` দিয়ে লুপ চালান**, যা প্রতিটি এলিমেন্টে ক্রমানুসারে যায়। `in`-এর
+আগের ভেরিয়েবলটি একটি নতুন ভেরিয়েবল, যা একবারে একটি করে এলিমেন্ট ধরে রাখে:
+
+```actionscript
+package main;
+
+protected int main() {
+    Array<string> names = ["Ada", "Grace", "Linus"];
+    for each (string name in names) {
+        trace("hello", name);
+    }
+    return 0;
+}
+```
+
+লুপ ভেরিয়েবলের টাইপ এলিমেন্টের টাইপের সঙ্গে মিলতে হবে: `for each (uint x in
+ints)` একটি এরর, যেমন `uint x = ints[0];` এরর হতো। `break` ও `continue` অন্য
+লুপের মতোই কাজ করে। অ্যারের এক্সপ্রেশনটি একবারই মূল্যায়ন হয়; প্রতিটি ধাপের আগে
+দৈর্ঘ্য যাচাই হয়, তাই লুপের ভেতরে push করা এলিমেন্টেও লুপ পৌঁছায়। `each` ও `in`
+সংরক্ষিত শব্দ নয়: শুধু এই জায়গাতেই এদের বিশেষ অর্থ আছে, তাই `in` এখনো একটি বৈধ
+ভেরিয়েবলের নাম।
+
 **অ্যারে ভাগাভাগি হয়, কপি হয় না।** একটি অ্যারে অন্য ভেরিয়েবলে অ্যাসাইন করলে বা
 কোনো ফাংশনে পাঠালে *একই* অ্যারের আরেকটি নাম পাওয়া যায়, ActionScript 3 ও
 JavaScript-এর মতো। এক নাম দিয়ে করা পরিবর্তন সব নামেই দেখা যায়:
@@ -230,8 +252,101 @@ protected int main() {
 }
 ```
 
-> **এখনো নেই:** for-each লুপ, স্লাইস করা, সাজানো, `a[i]++`, অ্যারে তুলনা, এবং
-> JavaScript-এর `extern` ফাংশনে অ্যারে পাঠানো। `main` এখনো কমান্ড-লাইন আর্গুমেন্ট
-> নিতে পারে না।
+## নেস্টেড অ্যারে
+
+একটি অ্যারে অন্য অ্যারে ধরে রাখতে পারে: `Array<Array<int>>` হলো সারির একটি তালিকা,
+আর প্রতিটি সারি নিজেই একটি `Array<int>`। একটি এলিমেন্টে পৌঁছাতে দুবার ইনডেক্স
+করুন। সারিগুলোর দৈর্ঘ্য আলাদা হতে পারে:
+
+```actionscript
+package main;
+
+protected int main() {
+    Array<Array<int>> grid = [[1, 2, 3], [4, 5], []];
+    grid[1][0] = 40;
+    grid[2].push(6);
+    int total = 0;
+    for each (Array<int> row in grid) {
+        for each (int v in row) {
+            total += v;
+        }
+    }
+    trace(grid.length, grid[1][0], total);   // 3 40 57
+    return 0;
+}
+```
+
+সারিগুলোও অ্যারে, তাই সেগুলোও ভাগাভাগি হয়: `Array<int> row = grid[0];` দিয়ে
+`grid[0]`-এর একই সারির আরেকটি নাম পাওয়া যায়। নির্দিষ্ট মাপের একটি টেবিল বানাতে
+লুপে নতুন সারি push করুন:
+
+```actionscript
+package main;
+
+protected int main() {
+    Array<Array<string>> table = [];
+    for (int r = 0; r < 2; r++) {
+        Array<string> row = [];
+        for (int c = 0; c < 3; c++) {
+            row.push($"{r},{c}");
+        }
+        table.push(row);
+    }
+    trace(table.length, table[0].length, table[1][2]);   // 2 3 1,2
+    return 0;
+}
+```
+
+## অ্যারের মেথড
+
+| মেথড | ফল | অর্থ |
+|---|---|---|
+| `a.insert(i, v)` | `void` | ইনডেক্স `i`-এর আগে `v` বসানো (`0` থেকে `length`) |
+| `a.removeAt(i)` | `T` | `i`-এর এলিমেন্টটি সরিয়ে ফেরত দেওয়া |
+| `a.slice(start, end)` | `Array<T>` | `start` থেকে `end`-এর আগ পর্যন্ত (`end` বাদে) এলিমেন্ট নিয়ে একটি নতুন অ্যারে |
+| `a.indexOf(v)` | `int` | `v`-এর সমান প্রথম এলিমেন্টের ইনডেক্স, অথবা `-1` |
+| `a.contains(v)` | `bool` | কোনো এলিমেন্ট `v`-এর সমান কি না |
+| `a.reverse()` | `void` | ক্রম উল্টে দেওয়া, একই অ্যারেতে |
+| `a.sort()` | `void` | একই অ্যারেতে সাজানো, ছোটটি আগে |
+| `a.sort(less)` | `void` | একটি ফাংশন `bool less(T x, T y)` অনুযায়ী একই অ্যারেতে সাজানো |
+
+```actionscript
+package main;
+
+use "std:string";
+
+protected int main() {
+    Array<string> fruit = ["pear", "fig", "apple"];
+    fruit.insert(1, "kiwi");
+    trace(string.join(fruit, " "));             // pear kiwi fig apple
+    trace(fruit.indexOf("fig"), fruit.contains("plum"));   // 2 false
+    string gone = fruit.removeAt(0);
+    Array<string> firstTwo = fruit.slice(0, 2);
+    trace(gone, string.join(firstTwo, " "));    // pear kiwi fig
+    fruit.sort();
+    trace(string.join(fruit, " "));             // apple fig kiwi
+    fruit.sort((string x, string y) => string.len(x) > string.len(y));
+    trace(string.join(fruit, " "));             // apple kiwi fig
+    return 0;
+}
+```
+
+- **ভুল ইনডেক্স এরর থ্রো করে।** `insert` নেয় `0` থেকে `length`, `removeAt` একটি
+  বিদ্যমান ইনডেক্স, আর `slice`-এর দরকার `0 <= start <= end <= length`; অন্য কিছু
+  হলে একটি `RangeError` থ্রো হয়।
+- **`slice` কপি করে।** নতুন অ্যারে বদলালে পুরোনোটি বদলায় না।
+- **`indexOf` ও `contains` `==` দিয়ে তুলনা করে**, তাই এগুলো সেই টাইপগুলোতে কাজ
+  করে যেগুলোতে `==` কাজ করে: সংখ্যা, `bool`, `string`, `char`, এবং এদের দিয়ে গড়া
+  struct। অ্যারের অ্যারে, ফাংশন বা এররের অ্যারেতে এগুলো নেই।
+- **ফাংশন ছাড়া `sort()`** সংখ্যা, `char` ও স্ট্রিংয়ে কাজ করে। স্ট্রিং সাজানো হয়
+  তাদের UTF-8 বাইট অনুযায়ী (`string.compare`), তাই `"Z"` আসে `"a"`-এর আগে।
+- **`sort(less)`** যেকোনো এলিমেন্ট টাইপে কাজ করে। `x`-কে `y`-এর আগে রাখতে হলে
+  `less(x, y)` `true` ফেরত দেয়। সাজানোটি *স্থিতিশীল* (stable): যে এলিমেন্টগুলো
+  একে অপরের চেয়ে ছোটও নয় বড়ও নয়, সেগুলোর ক্রম বজায় থাকে। `less` থ্রো করলে
+  অ্যারেটি আগের মতোই থাকে।
+
+> **এখনো নেই:** `a[i]++`, `==` দিয়ে অ্যারে তুলনা, সরাসরি অ্যারে trace করা, এবং
+> JavaScript-এর `extern` ফাংশনে অ্যারে পাঠানো। `main` কমান্ড-লাইন আর্গুমেন্ট নিতে
+> পারে না; `process.args()` ব্যবহার করুন ([অধ্যায় ২০](20-files-and-input.md))।
 
 পরবর্তী: [`null` নেই, `any` নেই, জেনেরিক নেই](17-no-null-any-generics.md)

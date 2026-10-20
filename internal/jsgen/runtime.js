@@ -328,6 +328,59 @@ const $rt = (() => {
     if (a.length === 0) fail(CODES.index, site, "pop from an empty array");
     return a.pop();
   }
+  function ainsert(a, i, v, site) {
+    if (!(i >= 0 && i <= a.length)) fail(CODES.index, site, `index ${i} is out of range for inserting into an array of length ${a.length}`);
+    a.splice(Number(i), 0, v);
+  }
+  function aremove(a, i, site) {
+    return a.splice(checkIndex(a, i, site), 1)[0];
+  }
+  function aslice(a, lo, hi, site) {
+    if (!(lo >= 0 && lo <= hi && hi <= a.length)) fail(CODES.index, site, `slice [${lo}, ${hi}) is out of range for an array of length ${a.length}`);
+    return a.slice(Number(lo), Number(hi));
+  }
+  // aindex is indexOf (and contains): eq compares structs, null means ===.
+  function aindex(a, v, eq, site) {
+    for (let i = 0; i < a.length; i++) {
+      if (eq === null ? a[i] === v : eq(a[i], v)) return i;
+    }
+    return -1;
+  }
+  function areverse(a, site) {
+    a.reverse();
+  }
+  // strLess orders strings by UTF-8 bytes, as std:string's compare does.
+  function strLess(x, y) {
+    const n = Math.min(x.length, y.length);
+    for (let i = 0; i < n; i++) {
+      const c = x.charCodeAt(i), d = y.charCodeAt(i);
+      if (c !== d) return (c >= 0xD800 ? (c >= 0xE000 ? c - 0x800 : c + 0x2000) : c) < (d >= 0xD800 ? (d >= 0xE000 ? d - 0x800 : d + 0x2000) : d);
+    }
+    return x.length < y.length;
+  }
+  // asort sorts a in place with less: a RuneScript bool(T, T) function,
+  // a two-argument helper (strLess), or null for <. It sorts a copy with
+  // msort, the same top-down merge sort as the interpreter's mergeSort,
+  // so less is called in the same order on both targets; the copy
+  // replaces a's contents only when sorting finishes.
+  function asort(a, less, site) {
+    const cmp = less === null ? (x, y) => x < y : less === strLess ? strLess : (x, y) => less(x, y, site);
+    const work = a.slice();
+    msort(work, new Array(work.length), 0, work.length, cmp);
+    a.length = 0;
+    for (const v of work) a.push(v);
+  }
+  function msort(a, tmp, lo, hi, less) {
+    if (hi - lo < 2) return;
+    const mid = lo + ((hi - lo) >> 1);
+    msort(a, tmp, lo, mid, less);
+    msort(a, tmp, mid, hi, less);
+    let i = lo, j = mid, k = lo;
+    while (i < mid && j < hi) tmp[k++] = less(a[j], a[i]) ? a[j++] : a[i++];
+    while (i < mid) tmp[k++] = a[i++];
+    while (j < hi) tmp[k++] = a[j++];
+    for (k = lo; k < hi; k++) a[k] = tmp[k];
+  }
 
   // ---- structs (OQ-STRUCT-01) ----
   //
@@ -2458,7 +2511,7 @@ const $rt = (() => {
     addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU, arN, arW, ga, shift,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
-    enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop, withField, structEq,
+    enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop, ainsert, aremove, aslice, aindex, areverse, asort, strLess, withField, structEq,
     //@section extern
     ext,
     //@end

@@ -581,6 +581,8 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 		last := a.Elems[len(a.Elems)-1]
 		a.Elems = a.Elems[:len(a.Elems)-1]
 		return last
+	case *ir.ArrayCall:
+		return in.arrayCall(f, e)
 	}
 	// Templates, runes, renderApp, and extern calls need the JavaScript
 	// target; the driver rejects such programs (ASX-TARGET-002).
@@ -1043,4 +1045,93 @@ func (in *interp) indexSet(f *frame, s *ir.IndexSet) {
 		v = in.expr(f, s.Value)
 	}
 	a.Elems[in.checkIndex(a, i, s.Site)] = v
+}
+
+// arrayCall runs an array method (ir.ArrayCall).
+func (in *interp) arrayCall(f *frame, e *ir.ArrayCall) Value {
+	a := in.expr(f, e.X).Arr
+	args := in.exprs(f, e.Args)
+	void := Value{Kind: types.Void}
+	switch e.Method {
+	case "insert":
+		n := args[0].big()
+		if !n.IsInt64() || n.Int64() < 0 || n.Int64() > int64(len(a.Elems)) {
+			in.fail(diagnostics.RunIndex, e.Site, "index %s is out of range for inserting into an array of length %d", n, len(a.Elems))
+		}
+		i := n.Int64()
+		a.Elems = append(a.Elems, Value{})
+		copy(a.Elems[i+1:], a.Elems[i:])
+		a.Elems[i] = args[1]
+		return void
+	case "removeAt":
+		i := in.checkIndex(a, args[0], e.Site)
+		v := a.Elems[i]
+		a.Elems = append(a.Elems[:i], a.Elems[i+1:]...)
+		return v
+	case "slice":
+		lo, hi := args[0].big(), args[1].big()
+		n := int64(len(a.Elems))
+		if !lo.IsInt64() || !hi.IsInt64() || lo.Int64() < 0 || lo.Int64() > hi.Int64() || hi.Int64() > n {
+			in.fail(diagnostics.RunIndex, e.Site, "slice [%s, %s) is out of range for an array of length %d", lo, hi, n)
+		}
+		return Value{Kind: types.Array, Arr: &ArrayValue{Elems: append([]Value(nil), a.Elems[lo.Int64():hi.Int64()]...)}}
+	case "indexOf", "contains":
+		at := -1
+		for i, x := range a.Elems {
+			if compare("==", x, args[0]) {
+				at = i
+				break
+			}
+		}
+		if e.Method == "contains" {
+			return boolean(at >= 0)
+		}
+		return Value{Kind: types.Signed, Int: int64(at)}
+	case "reverse":
+		for i, j := 0, len(a.Elems)-1; i < j; i, j = i+1, j-1 {
+			a.Elems[i], a.Elems[j] = a.Elems[j], a.Elems[i]
+		}
+		return void
+	case "sort":
+		less := func(x, y Value) bool { return compare("<", x, y) }
+		if len(args) == 1 {
+			fn := args[0].Fn
+			less = func(x, y Value) bool { return in.call(fn, []Value{x, y}, e.Site).Bool }
+		}
+		work := append([]Value(nil), a.Elems...)
+		mergeSort(work, make([]Value, len(work)), 0, len(work), less)
+		a.Elems = work
+		return void
+	}
+	ice("unknown array method %q", e.Method)
+	return Value{}
+}
+
+// mergeSort sorts a[lo:hi] stably with a top-down merge sort, using tmp
+// (as long as a) for merging. The JavaScript runtime (msort in runtime.js)
+// runs the same steps, so a sort function is called with the same
+// arguments in the same order on both targets. Sorting works on a copy of
+// the array, which replaces its contents only when sorting finishes: an
+// error thrown by the sort function leaves the array unchanged.
+func mergeSort(a, tmp []Value, lo, hi int, less func(x, y Value) bool) {
+	if hi-lo < 2 {
+		return
+	}
+	mid := lo + (hi-lo)/2
+	mergeSort(a, tmp, lo, mid, less)
+	mergeSort(a, tmp, mid, hi, less)
+	i, j, k := lo, mid, lo
+	for i < mid && j < hi {
+		if less(a[j], a[i]) {
+			tmp[k] = a[j]
+			j++
+		} else {
+			tmp[k] = a[i]
+			i++
+		}
+		k++
+	}
+	k += copy(tmp[k:], a[i:mid])
+	copy(tmp[k:], a[j:hi])
+	copy(a[lo:hi], tmp[lo:hi])
 }

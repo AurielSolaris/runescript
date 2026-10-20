@@ -143,6 +143,10 @@ func TestParseErrors(t *testing.T) {
 		{"standalone block", "package p;\npublic void f() {\n    { }\n}", diagnostics.ParseNotImplemented, "3:5"},
 		{"if without braces", "package p;\npublic void f() {\n    if (true) trace(1);\n}", diagnostics.ParseUnexpected, "3:15"},
 		{"decl in for post", "package p;\npublic void f() {\n    for (;; int i = 0) { }\n}", diagnostics.ParseUnexpected, "3:13"},
+		{"for each without in", "package p;\npublic void f() {\n    for each (int x : a) { }\n}", diagnostics.ParseUnexpected, "3:21"},
+		{"for each without type", "package p;\npublic void f() {\n    for each (x in a) { }\n}", diagnostics.ParseUnexpected, "3:15"},
+		{"for each without parens", "package p;\npublic void f() {\n    for each int x in a { }\n}", diagnostics.ParseUnexpected, "3:14"},
+		{"for each without braces", "package p;\npublic void f() {\n    for each (int x in a) trace(x);\n}", diagnostics.ParseUnexpected, "3:27"},
 		{"unclosed body", "package p;\npublic void f() {\n", diagnostics.ParseUnexpected, "3:1"},
 	}
 	for _, c := range cases {
