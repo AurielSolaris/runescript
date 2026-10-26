@@ -425,11 +425,18 @@ func (p *parser) isNamedFuncTypeAt(start int) bool {
 
 // isQualifiedStart reports whether the next tokens begin `pkg.name`. A type
 // keyword may be a qualifier: `string.toUpper(s)` uses package std:string.
+// So may the reserved words in reservedQualifiers.
 func (p *parser) isQualifiedStart() bool {
 	t := p.tok()
-	return (t.Kind == lexer.Ident || (t.Kind == lexer.Keyword && typeKeywords[t.Text])) &&
+	return (t.Kind == lexer.Ident || (t.Kind == lexer.Keyword && typeKeywords[t.Text]) ||
+		(t.Kind == lexer.Reserved && reservedQualifiers[t.Text])) &&
 		p.peekTok(1).Kind == lexer.Dot
 }
+
+// reservedQualifiers are reserved words that may still qualify a call:
+// `matrix.mul(a, b)` uses std:matrix. The owner chose a library over a
+// matrix type (OQ-TYPE-03a), but `matrix` stays reserved.
+var reservedQualifiers = map[string]bool{"matrix": true}
 
 // typeRef parses a type: a built-in type keyword or an identifier (unknown
 // names are reported by the checker), followed by any number of function
@@ -573,7 +580,7 @@ func (p *parser) stmt() ast.Stmt {
 		p.failHelp(diagnostics.ParseNotImplemented, t.Span,
 			"standalone blocks are not part of v0.1; blocks follow functions, if, while, and for",
 			"unexpected '{'")
-	case t.Kind == lexer.Reserved:
+	case t.Kind == lexer.Reserved && !p.isQualifiedStart():
 		p.notImplemented(t)
 	case t.Kind == lexer.Keyword && visibilities[t.Text] != ast.VisNone && p.isStructDecl():
 		p.failHelp(diagnostics.ParseUnexpected, t.Span, "declare structs at the top level of the file, outside any function",

@@ -138,6 +138,10 @@ func TestParseErrors(t *testing.T) {
 		{"two values in a hole", "package p;\npublic void f() {\n    trace($\"{a b}\");\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"cast of nothing", "package p;\npublic void f() {\n    trace((int));\n}", diagnostics.ParseUnexpected, "3:16"},
 		{"reserved type in body", "package p;\npublic void f() {\n    array x = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
+		// matrix may qualify a call (std:matrix), but stays reserved.
+		{"matrix as a name", "package p;\npublic void f() {\n    int matrix = 1;\n}", diagnostics.ParseNotImplemented, "3:9"},
+		{"matrix as a statement", "package p;\npublic void f() {\n    matrix = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
+		{"matrix as a type", "package p;\npublic void f() {\n    matrix m = 1;\n}", diagnostics.ParseNotImplemented, "3:5"},
 		{"declaration missing = or ;", "package p;\npublic void f() {\n    int x 5;\n}", diagnostics.ParseUnexpected, "3:11"},
 		{"expression statement", "package p;\npublic void f() {\n    1 + 2;\n}", diagnostics.ParseUnexpected, "3:5"},
 		{"standalone block", "package p;\npublic void f() {\n    { }\n}", diagnostics.ParseNotImplemented, "3:5"},

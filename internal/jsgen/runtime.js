@@ -2825,6 +2825,596 @@ const $rt = (() => {
   std.json = json;
   //@end
 
+  //@section csv
+  // ---- std:csv (OQ-CSV-01) ----
+  //
+  // A line-by-line twin of stdlib/csv.go, run over the text's UTF-8 bytes
+  // so that error columns (in bytes) agree.
+  let cEncoder = null, cDecoder = null;
+  function csvSep(c) {
+    if (c === 0x22) throw new Fault("ArgumentError", "the separator cannot be '\"'");
+    if (c === 0x0D) throw new Fault("ArgumentError", "the separator cannot be '\\r'");
+    if (c === 0x0A) throw new Fault("ArgumentError", "the separator cannot be '\\n'");
+    return String.fromCodePoint(c);
+  }
+  function csvParse(text, sepText) {
+    if (cEncoder === null) cEncoder = new TextEncoder();
+    if (cDecoder === null) cDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
+    const s = cEncoder.encode(text), sep = cEncoder.encode(sepText), n = s.length;
+    const records = [];
+    let i = 0;
+    if (n >= 3 && s[0] === 0xEF && s[1] === 0xBB && s[2] === 0xBF) i = 3;
+    let line = 1, lineStart = i;
+    const fail = (l, at, msg) => {
+      throw new Fault("Error", `line ${l}, column ${at - lineStart + 1}: ${msg}`);
+    };
+    // lineBreak is the length of the line break at j: 1 for "\n", 2 for
+    // "\r\n", 0 for none.
+    const lineBreak = (j) => (j < n && s[j] === 0x0A ? 1 : j + 1 < n && s[j] === 0x0D && s[j + 1] === 0x0A ? 2 : 0);
+    const atSep = (j) => {
+      if (j + sep.length > n) return false;
+      for (let k = 0; k < sep.length; k++) if (s[j + k] !== sep[k]) return false;
+      return true;
+    };
+    const text8 = (a, b) => cDecoder.decode(s.subarray(a, b));
+    while (i < n) {
+      const k = lineBreak(i);
+      if (k > 0) { // an empty line
+        i += k;
+        line++;
+        lineStart = i;
+        continue;
+      }
+      const record = [];
+      for (;;) {
+        let field = "";
+        if (i < n && s[i] === 0x22) {
+          const qline = line, qstart = lineStart, qat = i;
+          i++;
+          let from = i;
+          for (;;) {
+            if (i >= n) {
+              lineStart = qstart;
+              fail(qline, qat, "quoted field has no closing '\"'");
+            }
+            const c = s[i];
+            if (c === 0x22) {
+              if (i + 1 < n && s[i + 1] === 0x22) {
+                field += text8(from, i + 1);
+                i += 2;
+                from = i;
+                continue;
+              }
+              field += text8(from, i);
+              i++;
+              break;
+            }
+            i++;
+            if (c === 0x0A) {
+              line++;
+              lineStart = i;
+            }
+          }
+          if (i < n && !atSep(i) && lineBreak(i) === 0) {
+            fail(line, i, "expected a separator or a line break after the closing '\"'");
+          }
+        } else {
+          const from = i;
+          while (i < n && !atSep(i) && lineBreak(i) === 0) {
+            if (s[i] === 0x22) fail(line, i, "'\"' in an unquoted field; quote the field and write the '\"' twice");
+            i++;
+          }
+          field = text8(from, i);
+        }
+        record.push(field);
+        if (i < n && atSep(i)) {
+          i += sep.length;
+          continue;
+        }
+        break;
+      }
+      records.push(record);
+      const k2 = lineBreak(i);
+      if (k2 > 0) {
+        i += k2;
+        line++;
+        lineStart = i;
+      }
+    }
+    return records;
+  }
+  function csvFormat(records, sep) {
+    let out = "";
+    for (let r = 0; r < records.length; r++) {
+      const record = records[r];
+      if (record.length === 0) throw new Fault("ArgumentError", `rows[${r}] has no fields; a CSV record has at least one`);
+      for (let i = 0; i < record.length; i++) {
+        const field = record[i];
+        if (i > 0) out += sep;
+        if (field.includes(sep) || /["\r\n]/.test(field) || (record.length === 1 && field === "")) {
+          out += '"' + field.replace(/"/g, '""') + '"';
+        } else {
+          out += field;
+        }
+      }
+      out += "\n";
+    }
+    return out;
+  }
+  std.csv = {
+    parse: (text) => csvParse(text, ","),
+    parseWith: (text, sep) => csvParse(text, csvSep(sep)),
+    format: (rows) => csvFormat(rows, ","),
+    formatWith: (rows, sep) => csvFormat(rows, csvSep(sep)),
+  };
+  //@end
+
+  //@section matrix
+  // ---- std:matrix (OQ-TYPE-03a) ----
+  //
+  // A line-by-line twin of stdlib/matrix.go: the same IEEE 754 operations
+  // in the same order, so both targets give bit-identical results.
+  function mFault(msg) {
+    throw new Fault("ArgumentError", msg);
+  }
+  function mSize(n, what) {
+    if (n < 0) mFault(`${what} cannot be negative (${n})`);
+    return n;
+  }
+  const mCount = (n, noun) => (n === 1 ? "1 " + noun : `${n} ${noun}s`);
+  function mShape(m) {
+    if (m.length === 0) return [0, 0];
+    const cols = m[0].length;
+    for (let i = 0; i < m.length; i++) {
+      if (m[i].length !== cols) mFault(`the matrix is not rectangular: row ${i} has ${mCount(m[i].length, "column")}, row 0 has ${cols}`);
+    }
+    return [m.length, cols];
+  }
+  function mSquare(m) {
+    const [r, c] = mShape(m);
+    if (r !== c) mFault(`the matrix must be square, not ${r}x${c}`);
+    return r;
+  }
+  function mZeros(rows, cols) {
+    const out = [];
+    for (let i = 0; i < rows; i++) {
+      const row = [];
+      for (let j = 0; j < cols; j++) row.push(0);
+      out.push(row);
+    }
+    return out;
+  }
+  function mIdentity(n) {
+    const out = mZeros(n, n);
+    for (let i = 0; i < n; i++) out[i][i] = 1;
+    return out;
+  }
+  const mCopy = (m) => m.map((row) => row.slice());
+  function mAddSub(a, b, sub) {
+    const [ar, ac] = mShape(a), [br, bc] = mShape(b);
+    if (ar !== br || ac !== bc) mFault(`cannot ${sub ? "subtract" : "add"} a ${ar}x${ac} matrix and a ${br}x${bc} matrix`);
+    const out = mZeros(ar, ac);
+    for (let i = 0; i < ar; i++) {
+      for (let j = 0; j < ac; j++) out[i][j] = sub ? a[i][j] - b[i][j] : a[i][j] + b[i][j];
+    }
+    return out;
+  }
+  function mScale(m, k) {
+    const [r, c] = mShape(m);
+    const out = mZeros(r, c);
+    for (let i = 0; i < r; i++) {
+      for (let j = 0; j < c; j++) out[i][j] = m[i][j] * k;
+    }
+    return out;
+  }
+  function mMul(a, b) {
+    const [ar, ac] = mShape(a), [br, bc] = mShape(b);
+    if (ac !== br) mFault(`cannot multiply a ${ar}x${ac} matrix by a ${br}x${bc} matrix: the first has ${mCount(ac, "column")}, the second ${mCount(br, "row")}`);
+    const out = mZeros(ar, bc);
+    for (let i = 0; i < ar; i++) {
+      for (let j = 0; j < bc; j++) {
+        let s = 0;
+        for (let k = 0; k < ac; k++) s += a[i][k] * b[k][j];
+        out[i][j] = s;
+      }
+    }
+    return out;
+  }
+  function mMulVec(m, v) {
+    const [r, c] = mShape(m);
+    if (v.length !== c) mFault(`cannot multiply a ${r}x${c} matrix by a vector of length ${v.length}`);
+    const out = [];
+    for (let i = 0; i < r; i++) {
+      let s = 0;
+      for (let k = 0; k < c; k++) s += m[i][k] * v[k];
+      out.push(s);
+    }
+    return out;
+  }
+  function mTranspose(m) {
+    const [r, c] = mShape(m);
+    const out = mZeros(c, r);
+    for (let i = 0; i < r; i++) {
+      for (let j = 0; j < c; j++) out[j][i] = m[i][j];
+    }
+    return out;
+  }
+  function mPivot(a, k) {
+    let p = k;
+    for (let i = k + 1; i < a.length; i++) {
+      if (Math.abs(a[i][k]) > Math.abs(a[p][k])) p = i;
+    }
+    return p;
+  }
+  function mSwap(a, i, j) {
+    const t = a[i];
+    a[i] = a[j];
+    a[j] = t;
+  }
+  function mDet(m) {
+    const n = mSquare(m), a = mCopy(m);
+    let det = 1;
+    for (let k = 0; k < n; k++) {
+      const p = mPivot(a, k);
+      if (a[p][k] === 0) return 0;
+      if (p !== k) {
+        mSwap(a, p, k);
+        det = -det;
+      }
+      det *= a[k][k];
+      for (let i = k + 1; i < n; i++) {
+        const f = a[i][k] / a[k][k];
+        for (let j = k + 1; j < n; j++) a[i][j] -= f * a[k][j];
+      }
+    }
+    return det;
+  }
+  const mSingular = () => {
+    throw new Fault("Error", "the matrix is singular");
+  };
+  function mInverse(m) {
+    const n = mSquare(m), a = mCopy(m), inv = mIdentity(n);
+    for (let k = 0; k < n; k++) {
+      const p = mPivot(a, k);
+      if (a[p][k] === 0) mSingular();
+      mSwap(a, p, k);
+      mSwap(inv, p, k);
+      const piv = a[k][k];
+      for (let j = 0; j < n; j++) {
+        a[k][j] /= piv;
+        inv[k][j] /= piv;
+      }
+      for (let i = 0; i < n; i++) {
+        if (i === k) continue;
+        const f = a[i][k];
+        for (let j = 0; j < n; j++) {
+          a[i][j] -= f * a[k][j];
+          inv[i][j] -= f * inv[k][j];
+        }
+      }
+    }
+    return inv;
+  }
+  function mSolve(m, b) {
+    const n = mSquare(m);
+    if (b.length !== n) mFault(`cannot solve a ${n}x${n} system with a right-hand side of length ${b.length}`);
+    const a = mCopy(m), y = b.slice();
+    for (let k = 0; k < n; k++) {
+      const p = mPivot(a, k);
+      if (a[p][k] === 0) mSingular();
+      mSwap(a, p, k);
+      mSwap(y, p, k);
+      for (let i = k + 1; i < n; i++) {
+        const f = a[i][k] / a[k][k];
+        for (let j = k + 1; j < n; j++) a[i][j] -= f * a[k][j];
+        y[i] -= f * y[k];
+      }
+    }
+    const x = new Array(n).fill(0);
+    for (let i = n - 1; i >= 0; i--) {
+      let s = y[i];
+      for (let j = i + 1; j < n; j++) s -= a[i][j] * x[j];
+      x[i] = s / a[i][i];
+    }
+    return x;
+  }
+  function mFormat(m) {
+    mShape(m);
+    return m.map((row) => "[" + row.map((x) => String(x)).join(", ") + "]").join("\n");
+  }
+  std.matrix = {
+    zeros: (r, c) => mZeros(mSize(r, "the number of rows"), mSize(c, "the number of columns")),
+    identity: (n) => mIdentity(mSize(n, "the size")),
+    rows: (m) => mShape(m)[0],
+    cols: (m) => mShape(m)[1],
+    add: (a, b) => mAddSub(a, b, false),
+    sub: (a, b) => mAddSub(a, b, true),
+    scale: mScale,
+    mul: mMul,
+    mulVec: mMulVec,
+    transpose: mTranspose,
+    det: mDet,
+    inverse: mInverse,
+    solve: mSolve,
+    format: mFormat,
+  };
+  //@end
+
+  //@section semver
+  // ---- std:semver (OQ-MOD-01) ----
+  //
+  // A line-by-line twin of stdlib/semver.go: SemVer 2.0.0 versions, with
+  // node-semver's precedence and ranges. Numbers stay digit strings.
+  const svDigits = (s) => /^[0-9]+$/.test(s);
+  const svNumber = (s) => svDigits(s) && (s === "0" || s[0] !== "0");
+  const svIdentChars = (s) => /^[0-9A-Za-z-]+$/.test(s);
+  function svIdents(s, pre) {
+    const ids = s.split(".");
+    for (const id of ids) {
+      if (!svIdentChars(id) || (pre && svDigits(id) && !svNumber(id))) return null;
+    }
+    return ids;
+  }
+  // svTail parses the -PRERELEASE+BUILD after a version's numbers into v.
+  function svTail(s, v) {
+    const plus = s.indexOf("+");
+    if (plus >= 0) {
+      const ids = svIdents(s.slice(plus + 1), false);
+      if (ids === null) return false;
+      v.build = ids;
+      s = s.slice(0, plus);
+    }
+    if (s === "") return true;
+    if (s[0] !== "-") return false;
+    const ids = svIdents(s.slice(1), true);
+    if (ids === null) return false;
+    v.pre = ids;
+    return true;
+  }
+  function svParse(s) {
+    let end = s.search(/[-+]/);
+    if (end < 0) end = s.length;
+    const nums = s.slice(0, end).split(".");
+    if (nums.length !== 3 || !svNumber(nums[0]) || !svNumber(nums[1]) || !svNumber(nums[2])) return null;
+    const v = { major: nums[0], minor: nums[1], patch: nums[2], pre: [], build: [] };
+    return svTail(s.slice(end), v) ? v : null;
+  }
+  const svQuote = (s) => '"' + s + '"';
+  function svMust(s) {
+    const v = svParse(s);
+    if (v === null) throw new Fault("ArgumentError", `${svQuote(s)} is not a valid version: SemVer 2.0.0 is MAJOR.MINOR.PATCH, e.g. 1.2.3 or 1.2.3-rc.1`);
+    return v;
+  }
+  function svInt(digits, what) {
+    if (digits.length > 10 || (digits.length === 10 && digits > "2147483647")) {
+      throw new Fault("RangeError", `the ${what} version ${digits} does not fit in 'int'`);
+    }
+    return Number(digits);
+  }
+  const svSign = (n) => (n < 0 ? -1 : n > 0 ? 1 : 0);
+  const svCompareNum = (a, b) => (a.length !== b.length ? svSign(a.length - b.length) : a < b ? -1 : a > b ? 1 : 0);
+  function svCompareIdent(a, b) {
+    const an = svDigits(a), bn = svDigits(b);
+    if (an && bn) return svCompareNum(a, b);
+    if (an) return -1;
+    if (bn) return 1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  function svCompare(a, b) {
+    for (const c of [svCompareNum(a.major, b.major), svCompareNum(a.minor, b.minor), svCompareNum(a.patch, b.patch)]) {
+      if (c !== 0) return c;
+    }
+    if (a.pre.length === 0 && b.pre.length === 0) return 0;
+    if (a.pre.length === 0) return 1;
+    if (b.pre.length === 0) return -1;
+    for (let i = 0; i < a.pre.length && i < b.pre.length; i++) {
+      const c = svCompareIdent(a.pre[i], b.pre[i]);
+      if (c !== 0) return c;
+    }
+    return svSign(a.pre.length - b.pre.length);
+  }
+  // svInc adds one to a number written in digits.
+  function svInc(d) {
+    const b = d.split("");
+    for (let i = b.length - 1; i >= 0; i--) {
+      if (b[i] < "9") {
+        b[i] = String.fromCharCode(b[i].charCodeAt(0) + 1);
+        return b.join("");
+      }
+      b[i] = "0";
+    }
+    return "1" + b.join("");
+  }
+  // svParsePartial parses an x-range: nums holds "" for a missing or x part.
+  function svParsePartial(s) {
+    const p = { nums: ["", "", ""], pre: [] };
+    let end = s.search(/[-+]/);
+    if (end < 0) end = s.length;
+    const parts = s.slice(0, end).split(".");
+    if (parts.length > 3) return null;
+    let wild = false;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part === "x" || part === "X" || part === "*") {
+        wild = true;
+      } else if (svNumber(part)) {
+        if (!wild) p.nums[i] = part;
+      } else {
+        return null;
+      }
+    }
+    if (end < s.length) {
+      if (parts.length !== 3) return null;
+      const v = { pre: [], build: [] };
+      if (!svTail(s.slice(end), v)) return null;
+      if (!wild) p.pre = v.pre;
+    }
+    return p;
+  }
+  const svFull = (major, minor, patch, pre) => ({ major, minor, patch, pre, build: [] });
+  const svZeroPre = ["0"];
+  const svNone = { op: "<", v: svFull("0", "0", "0", svZeroPre) };
+  function svDesugar(op, p) {
+    let [M, m, pt] = p.nums;
+    const xM = M === "", xm = xM || m === "", xp = xm || pt === "";
+    const ge = (v) => ({ op: ">=", v }), lt = (v) => ({ op: "<", v });
+    if (op === "~" || op === "~>") {
+      if (xM) return [];
+      if (xm) return [ge(svFull(M, "0", "0", [])), lt(svFull(svInc(M), "0", "0", svZeroPre))];
+      if (xp) return [ge(svFull(M, m, "0", [])), lt(svFull(M, svInc(m), "0", svZeroPre))];
+      return [ge(svFull(M, m, pt, p.pre)), lt(svFull(M, svInc(m), "0", svZeroPre))];
+    }
+    if (op === "^") {
+      if (xM) return [];
+      if (xm) return [ge(svFull(M, "0", "0", [])), lt(svFull(svInc(M), "0", "0", svZeroPre))];
+      if (xp) {
+        if (M === "0") return [ge(svFull(M, m, "0", [])), lt(svFull(M, svInc(m), "0", svZeroPre))];
+        return [ge(svFull(M, m, "0", [])), lt(svFull(svInc(M), "0", "0", svZeroPre))];
+      }
+      const low = ge(svFull(M, m, pt, p.pre));
+      if (M === "0" && m === "0") return [low, lt(svFull(M, m, svInc(pt), svZeroPre))];
+      if (M === "0") return [low, lt(svFull(M, svInc(m), "0", svZeroPre))];
+      return [low, lt(svFull(svInc(M), "0", "0", svZeroPre))];
+    }
+    if (!xp) return [{ op: op === "" ? "=" : op, v: svFull(M, m, pt, p.pre) }];
+    if (op === "=") op = "";
+    if (xM) return op === ">" || op === "<" ? [svNone] : [];
+    if (op !== "") {
+      if (xm) m = "0";
+      pt = "0";
+      if (op === ">") {
+        op = ">=";
+        if (xm) {
+          M = svInc(M);
+          m = "0";
+        } else {
+          m = svInc(m);
+        }
+      } else if (op === "<=") {
+        op = "<";
+        if (xm) M = svInc(M);
+        else m = svInc(m);
+      }
+      return [{ op, v: svFull(M, m, pt, op === "<" ? svZeroPre : []) }];
+    }
+    if (xm) return [ge(svFull(M, "0", "0", [])), lt(svFull(svInc(M), "0", "0", svZeroPre))];
+    return [ge(svFull(M, m, "0", [])), lt(svFull(M, svInc(m), "0", svZeroPre))];
+  }
+  function svHyphen(from, to) {
+    const out = [];
+    const [fM, fm, fp] = from.nums, [tM, tm, tp] = to.nums;
+    if (fM === "") {
+      // no lower bound
+    } else if (fm === "") {
+      out.push({ op: ">=", v: svFull(fM, "0", "0", []) });
+    } else if (fp === "") {
+      out.push({ op: ">=", v: svFull(fM, fm, "0", []) });
+    } else {
+      out.push({ op: ">=", v: svFull(fM, fm, fp, from.pre) });
+    }
+    if (tM === "") {
+      // no upper bound
+    } else if (tm === "") {
+      out.push({ op: "<", v: svFull(svInc(tM), "0", "0", svZeroPre) });
+    } else if (tp === "") {
+      out.push({ op: "<", v: svFull(tM, svInc(tm), "0", svZeroPre) });
+    } else {
+      out.push({ op: "<=", v: svFull(tM, tm, tp, to.pre) });
+    }
+    return out;
+  }
+  // svAppend adds cs to set, leaving out >=0.0.0 (node-semver's replaceGTE0).
+  function svAppend(set, cs) {
+    for (const c of cs) {
+      if (c.op === ">=" && c.v.major === "0" && c.v.minor === "0" && c.v.patch === "0" && c.v.pre.length === 0) continue;
+      set.push(c);
+    }
+    return set;
+  }
+  const svOps = ["~>", "~", "^", "<=", ">=", "<", ">", "="];
+  // svParseRange returns { sets } or { error }.
+  function svParseRange(r) {
+    const bad = (why) => ({ error: `${svQuote(r)} is not a valid range: ${why}` });
+    let sets = [];
+    for (const part of r.split("||")) {
+      const words = part.split(/[ \t]+/).filter((w) => w !== "");
+      if (words.length === 3 && words[1] === "-") {
+        const from = svParsePartial(words[0]), to = svParsePartial(words[2]);
+        if (from === null || to === null) return bad(`${words[0]} - ${words[2]} is not a hyphen range of versions`);
+        sets.push(svAppend([], svHyphen(from, to)));
+        continue;
+      }
+      const set = [];
+      for (let i = 0; i < words.length; i++) {
+        let w = words[i];
+        let op = "";
+        for (const o of svOps) {
+          if (w.startsWith(o)) {
+            op = o;
+            break;
+          }
+        }
+        if (op === w && i + 1 < words.length) {
+          i++;
+          w += words[i];
+        }
+        const p = svParsePartial(w.slice(op.length));
+        if (p === null) return bad(`${svQuote(w)} is not a comparator`);
+        svAppend(set, svDesugar(op, p));
+      }
+      sets.push(set);
+    }
+    if (sets.length > 1) {
+      for (const set of sets) {
+        if (set.length === 0) return { sets: [set] };
+      }
+    }
+    return { sets };
+  }
+  function svTest(c, v) {
+    const d = svCompare(v, c.v);
+    switch (c.op) {
+      case "": return true;
+      case "=": return d === 0;
+      case "<": return d < 0;
+      case "<=": return d <= 0;
+      case ">": return d > 0;
+    }
+    return d >= 0;
+  }
+  function svTestSet(set, v) {
+    for (const c of set) if (!svTest(c, v)) return false;
+    if (v.pre.length === 0) return true;
+    for (const c of set) {
+      if (c.op !== "" && c.v.pre.length > 0 && c.v.major === v.major && c.v.minor === v.minor && c.v.patch === v.patch) return true;
+    }
+    return false;
+  }
+  const svCmp = (a, b) => svCompare(svMust(a), svMust(b));
+  std.semver = {
+    valid: (s) => svParse(s) !== null,
+    validRange: (r) => svParseRange(r).error === undefined,
+    compare: svCmp,
+    eq: (a, b) => svCmp(a, b) === 0,
+    neq: (a, b) => svCmp(a, b) !== 0,
+    gt: (a, b) => svCmp(a, b) > 0,
+    gte: (a, b) => svCmp(a, b) >= 0,
+    lt: (a, b) => svCmp(a, b) < 0,
+    lte: (a, b) => svCmp(a, b) <= 0,
+    satisfies(s, r) {
+      const v = svMust(s);
+      const range = svParseRange(r);
+      if (range.error !== undefined) throw new Fault("ArgumentError", range.error);
+      return range.sets.some((set) => svTestSet(set, v));
+    },
+    major: (s) => svInt(svMust(s).major, "major"),
+    minor: (s) => svInt(svMust(s).minor, "minor"),
+    patch: (s) => svInt(svMust(s).patch, "patch"),
+    prerelease: (s) => svMust(s).pre.join("."),
+    build: (s) => svMust(s).build.join("."),
+  };
+  //@end
+
   // lineWriter collects text and passes each complete line to emit;
   // flush passes on the rest.
   function lineWriter(emit) {

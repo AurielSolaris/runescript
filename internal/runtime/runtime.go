@@ -940,29 +940,8 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 		switch a.Kind {
 		case types.Opaque:
 			goArgs[i] = a.Opq
-		case types.Array: // Array<string> as []string, Array<uint8> as []byte, Array<opaque> as []any
-			switch f.Params[i].Elem.Kind {
-			case types.Opaque:
-				vals := make([]any, len(a.Arr.Elems))
-				for j, v := range a.Arr.Elems {
-					vals[j] = v.Opq
-				}
-				goArgs[i] = vals
-				continue
-			}
-			if f.Params[i].Elem.Kind == types.String {
-				strs := make([]string, len(a.Arr.Elems))
-				for j, v := range a.Arr.Elems {
-					strs[j] = v.Str
-				}
-				goArgs[i] = strs
-				break
-			}
-			b := make([]byte, len(a.Arr.Elems))
-			for j, v := range a.Arr.Elems {
-				b[j] = byte(v.Int)
-			}
-			goArgs[i] = b
+		case types.Array:
+			goArgs[i] = goArray(a.Arr, f.Params[i])
 		case types.String:
 			goArgs[i] = a.Str
 		case types.Bool:
@@ -1008,33 +987,104 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 		return Value{Kind: types.Float, F: out.(float64), Bits: f.Result.Bits}
 	case types.Opaque:
 		return Value{Kind: types.Opaque, Opq: out}
-	case types.Array: // Array<string> from []string, Array<uint8> from []byte, Array<opaque> from []any
-		if vals, ok := out.([]any); ok {
-			arr := &ArrayValue{Elems: make([]Value, len(vals))}
-			for i, x := range vals {
-				arr.Elems[i] = Value{Kind: types.Opaque, Opq: x}
-			}
-			return Value{Kind: types.Array, Arr: arr}
-		}
-		if b, ok := out.([]byte); ok {
-			arr := &ArrayValue{Elems: make([]Value, len(b))}
-			for i, x := range b {
-				arr.Elems[i] = Value{Kind: types.Unsigned, Int: int64(x), Bits: 8}
-			}
-			return Value{Kind: types.Array, Arr: arr}
-		}
-		strs := out.([]string)
-		arr := &ArrayValue{Elems: make([]Value, len(strs))}
-		for i, s := range strs {
-			arr.Elems[i] = Value{Kind: types.String, Str: s}
-		}
-		return Value{Kind: types.Array, Arr: arr}
+	case types.Array:
+		return Value{Kind: types.Array, Arr: fromGoArray(out, f.Result)}
 	}
 	n := out.(int64)
 	if !types.InRange(f.Result, n) {
 		in.fail(diagnostics.RunOverflow, e.Site, "%s returned %d, which does not fit in '%s'", name, n, f.Result)
 	}
 	return Value{Kind: f.Result.Kind, Int: n, Bits: f.Result.Bits}
+}
+
+// goArray converts the array a, of type t, to the Go slice natives take
+// (see package stdlib): []string, []float64, []byte for Array<uint8>, []any
+// for an array of opaque values, and [][]string or [][]float64 for nested
+// arrays. The slice is a copy: a native cannot change the program's array.
+func goArray(a *ArrayValue, t *types.Type) any {
+	e := t.Elem
+	switch {
+	case e.Kind == types.Opaque:
+		out := make([]any, len(a.Elems))
+		for i, v := range a.Elems {
+			out[i] = v.Opq
+		}
+		return out
+	case e.Kind == types.String:
+		out := make([]string, len(a.Elems))
+		for i, v := range a.Elems {
+			out[i] = v.Str
+		}
+		return out
+	case e.Kind == types.Float:
+		out := make([]float64, len(a.Elems))
+		for i, v := range a.Elems {
+			out[i] = v.F
+		}
+		return out
+	case e.Kind == types.Unsigned && e.Bits == 8:
+		out := make([]byte, len(a.Elems))
+		for i, v := range a.Elems {
+			out[i] = byte(v.Int)
+		}
+		return out
+	case e.Kind == types.Array && e.Elem.Kind == types.String:
+		out := make([][]string, len(a.Elems))
+		for i, v := range a.Elems {
+			out[i] = goArray(v.Arr, e).([]string)
+		}
+		return out
+	case e.Kind == types.Array && e.Elem.Kind == types.Float:
+		out := make([][]float64, len(a.Elems))
+		for i, v := range a.Elems {
+			out[i] = goArray(v.Arr, e).([]float64)
+		}
+		return out
+	}
+	ice("no Go form for %s", t)
+	return nil
+}
+
+// fromGoArray is goArray's inverse: it builds an array of type t from the
+// slice a native returned.
+func fromGoArray(out any, t *types.Type) *ArrayValue {
+	e := t.Elem
+	var elems []Value
+	switch x := out.(type) {
+	case []any:
+		elems = make([]Value, len(x))
+		for i, v := range x {
+			elems[i] = Value{Kind: types.Opaque, Opq: v}
+		}
+	case []string:
+		elems = make([]Value, len(x))
+		for i, v := range x {
+			elems[i] = Value{Kind: types.String, Str: v}
+		}
+	case []float64:
+		elems = make([]Value, len(x))
+		for i, v := range x {
+			elems[i] = Value{Kind: types.Float, F: v, Bits: e.Bits}
+		}
+	case []byte:
+		elems = make([]Value, len(x))
+		for i, v := range x {
+			elems[i] = Value{Kind: types.Unsigned, Int: int64(v), Bits: 8}
+		}
+	case [][]string:
+		elems = make([]Value, len(x))
+		for i, v := range x {
+			elems[i] = Value{Kind: types.Array, Arr: fromGoArray(v, e)}
+		}
+	case [][]float64:
+		elems = make([]Value, len(x))
+		for i, v := range x {
+			elems[i] = Value{Kind: types.Array, Arr: fromGoArray(v, e)}
+		}
+	default:
+		ice("no %s form for Go %T", t, out)
+	}
+	return &ArrayValue{Elems: elems}
 }
 
 // goFunc wraps the function value v, of type t, as the Go function a

@@ -14,6 +14,12 @@ func program(body, extra string) string {
 	return "package p;\nprotected int main() {\n" + body + "\n    return 0;\n}\n" + extra
 }
 
+// dataProgram is program with the uses of std:csv, std:matrix, and
+// std:semver: body starts on line 6.
+func dataProgram(body string) string {
+	return "package p;\nuse \"std:csv\";\nuse \"std:matrix\";\nuse \"std:semver\";\nprotected int main() {\n" + body + "\n    return 0;\n}\n"
+}
+
 // jsonProgram is program with `use "std:json";`: body starts on line 4.
 func jsonProgram(body, extra string) string {
 	return "package p;\nuse \"std:json\";\nprotected int main() {\n" + body + "\n    return 0;\n}\n" + extra
@@ -49,6 +55,10 @@ func TestAccepted(t *testing.T) {
 		"uint arithmetic":      program("    uint a = 3;\n    uint b = a * 2 + 1;\n    bool c = a < b;", ""),
 		"bitwise":              program("    uint32 a = 0xFF00;\n    a |= 0x0F;\n    a &= ~((uint32) 1);\n    a ^= a >> 4;\n    a <<= 2;\n    int8 n = -8;\n    int k = 2;\n    trace(a, n >> 1, n << k, ~n, 1 << 4, (int64) (1 << 40), a & 0xF);", ""),
 		"widths":               program("    int8 a = -128;\n    uint64 b = 18446744073709551615;\n    int64 c = (int64) a * 2;\n    uint16 d = (uint16) b % 7;\n    int32 e = (int32) 5;\n    trace(a, b, c, d, e, (int) e + 1, b > 0);", ""),
+		"csv":                  dataProgram("    Array<Array<string>> rows = csv.parse(\"a,b\");\n    Array<Array<string>> tsv = csv.parseWith(\"a\\tb\", '\\t');\n    trace(csv.format(rows), csv.formatWith(tsv, ';'), rows[0][1]);"),
+		"matrix":               dataProgram("    Array<Array<float64>> a = [[1, 2], [3, 4.5]];\n    Array<float64> x = matrix.solve(a, [1.0, 2.0]);\n    Array<Array<float64>> i = matrix.mul(a, matrix.inverse(a));\n    trace(matrix.det(a), matrix.rows(i) + matrix.cols(a), matrix.format(matrix.transpose(a)), x[0]);"),
+		"matrix statement":     dataProgram("    matrix.zeros(1, 1);"),
+		"semver":               dataProgram("    bool ok = semver.satisfies(\"1.2.3\", \"^1.0.0\") && semver.lt(\"1.0.0-rc.1\", \"1.0.0\");\n    trace(ok, semver.compare(\"1.10.0\", \"1.9.0\"), semver.major(\"2.0.0\"), semver.prerelease(\"1.0.0-rc.1\"));"),
 		"json values":          jsonProgram("    json.Value doc = json.parse(\"{}\");\n    Array<json.Value> parts = [doc, json.fromInt(1), json.fromString(\"x\")];\n    json.Value all = json.fromObject([\"a\", \"b\"], [json.fromArray(parts), json.nullValue()]);\n    for each (json.Value p in json.items(json.get(all, \"a\"))) { trace(json.kind(p)); }\n    Holder h = Holder{v: all};\n    json.Value(json.Value) id = (json.Value x) => x;\n    trace(json.stringify(id(h.v)), json.asInt(json.at(json.fromArray(parts), 1)), json.asInt64(json.fromInt64((int64) 2)));", "public struct Holder {\n    json.Value v;\n}\n"),
 		"for each":             program("    Array<Array<int>> g = [[1, 2], [3]];\n    int t = 0;\n    for each (Array<int> row in g) {\n        for each (int v in row) {\n            if (v == 2) { continue; }\n            t += v;\n        }\n        break;\n    }\n    for each (int v in [4, 5]) { t += v; }\n    trace(t);", ""),
 		"for each shadows":     program("    int x = 1;\n    Array<int> a = [2];\n    for each (int x in a) { trace(x); }\n    trace(x);", ""),
@@ -147,6 +157,10 @@ func TestRejected(t *testing.T) {
 		{"array element types", program("    Array<int> a = [1];\n    Array<uint> b = a;", ""), diagnostics.TypeMismatch, "4:21"},
 		{"push wrong type", program("    Array<int> a = [];\n    a.push(\"x\");", ""), diagnostics.TypeMismatch, "4:12"},
 		{"push arity", program("    Array<int> a = [];\n    a.push();", ""), diagnostics.TypeArgCount, "4:5"},
+		{"matrix without use", program("    trace(matrix.rows([[1.0]]));", ""), diagnostics.NamePackageNotUsed, "3:11"},
+		{"matrix of ints", dataProgram("    Array<Array<int>> a = [[1]];\n    trace(matrix.det(a));"), diagnostics.TypeMismatch, "7:22"},
+		{"csv separator string", dataProgram("    trace(csv.parseWith(\"a\", \";\"));"), diagnostics.TypeMismatch, "6:30"},
+		{"semver unknown function", dataProgram("    trace(semver.inc(\"1.0.0\"));"), diagnostics.NameNotInPackage, "6:18"},
 		{"json value traced", jsonProgram("    json.Value v = json.nullValue();\n    trace(v);", ""), diagnostics.TypeBadOperand, "5:11"},
 		{"json value compared", jsonProgram("    json.Value v = json.nullValue();\n    trace(v == v);", ""), diagnostics.TypeBadOperand, "5:13"},
 		{"json value converted", jsonProgram("    json.Value v = json.nullValue();\n    string s = (string) v;", ""), diagnostics.TypeBadConversion, "5:16"},

@@ -122,7 +122,8 @@ func sections(src string, keep map[string]bool) string {
 }
 
 var sectionNames = map[string]bool{"extern": true, "dom": true, "string": true, "math": true,
-	"host": true, "io": true, "process": true, "fs": true, "path": true, "json": true}
+	"host": true, "io": true, "process": true, "fs": true, "path": true, "json": true,
+	"csv": true, "matrix": true, "semver": true}
 
 // hostPackages are the std packages that use the program's environment,
 // in the runtime's host section.

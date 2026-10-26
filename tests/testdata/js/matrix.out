@@ -1,0 +1,42 @@
+[0, 0, 0]
+[0, 0, 0]
+[1, 0, 0]
+[0, 1, 0]
+[0, 0, 1]
+2 2 0 3
+[1.5, 1]
+[5, 4.25]
+[0.5, 3]
+[1, 3.75]
+[0.1, 0.2]
+[0.30000000000000004, 0.4]
+[4.5, -0.5]
+[9.5, -2]
+[14]
+-1 -1
+[1, 4]
+[2, 5]
+[3, 6]
+det 4 -2 0 1
+[0.75, 0.49999999999999994, 0.24999999999999994]
+[0.49999999999999994, 0.9999999999999999, 0.4999999999999999]
+[0.24999999999999997, 0.49999999999999994, 0.7499999999999999]
+[1, 0, 0]
+[-8.326672684688674e-17, 0.9999999999999998, -1.1102230246251565e-16]
+[0, 0, 0.9999999999999999]
+solve 1 1 0.9999999999999999
+solve -4.000000000000003 4.500000000000001
+[1, 2]
+[3, 4]
+[0, 1e+21, 1e-7, 0.30000000000000004]
+not rectangular -> ArgumentError matrix.det: the matrix is not rectangular: row 1 has 1 column, row 0 has 2
+add sizes -> ArgumentError matrix.add: cannot add a 1x2 matrix and a 2x1 matrix
+sub sizes -> ArgumentError matrix.sub: cannot subtract a 1x2 matrix and a 1x1 matrix
+mul sizes -> ArgumentError matrix.mul: cannot multiply a 1x2 matrix by a 1x2 matrix: the first has 2 columns, the second 1 row
+mulVec sizes -> ArgumentError matrix.mulVec: cannot multiply a 1x2 matrix by a vector of length 1
+not square -> ArgumentError matrix.inverse: the matrix must be square, not 1x3
+singular inverse -> Error matrix.inverse: the matrix is singular
+singular solve -> Error matrix.solve: the matrix is singular
+solve sizes -> ArgumentError matrix.solve: cannot solve a 1x1 system with a right-hand side of length 2
+negative size -> ArgumentError matrix.zeros: the number of rows cannot be negative (-1)
+negative identity -> ArgumentError matrix.identity: the size cannot be negative (-3)

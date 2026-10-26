@@ -1,0 +1,36 @@
+records: 3
+[name] [age] [city]
+[Ada] [36] [London]
+[Alan] [41] [Wilmslow, Cheshire]
+records: 1
+[say "hi"] [two\nlines] [] [end] []
+records: 0
+records: 1
+[only]
+records: 1
+[ spaced ] [ kept \ra]
+records: 1
+[a] [b,c] [d]
+records: 2
+[x] [y]
+[1] [2]
+records: 1
+[é] [ü] [→]
+id,note
+1,plain
+2,"has, comma"
+3,"has ""quotes"""
+4,"two
+lines"
+""
+
+round trip: true
+"a;b";c,d
+
+bare quote -> Error csv.parse: line 1, column 3: '"' in an unquoted field; quote the field and write the '"' twice
+text after quote -> Error csv.parse: line 2, column 4: expected a separator or a line break after the closing '"'
+unclosed quote -> Error csv.parse: line 1, column 3: quoted field has no closing '"'
+column in bytes -> Error csv.parse: line 1, column 5: '"' in an unquoted field; quote the field and write the '"' twice
+quote separator -> ArgumentError csv.parseWith: the separator cannot be '"'
+newline separator -> ArgumentError csv.formatWith: the separator cannot be '\n'
+empty record -> ArgumentError csv.format: rows[1] has no fields; a CSV record has at least one

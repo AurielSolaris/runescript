@@ -77,6 +77,9 @@ with `ASX-PARSE-002`:
 class array matrix
 ```
 
+**[2026-10-26]** `matrix` may still qualify a call, `matrix.mul(a, b)`,
+after `use "std:matrix";`; everywhere else it stays reserved.
+
 `trace` is not a keyword. It is a built-in function name and can't be
 redeclared.
 
@@ -531,8 +534,9 @@ through the package's functions. Each opaque type is its own type.
   qualified, as for structs of other packages.
 
 ### 5.2 Planned types **[planned/undecided]**
-`matrix` and `class`.
-None of these are implemented. Their names are reserved.
+`class`. It is not implemented; its name is reserved. Matrices are not a
+type: they are `Array<Array<float64>>` and the functions of `std:matrix`
+(§8.2), and `matrix` stays reserved.
 
 ### 5.3 Integer constants **[v0.1, provisional]**
 Integer literals, and expressions built only from literals using
@@ -801,6 +805,9 @@ of it. A NaN's sign is not observable:
 | `std:process` | [2026-10-17] `args()` (a new array each call), `env(name)` (`""` if unset), `hasEnv(name)`, `cwd()`, `platform()` (`"windows"`, `"linux"`, `"macos"`, or the system's own name; `"browser"` where the JavaScript host gives none) |
 | `std:fs` | [2026-10-17] `readFile writeFile appendFile` [2026-10-20] `readBytes writeBytes appendBytes` (bytes as `Array<uint8>`, unchanged) `exists isFile isDir size copyFile rename remove removeAll mkdir mkdirAll readDir walk tempDir`. Paths are relative to the working directory; text is UTF-8. A failure throws an `Error` whose message is `<qualifier>.<function>: cannot <operation> <path>: <reason>`, with the reasons "no such file or directory", "already exists", "is a directory", "not a directory", "directory not empty", and "permission denied" worded the same on every target and platform. `readDir` sorts by code point; `walk` lists a directory before its contents and does not follow symbolic links. |
 | `std:json` | [2026-10-20] The opaque `json.Value` (§5.1f). `parse stringify stringifyIndent`; reading: `kind isNull asBool asString asInt asInt64 asFloat length at items has get keys`; building: `nullValue fromBool fromString fromInt fromInt64 fromFloat fromArray fromObject`. RFC 8259 JSON only, nesting at most 1,000 deep, parsed by one algorithm on both targets with the same messages (`json.parse: <reason> at byte <UTF-8 offset>`). Numbers keep their text (`asInt`/`asInt64` need integer syntax and range, else `TypeError`/`RangeError`; `asFloat` rounds, `RangeError` if infinite); objects keep key order, a repeated key keeping its first position and last value; lone surrogate escapes become U+FFFD. Wrong kinds are `TypeError`s, `at` out of range a `RangeError`, a missing key in `get` an `Error`, NaN/infinite `fromFloat` and mismatched `fromObject` lengths `ArgumentError`s. Output escapes as `JSON.stringify`. |
+| `std:csv` | [2026-10-26] RFC 4180 CSV as `Array<Array<string>>`: `parse parseWith format formatWith` (the `With` forms take the separator as a `char`; `"`, `\r`, and `\n` are `ArgumentError`s). Records end at `\n` or `\r\n`; empty lines are skipped; records may differ in length; spaces are kept; a quoted field keeps its separators and line breaks exactly, `""` standing for `"`; a leading UTF-8 BOM is skipped. A `"` in an unquoted field, text after a closing `"`, and an unclosed quote throw an `Error`: `csv.parse: line L, column C: <reason>`, with C counted in bytes from 1. `format` ends every record with `\n` and quotes a field only if it contains the separator, `"`, `\r`, or `\n`, or is the only, empty field of its record, so `parse(format(rows)) == rows`; a record with no fields is an `ArgumentError`. |
+| `std:matrix` | [2026-10-26] Functions over `Array<Array<float64>>`, a matrix being an array of rows (no matrix type; `matrix` stays reserved but qualifies calls, §2.3): `zeros identity rows cols add sub scale mul mulVec transpose det inverse solve format`. Every argument must be rectangular and the sizes must fit (`ArgumentError` otherwise, naming them, e.g. `cannot multiply a 1x2 matrix by a 1x2 matrix: …`); results are new arrays. `det`, `inverse`, and `solve` use Gaussian elimination with partial pivoting (the first row of largest absolute value): a singular matrix has `det` 0, and `inverse`/`solve` throw an `Error` ("the matrix is singular"). Results are bit-identical on both targets: sums run from index 0 starting at 0, with no fused multiply-add. `format` writes one `[a, b]` line per row, numbers as `trace` writes them. |
+| `std:semver` | [2026-10-26] Version strings: `valid validRange compare eq neq gt gte lt lte satisfies major minor patch prerelease build`. Versions are strict SemVer 2.0.0 (no leading zeros, no `v` prefix or spaces; numbers of any length, compared exactly); precedence and ranges follow npm's semver package without its loose and includePrerelease options: `<`, `<=`, `>`, `>=`, `=`, spaces (and), `\|\|` (or), x-ranges and partial versions, `~` (also `~>`), `^`, hyphen ranges, and npm's rule that a prerelease satisfies a set only through a comparator with a prerelease of the same `MAJOR.MINOR.PATCH`. Build metadata is ignored. An invalid version or range is an `ArgumentError` everywhere except `valid` and `validRange`; `major`, `minor`, and `patch` throw a `RangeError` for a number that does not fit in `int`. |
 | `std:path` | [2026-10-17] Node.js's `path` semantics, implemented in RuneScript's runtimes: `join joinAll resolve resolveAll normalize isAbsolute relative dirname basename extname root sep delimiter`, with `basename(p, suffix)` as an overload. The plain names follow the running platform's rules (Windows or POSIX); `posix…` and `win32…` versions (`path.posixJoin`) choose. Differences from Node.js: Windows paths compare ignoring ASCII case only, and resolving a path on another drive starts at that drive's root instead of reading cmd.exe's `=D:` variables. |
 | `std:symrs` | [planned] Symbolic mathematics, a port of the owner's SympJS library; needs objects, floats, and arrays |
 

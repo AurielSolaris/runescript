@@ -30,11 +30,17 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 				case types.Opaque:
 					args[i] = jsonNull // the only opaque type so far
 				case types.Array:
-					switch p.Elem.Kind {
-					case types.String:
+					switch {
+					case p.Elem.Kind == types.String:
 						args[i] = []string{}
-					case types.Opaque:
+					case p.Elem.Kind == types.Opaque:
 						args[i] = []any{}
+					case p.Elem.Kind == types.Float:
+						args[i] = []float64{}
+					case p.Elem.Kind == types.Array && p.Elem.Elem.Kind == types.String:
+						args[i] = [][]string{}
+					case p.Elem.Kind == types.Array && p.Elem.Elem.Kind == types.Float:
+						args[i] = [][]float64{}
 					default:
 						args[i] = []byte{}
 					}
@@ -67,11 +73,17 @@ func TestSignaturesMatchImplementations(t *testing.T) {
 			case types.Opaque:
 				_, ok = out.(*jsonValue)
 			case types.Array:
-				switch f.Result.Elem.Kind {
-				case types.String:
+				switch e := f.Result.Elem; {
+				case e.Kind == types.String:
 					_, ok = out.([]string)
-				case types.Opaque:
+				case e.Kind == types.Opaque:
 					_, ok = out.([]any)
+				case e.Kind == types.Float:
+					_, ok = out.([]float64)
+				case e.Kind == types.Array && e.Elem.Kind == types.String:
+					_, ok = out.([][]string)
+				case e.Kind == types.Array && e.Elem.Kind == types.Float:
+					_, ok = out.([][]float64)
 				default:
 					_, ok = out.([]byte)
 				}

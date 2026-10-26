@@ -1,0 +1,39 @@
+1.2.3 true
+1.2.3-rc.1 true
+1.2.3+build.5 true
+1.2 false
+01.2.3 false
+v1.2.3 false
+1.2.3-rc.01 false
+1.2.3-rc-01 true
+1.0.0-alpha < 1.0.0-alpha.1 true 1
+1.0.0-alpha.1 < 1.0.0-alpha.beta true 1
+1.0.0-alpha.beta < 1.0.0-beta true 1
+1.0.0-beta < 1.0.0-beta.2 true 1
+1.0.0-beta.2 < 1.0.0-beta.11 true 1
+1.0.0-beta.11 < 1.0.0-rc.1 true 1
+1.0.0-rc.1 < 1.0.0 true 1
+1
+true true false true true
+12 34 56 rc.1 b.7 true
+1.4.0 in ^1.2.0 -> true
+2.0.0 in ^1.2.0 -> false
+0.2.9 in ^0.2.3 -> true
+0.3.0 in ^0.2.3 -> false
+1.2.9 in ~1.2.3 -> true
+1.3.0 in ~1.2.3 -> false
+1.9.9 in 1.x -> true
+1.5.0 in >=1.2.3 <2.0.0 -> true
+1.5.0 in <1.0.0 || >=2.0.0 -> false
+2.3.9 in 1.2.3 - 2.3 -> true
+1.2.4-beta in ^1.2.3 -> false
+1.2.3-beta.4 in ^1.2.3-beta.2 -> true
+1.0.0-rc.1 in * -> false
+3.0.0 in  -> true
+true false false
+invalid version -> ArgumentError semver.compare: "1.2" is not a valid version: SemVer 2.0.0 is MAJOR.MINOR.PATCH, e.g. 1.2.3 or 1.2.3-rc.1
+invalid satisfies version -> ArgumentError semver.satisfies: "latest" is not a valid version: SemVer 2.0.0 is MAJOR.MINOR.PATCH, e.g. 1.2.3 or 1.2.3-rc.1
+invalid range -> ArgumentError semver.satisfies: ">=1.0.0 <" is not a valid range: "<" is not a comparator
+bad hyphen range -> ArgumentError semver.satisfies: "1.0 - a" is not a valid range: 1.0 - a is not a hyphen range of versions
+major too big -> RangeError semver.major: the major version 2147483648 does not fit in 'int'
+true
