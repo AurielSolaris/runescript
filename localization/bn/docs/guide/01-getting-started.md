@@ -1,4 +1,4 @@
-<!-- source: docs/guide/01-getting-started.md @ 362a461 -->
+<!-- source: docs/guide/01-getting-started.md @ 298a2e7 -->
 
 > এটি [ইংরেজি মূল লেখার](../../../../docs/guide/01-getting-started.md) অনুবাদ। পার্থক্য থাকলে ইংরেজি সংস্করণটিই সঠিক। অনুবাদটি AI-এর সাহায্যে করা এবং লেখক যাচাই করেছেন।
 

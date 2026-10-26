@@ -1,4 +1,4 @@
-<!-- source: docs/guide/23-editors.md @ be7087a -->
+<!-- source: docs/guide/23-editors.md @ 298a2e7 -->
 
 <div dir="rtl">
 
