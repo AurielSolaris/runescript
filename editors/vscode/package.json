@@ -1,0 +1,96 @@
+{
+  "name": "runescript",
+  "displayName": "RuneScript",
+  "description": "RuneScript language support: syntax highlighting, and diagnostics as you type, hover, go to definition, completion, and an outline from the RuneScript language server.",
+  "version": "0.6.0",
+  "publisher": "AurielSolaris",
+  "license": "MIT",
+  "icon": "icons/runescript.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AurielSolaris/runescript"
+  },
+  "bugs": {
+    "url": "https://github.com/AurielSolaris/runescript/issues"
+  },
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "runescript",
+    "rsc",
+    "rsm"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "runescript",
+        "aliases": [
+          "RuneScript",
+          "runescript"
+        ],
+        "extensions": [
+          ".rsc",
+          ".rsm"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/runescript-file.svg",
+          "dark": "./icons/runescript-file.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "runescript",
+        "scopeName": "source.runescript",
+        "path": "./syntaxes/runescript.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "RuneScript",
+      "properties": {
+        "runescript.server.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the RuneScript language server (`runescript lsp`) for diagnostics, hover, go to definition, completion, and the outline."
+        },
+        "runescript.server.path": {
+          "type": "string",
+          "default": "runescript",
+          "markdownDescription": "The `runescript` command. Set an absolute path if it is not on your `PATH`."
+        },
+        "runescript.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Log the messages between VS Code and the language server in the RuneScript output channel."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "runescript.restartServer",
+        "title": "Restart Language Server",
+        "category": "RuneScript"
+      }
+    ]
+  },
+  "scripts": {
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.2.1"
+  }
+}

@@ -42,6 +42,7 @@ func (c *checker) declareStruct(d *ast.StructDecl) {
 		return
 	}
 	st := &StructSym{Type: types.NewStruct(name), Decl: d, File: c.file, Pkg: c.file.Package}
+	c.info.Structs[st.Type] = st
 	s.add(name, &symbol{st: st, typ: st.Type})
 	c.structs = append(c.structs, st)
 }

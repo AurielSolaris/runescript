@@ -78,6 +78,13 @@ type Info struct {
 	// Warnings holds the warnings found, in no particular order. They are
 	// not in the diagnostics Check returns.
 	Warnings []*diagnostics.Diagnostic
+
+	// VarRefs maps each name that refers to a variable or parameter to
+	// the name in its declaration, and Structs maps each struct type to
+	// its declaration. Only tools read them (the language server's
+	// go-to-definition); the back ends do not.
+	VarRefs map[*ast.Ident]*ast.Ident
+	Structs map[*types.Type]*StructSym
 }
 
 // FuncSym is a named function: top-level or nested, possibly declared by a
@@ -189,6 +196,8 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 			QualRefs:    map[*ast.SelectorExpr]*FuncSym{},
 			ArrayCalls:  map[*ast.CallExpr]string{},
 			TypeRefs:    map[*ast.TypeRef]*types.Type{},
+			VarRefs:     map[*ast.Ident]*ast.Ident{},
+			Structs:     map[*types.Type]*StructSym{},
 
 			TemplateElems: map[*ast.MElement]*dom.Element{},
 			TemplateAttrs: map[*ast.MAttr]*dom.Attr{},
@@ -367,6 +376,13 @@ func (c *checker) lookup(name string) (sym *symbol, crossed bool) {
 		}
 	}
 	return nil, false
+}
+
+// ref records that id refers to sym, for tools (Info.VarRefs).
+func (c *checker) ref(id *ast.Ident, sym *symbol) {
+	if sym != nil && sym.decl != nil && sym.decl != id {
+		c.info.VarRefs[id] = sym.decl
+	}
 }
 
 func (s *scope) add(name string, sym *symbol) {

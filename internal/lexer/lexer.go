@@ -3,6 +3,7 @@ package lexer
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -695,6 +696,17 @@ func (l *lexer) matchOperator() string {
 		}
 	}
 	return ""
+}
+
+// Keywords returns the keywords, sorted, for tools such as the language
+// server's completion. Reserved words are not included.
+func Keywords() []string {
+	out := make([]string, 0, len(keywords))
+	for k := range keywords {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // IsName reports whether s is an identifier that is not a keyword or a

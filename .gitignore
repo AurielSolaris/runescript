@@ -11,3 +11,7 @@ docs/OPEN_QUESTIONS.md
 
 # Internal map of the codebase, kept local by the project owner.
 MAP.md
+
+# Editor extensions: dependencies and packages
+editors/vscode/node_modules/
+*.vsix

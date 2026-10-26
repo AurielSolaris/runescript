@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -201,5 +202,28 @@ protected int main() {
 	}
 	if got, _ := os.ReadFile(src); string(got) != text {
 		t.Error("source was modified")
+	}
+}
+
+// TestLanguageServer runs a whole session through `runescript lsp`:
+// initialize, shutdown, and exit.
+func TestLanguageServer(t *testing.T) {
+	frame := func(body string) string { return fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(body), body) }
+	in := frame(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}`) +
+		frame(`{"jsonrpc":"2.0","method":"initialized","params":{}}`) +
+		frame(`{"jsonrpc":"2.0","id":2,"method":"shutdown"}`) +
+		frame(`{"jsonrpc":"2.0","method":"exit"}`)
+	old := stdin
+	defer func() { stdin = old }()
+	stdin = strings.NewReader(in)
+	var out, errOut strings.Builder
+	if code := cli([]string{"lsp", "--stdio"}, &out, &errOut); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"hoverProvider":true`) || !strings.Contains(out.String(), `"id":2,"result":null`) {
+		t.Errorf("output: %s", out.String())
+	}
+	if code := cli([]string{"lsp", "--tcp"}, &out, &errOut); code != exitUsage {
+		t.Errorf("unknown argument: exit %d", code)
 	}
 }

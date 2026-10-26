@@ -95,6 +95,9 @@ protected int main() {
   ([מדריך](docs/guide/20-files-and-input.md))
 - ‏JSON עם `std:json`: ‏`json.parse`, קריאה בדוקה (`json.get`, `json.asInt`, …), בנייה
   ו-`json.stringify`, עם אותו מפענח ואותן הודעות שגיאה בשני היעדים ([מדריך](docs/guide/21-json.md))
+- ‏CSV, מטריצות וגרסאות: ‏`std:csv` (קריאה וכתיבה לפי RFC 4180), ‏`std:matrix` (מכפלות,
+  דטרמיננטות, הופכיות ומערכות לינאריות על `Array<Array<float64>>`, זהות עד לביט בשני היעדים)
+  ו-`std:semver` (גרסאות SemVer 2.0.0, השוואה והתאמה כמו ב-npm) ([מדריך](docs/guide/22-csv-matrix-semver.md))
 - הידור ל-JavaScript (`runescript build`): מודול ES2015 (בתוספת BigInt ו-`??`) שרץ בדפדפנים וב-Node.js
   ומתנהג בדיוק כמו המפרש בכל תוכנית שהמפרש יכול להריץ ([מדריך](docs/guide/11-javascript.md))
 - דפי רשת עם `rune:dom`: רכיבים עם תבניות HTML ו-SVG שכל אלמנט ומאפיין בהן נבדק בזמן
@@ -105,6 +108,9 @@ protected int main() {
 - אזהרות על משתנים, פרמטרים והצהרות use שאינם בשימוש, על קוד שלא ירוץ לעולם, על
   תוצאות שנזרקות ועל הסתרה, עם `-Werror` ו-`--allow <code>`; במסוף שגיאות באדום ואזהרות
   בצהוב (`--color`)
+- תמיכה בעורכים: שרת שפה, `runescript lsp`, עם שגיאות תוך כדי הקלדה, ריחוף, מעבר להגדרה,
+  השלמה ומתאר, וחבילות ל-VS Code, ל-Vim ו-Neovim ול-Emacs ([מדריך](docs/guide/23-editors.md),
+  [editors/](editors/README.md))
 - טעינה מחדש חיה בזמן העבודה: `runescript dev app.rsc` מגישה תוכנית רשת וטוענת מחדש
   את הדפדפן בכל שמירה; `runescript run --watch` מריצה שוב תוכנית שורת פקודה
 
@@ -255,6 +261,8 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 - [מבנים](docs/guide/19-structs.md)
 - [קבצים, קלט ופלט: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
 - [JSON: ‏std:json](docs/guide/21-json.md)
+- [CSV, מטריצות וגרסאות: ‏std:csv, ‏std:matrix, ‏std:semver](docs/guide/22-csv-matrix-semver.md)
+- [עורכים: ‏VS Code, ‏Vim, ‏Neovim, ‏Emacs ו-runescript lsp](docs/guide/23-editors.md)
 - [הידור ל-JavaScript](docs/guide/11-javascript.md)
 - [מדריך הודעות האבחון](docs/guide/08-diagnostics.md)
 - [למי שמגיע מ-ActionScript 3](docs/guide/09-coming-from-actionscript.md)
@@ -284,10 +292,12 @@ internal/term/         terminal detection for colored output
 internal/driver/       wires the stages together
 internal/watch/        file watcher for run --watch and dev
 internal/devserver/    the runescript dev server and its browser client
+internal/lsp/          the language server (runescript lsp)
 stdlib/                standard library packages (std:string, std:math, std:io, std:process,
-                       std:fs, std:path, std:json), implemented in Go; their JavaScript twins are in
-                       internal/jsgen/runtime.js
+                       std:fs, std:path, std:json, std:csv, std:matrix, std:semver), implemented
+                       in Go; their JavaScript twins are in internal/jsgen/runtime.js
 examples/              example programs
+editors/               VS Code extension, Vim plugin, and Emacs mode
 tests/                 end-to-end, golden, and documentation tests
 bench/                 benchmark and conformance suite vs TypeScript 1.0 RC (go run ./bench/rsbench)
 assets/                logo: SVG source and PNGs generated from it

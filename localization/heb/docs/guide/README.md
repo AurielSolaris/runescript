@@ -31,6 +31,8 @@
 19. [מבנים](19-structs.md): הצהרה, בנייה והעתקה של טיפוסי ערך
 20. [קבצים, קלט ופלט](20-files-and-input.md): `std:io`, `std:process`, `std:fs`, `std:path`, ומפרש Brainfuck
 21. [JSON](21-json.md): ‏`std:json`: פענוח JSON, קריאה בפונקציות בדוקות, בנייה וכתיבה
+22. [CSV, מטריצות וגרסאות](22-csv-matrix-semver.md): ‏`std:csv`, ‏`std:matrix` ו-`std:semver`
+23. [עורכים](23-editors.md): ‏VS Code, ‏Vim, ‏Neovim ו-Emacs, ושרת השפה `runescript lsp`
 
 לכללים המדויקים, ראו את [מפרט השפה](../../../../docs/LANGUAGE_SPEC.md) (באנגלית).
 למה שמתוכנן בהמשך, ראו את [מפת הדרכים](../../../../docs/ROADMAP.md) (באנגלית).

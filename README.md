@@ -86,6 +86,11 @@ protected int main() {
 - JSON with `std:json`: `json.parse`, checked reading (`json.get`,
   `json.asInt`, …), building, and `json.stringify`, with the same parser and
   error messages on both targets ([guide](docs/guide/21-json.md))
+- CSV, matrices, and versions: `std:csv` (RFC 4180 reading and writing),
+  `std:matrix` (products, determinants, inverses, and linear systems on
+  `Array<Array<float64>>`, bit-identical on both targets), and `std:semver`
+  (SemVer 2.0.0 versions compared and matched like npm)
+  ([guide](docs/guide/22-csv-matrix-semver.md))
 - Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
   in browsers and Node.js and behaves exactly like the interpreter for every
   program the interpreter can run ([guide](docs/guide/11-javascript.md))
@@ -100,6 +105,10 @@ protected int main() {
 - Warnings for unused variables, parameters, and uses, unreachable code,
   discarded results, and shadowing, with `-Werror` and `--allow <code>`;
   errors in red and warnings in yellow on a terminal (`--color`)
+- Editor support: a language server, `runescript lsp`, with errors as you
+  type, hover, go to definition, completion, and an outline, plus packages
+  for VS Code, Vim and Neovim, and Emacs ([guide](docs/guide/23-editors.md),
+  [editors/](editors/README.md))
 - Live reload while you work: `runescript dev app.rsc` serves a web program
   and reloads the browser on every save; `runescript run --watch` re-runs a
   command-line program
@@ -248,6 +257,8 @@ test suite; the web examples run on a fake DOM under Node.js.
 - [Structs](docs/guide/19-structs.md)
 - [Files, input, and output: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
 - [JSON: std:json](docs/guide/21-json.md)
+- [CSV, matrices, and versions: std:csv, std:matrix, std:semver](docs/guide/22-csv-matrix-semver.md)
+- [Editors: VS Code, Vim, Neovim, Emacs, and runescript lsp](docs/guide/23-editors.md)
 - [Compiling to JavaScript](docs/guide/11-javascript.md)
 - [Web pages with rune:dom](docs/guide/15-web-pages.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)
@@ -276,10 +287,12 @@ internal/term/         terminal detection for colored output
 internal/driver/       wires the stages together
 internal/watch/        file watcher for run --watch and dev
 internal/devserver/    the runescript dev server and its browser client
+internal/lsp/          the language server (runescript lsp)
 stdlib/                standard library packages (std:string, std:math, std:io, std:process,
-                       std:fs, std:path, std:json), implemented in Go; their JavaScript twins are in
-                       internal/jsgen/runtime.js
+                       std:fs, std:path, std:json, std:csv, std:matrix, std:semver), implemented
+                       in Go; their JavaScript twins are in internal/jsgen/runtime.js
 examples/              example programs
+editors/               VS Code extension, Vim plugin, and Emacs mode
 tests/                 end-to-end, golden, and documentation tests
 bench/                 benchmark and conformance suite vs TypeScript 1.0 RC (go run ./bench/rsbench)
 assets/                logo: SVG source and PNGs generated from it

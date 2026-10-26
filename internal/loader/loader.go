@@ -117,6 +117,56 @@ func Load(path, dir string) (*Program, []*diagnostics.Diagnostic, error) {
 	return l.finish()
 }
 
+// Options configures LoadWith and LoadSourceWith, for tools such as the
+// language server. The compiler itself uses Load and LoadSource.
+type Options struct {
+	// Overlay, if set, returns the text of the file at the absolute path
+	// abs when it should not be read from the disk, such as an editor's
+	// unsaved buffer. ok false means: read the disk. A file must still
+	// exist on the disk to be found.
+	Overlay func(abs string) (text []byte, ok bool)
+}
+
+// LoadWith is Load with options: every file, the entry included, is read
+// through the overlay.
+func LoadWith(path, dir string, opts Options) (*Program, []*diagnostics.Diagnostic, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	l := newLoader(dir)
+	l.overlay = opts.Overlay
+	text, err := l.read(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	l.load(diagnostics.NewSource(entryName(path, dir), text), info)
+	return l.finish()
+}
+
+// LoadSourceWith is LoadSource with options: the files the entry uses are
+// read through the overlay.
+func LoadSourceWith(src *diagnostics.Source, dir string, opts Options) (*Program, []*diagnostics.Diagnostic) {
+	l := newLoader(dir)
+	l.overlay = opts.Overlay
+	l.load(src, nil)
+	prog, diags, _ := l.finish()
+	return prog, diags
+}
+
+// read returns the text of the file at path, from the overlay if it has
+// the file.
+func (l *loader) read(path string) ([]byte, error) {
+	if l.overlay != nil {
+		if abs, err := filepath.Abs(path); err == nil {
+			if text, ok := l.overlay(abs); ok {
+				return text, nil
+			}
+		}
+	}
+	return os.ReadFile(path)
+}
+
 // entryName is how the entry file is named in diagnostics: relative to the
 // working directory when it is inside it, otherwise as given.
 func entryName(path, dir string) string {
@@ -147,6 +197,8 @@ type loader struct {
 	infos []os.FileInfo // per file, for os.SameFile; nil for in-memory files
 	dirs  map[string]*Package
 	queue []*File
+	// overlay is Options.Overlay.
+	overlay func(abs string) ([]byte, bool)
 }
 
 func newLoader(dir string) *loader {
@@ -228,7 +280,7 @@ func (l *loader) open(path, name string, span diagnostics.Span) (*File, bool) {
 			return l.prog.Files[i], true
 		}
 	}
-	text, err := os.ReadFile(abs)
+	text, err := l.read(abs)
 	if err != nil {
 		l.errorf(diagnostics.UseNotFound, span, "cannot read %q: %v", name, err)
 		return nil, false

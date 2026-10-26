@@ -25,6 +25,8 @@ complete program in these pages is compiled by the test suite
 19. [Structs](19-structs.md): declaring, building, and copying value types
 20. [Files, input, and output](20-files-and-input.md): `std:io`, `std:process`, `std:fs`, `std:path`, and a Brainfuck interpreter
 21. [JSON](21-json.md): `std:json`: parsing, reading with checked functions, building, and writing JSON
+22. [CSV, matrices, and versions](22-csv-matrix-semver.md): `std:csv`, `std:matrix`, and `std:semver`
+23. [Editors](23-editors.md): VS Code, Vim, Neovim, and Emacs, and the language server `runescript lsp`
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).

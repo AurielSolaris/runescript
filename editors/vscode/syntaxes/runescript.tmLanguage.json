@@ -1,0 +1,159 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "RuneScript",
+  "scopeName": "source.runescript",
+  "fileTypes": ["rsc", "rsm"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#package" },
+    { "include": "#struct" },
+    { "include": "#interpolated-string" },
+    { "include": "#string" },
+    { "include": "#char" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#constants" },
+    { "include": "#calls" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.runescript",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [{ "include": "#todo" }]
+        },
+        {
+          "name": "comment.line.double-slash.runescript",
+          "begin": "//",
+          "end": "$",
+          "patterns": [{ "include": "#todo" }]
+        }
+      ]
+    },
+    "todo": {
+      "name": "keyword.other.todo.runescript",
+      "match": "\\b(TODO|FIXME|XXX|NOTE)\\b"
+    },
+    "package": {
+      "match": "\\b(package)\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
+      "captures": {
+        "1": { "name": "keyword.other.package.runescript" },
+        "2": { "name": "entity.name.namespace.runescript" }
+      }
+    },
+    "struct": {
+      "match": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.type.struct.runescript" },
+        "2": { "name": "entity.name.type.struct.runescript" }
+      }
+    },
+    "escapes": {
+      "name": "constant.character.escape.runescript",
+      "match": "\\\\(?:u\\{[0-9A-Fa-f]+\\}|.)"
+    },
+    "string": {
+      "name": "string.quoted.double.runescript",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [{ "include": "#escapes" }]
+    },
+    "interpolated-string": {
+      "name": "string.quoted.double.interpolated.runescript",
+      "begin": "\\$\"",
+      "end": "\"",
+      "patterns": [
+        { "include": "#escapes" },
+        { "name": "constant.character.escape.runescript", "match": "\\{\\{|\\}\\}" },
+        {
+          "name": "meta.interpolation.runescript",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.runescript" } },
+          "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.runescript" } },
+          "contentName": "source.runescript",
+          "patterns": [{ "include": "$self" }]
+        }
+      ]
+    },
+    "char": {
+      "name": "string.quoted.single.runescript",
+      "match": "'(?:\\\\(?:u\\{[0-9A-Fa-f]+\\}|.)|[^'\\\\])'"
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.hex.runescript", "match": "\\b0x[0-9A-Fa-f_]+\\b" },
+        { "name": "constant.numeric.binary.runescript", "match": "\\b0b[01_]+\\b" },
+        { "name": "constant.numeric.octal.runescript", "match": "\\b0o[0-7_]+\\b" },
+        {
+          "name": "constant.numeric.decimal.runescript",
+          "match": "(?:\\b[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?|\\.[0-9][0-9_]*)(?:[eE][+-]?[0-9][0-9_]*)?\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.runescript",
+          "match": "\\b(if|else|while|for|each|in|break|continue|return|try|catch|finally|throw)\\b"
+        },
+        { "name": "keyword.other.import.runescript", "match": "\\b(use|as)\\b" },
+        { "name": "storage.modifier.runescript", "match": "\\b(public|protected|private|extern)\\b" },
+        { "name": "keyword.operator.new.runescript", "match": "\\bnew\\b" },
+        { "name": "keyword.other.template.runescript", "match": "\\btemplate(?=\\s*\\{)" },
+        { "name": "invalid.deprecated.reserved.runescript", "match": "\\b(class|array)\\b" },
+        { "name": "keyword.other.package.runescript", "match": "\\bpackage\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.primitive.runescript",
+          "match": "\\b(int|sint|uint|int8|int16|int32|int64|uint8|uint16|uint32|uint64|float|float32|float64|bool|string|char|void)\\b"
+        },
+        {
+          "name": "support.class.runescript",
+          "match": "\\b(Array|Signal|Element|Error|RangeError|TypeError|ArgumentError)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.boolean.runescript", "match": "\\b(true|false)\\b" },
+        { "name": "constant.language.runescript", "match": "\\b(NaN|Infinity)\\b" }
+      ]
+    },
+    "calls": {
+      "patterns": [
+        {
+          "match": "\\b(trace|isNaN|isFinite)\\s*(?=\\()",
+          "captures": { "1": { "name": "support.function.builtin.runescript" } }
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "entity.name.namespace.runescript" },
+            "2": { "name": "punctuation.accessor.runescript" },
+            "3": { "name": "entity.name.function.runescript" }
+          }
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": { "1": { "name": "entity.name.function.runescript" } }
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        { "name": "storage.type.function.arrow.runescript", "match": "=>" },
+        { "name": "keyword.operator.runescript", "match": "[-+*/%=!<>&|^~?:]+" },
+        { "name": "punctuation.terminator.runescript", "match": ";" },
+        { "name": "punctuation.separator.runescript", "match": "," }
+      ]
+    }
+  }
+}

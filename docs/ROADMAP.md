@@ -194,11 +194,39 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [x] `Array<T>`: literals, bounds-checked indexing, `length`, `push`, `pop`, reference semantics (2026-10-16, details provisional)
 - [x] `for each (T x in a)` loops, nested arrays (`Array<Array<T>>`), and the methods `insert`, `removeAt`, `slice`, `indexOf`, `contains`, `reverse`, `sort()`, `sort(less)` (stable, same comparator calls on both targets) (2026-10-20)
 - [x] `std:fs` binary files (`Array<uint8>`), see v0.4 (2026-10-20)
-- [ ] `std:csv`: parse and format `Array<Array<string>>`
+- [x] `std:csv`: parse and format `Array<Array<string>>` (RFC 4180, any separator, errors with line and column) (2026-10-26)
 - [x] `std:json`: an opaque `json.Value` (the first opaque std type) read with checked functions, built with `from…` functions, and written with `json.stringify`/`stringifyIndent`; one parser on both targets, tested against random valid and broken texts (2026-10-20)
-- [ ] `std:matrix`: functions over `Array<Array<float64>>` (owner chose a library, no new type)
+- [x] `std:matrix`: functions over `Array<Array<float64>>` (owner chose a library, no new type): products, transpose, determinant, inverse, solve, bit-identical on both targets (2026-10-26)
 - [x] `struct`: value semantics (copy on assignment), named-field literals, nested field writes, `==` by field (2026-10-17)
 - [ ] Struct methods and constructors
+
+### Next, in order (owner, 2026-10-22)
+
+1. `std:csv` (above, done 2026-10-26)
+2. `std:matrix` (above, done 2026-10-26)
+3. `std:semver` (done 2026-10-26)
+   - [x] `compare`, `gt`, `lt`, `eq`, `satisfies` (and `neq`, `gte`, `lte`, `valid`, `validRange`, `major`, `minor`, `patch`, `prerelease`, `build`) on version strings, following SemVer 2.0.0 precedence and npm-style ranges (`^1.2.0`, `~1.2.0`, `>=1.2.0 <2.0.0`), checked against npm's semver package
+   - [x] An invalid version string throws a catchable error (`ArgumentError`)
+4. Module versions
+   - [ ] Every `.rsm` file must declare `public semver version` or `public string version` (a compile error otherwise); `public string author` and `public string license` are optional
+   - [ ] The metadata goes at the top of the file, after the `use` lines
+   - [ ] The `semver` type: version literals (`1.2.3-rc.1+build.5`) and the builder form `semver(1, 2, 3, "rc", 1)`; usable only for `version`
+   - [ ] Programs read a version as a `string`: `geom.version`, or `geom.version['a']` (the file name without `.rsm`) when files of a package declare different versions
+   - [ ] Versions for the `std:` modules, once the standard library is finished
+5. Performance
+   - [ ] Profile the interpreter on the `bench/` suite
+   - [ ] Cheap interpreter fixes: numbered variable slots instead of a map per call, operator codes instead of strings, no `defer` per call
+   - [ ] Compile the verified IR to typed Go closures as the `run` engine; keep the tree-walking interpreter as a reference for agreement tests
+   - Pure Go only: no `unsafe` and no hand-written machine code
+
+### Editor support (owner request, 2026-10-26)
+
+- [x] Language server `runescript lsp` (`internal/lsp`): diagnostics as you type (unsaved buffers included), hover, go to definition, completion, and document symbols
+- [x] VS Code extension (`editors/vscode`): TextMate grammar, language configuration, language client
+- [x] Vim and Neovim plugin (`editors/vim`): syntax, indentation, file type, Neovim 0.11 LSP configuration
+- [x] Emacs major mode (`editors/emacs`): highlighting, indentation, Eglot and lsp-mode registration (not yet tested in Emacs)
+- [ ] Rename, find references, signature help, formatting (needs a formatter), code actions
+- [ ] Publish the VS Code extension (Marketplace, Open VSX) and the Emacs mode (MELPA)
 
 ## v0.7: Graphics package (native window, drawing, input, UI)
 
@@ -240,4 +268,4 @@ Depends on: floats (v0.5), arrays (v0.6), classes or opaque native types (v0.8),
 - [ ] A `runescript` flag to resolve uses from a directory other than the working directory, if wanted
 - [ ] Standard library modules (`stdlib/`)
 - [ ] Better parser error recovery (report more than one syntax error)
-- [ ] Performance work (bytecode/VM) only after semantics are stable and measured
+- [ ] Further performance work (bytecode VM, a native-binary build mode) only if the closure compiler is measured and found not fast enough

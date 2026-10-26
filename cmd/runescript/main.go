@@ -17,6 +17,7 @@ import (
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
 	"github.com/AurielSolaris/runescript/internal/driver"
 	"github.com/AurielSolaris/runescript/internal/jsgen"
+	"github.com/AurielSolaris/runescript/internal/lsp"
 	"github.com/AurielSolaris/runescript/internal/runtime"
 	"github.com/AurielSolaris/runescript/internal/term"
 )
@@ -38,6 +39,8 @@ const usage = `usage:
                              serve the program on localhost and reload the
                              browser whenever one of its files changes
                              (default port 5173)
+  runescript lsp             run the language server on standard input
+                             and output, for editors (see editors/)
   runescript version         print the version
 
 flags:
@@ -72,6 +75,9 @@ func cli(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(args) >= 1 && args[0] == "dev" {
 		return dev(args[1:], stderr)
+	}
+	if len(args) >= 1 && args[0] == "lsp" {
+		return languageServer(args[1:], stdin, stdout, stderr)
 	}
 	if len(args) < 2 || (args[0] != "run" && args[0] != "check") {
 		fmt.Fprint(stderr, usage)
@@ -113,6 +119,24 @@ func cli(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	return runOnce(in, stdout, stderr)
+}
+
+// languageServer runs `runescript lsp`. Editors' clients may pass
+// --stdio, the only transport, which is accepted and ignored.
+func languageServer(args []string, in io.Reader, out, stderr io.Writer) int {
+	for _, a := range args {
+		if a != "--stdio" {
+			fmt.Fprintf(stderr, "runescript lsp: unknown argument %q\n", a)
+			return exitUsage
+		}
+	}
+	s := lsp.NewServer(in, out)
+	s.Log = stderr
+	if err := s.Run(); err != nil {
+		fmt.Fprintf(stderr, "runescript lsp: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 // runOnce checks and runs a program and returns the exit status.

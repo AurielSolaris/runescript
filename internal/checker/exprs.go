@@ -276,6 +276,7 @@ func (c *checker) identOperand(e *ast.Ident) operand {
 // (which yields a function value).
 func (c *checker) ident(e *ast.Ident) *types.Type {
 	sym, crossed := c.lookup(e.Name)
+	c.ref(e, sym)
 	switch {
 	case sym == nil && e.Name == "trace":
 		c.errorf(diagnostics.NameNotAValue, e.Span, "the built-in 'trace' cannot be used as a value").
@@ -661,6 +662,7 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	}
 	name := e.Fn.Name
 	sym, crossed := c.lookup(name)
+	c.ref(e.Fn, sym)
 	switch {
 	case sym == nil && (name == "isNaN" || name == "isFinite"):
 		return c.floatTest(e)

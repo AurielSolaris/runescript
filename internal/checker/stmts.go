@@ -151,6 +151,7 @@ func (c *checker) loopBody(b *ast.Block) {
 // read-only (OQ-VAR-02); enclosing functions' variables are not visible.
 func (c *checker) target(id *ast.Ident) *symbol {
 	v, crossed := c.lookup(id.Name)
+	c.ref(id, v)
 	switch {
 	case v == nil:
 		c.errorf(diagnostics.NameUndefined, id.Span, "undefined variable '%s'", id.Name)
