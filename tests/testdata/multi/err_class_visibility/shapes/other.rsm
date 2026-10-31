@@ -1,0 +1,7 @@
+package shapes;
+
+// Circle's private field belongs to circle.rsm, not to this file.
+public int peek(Circle c) {
+    return c.secret;
+    // expect: ASX-NAME-011 shapes/other.rsm:5:14
+}

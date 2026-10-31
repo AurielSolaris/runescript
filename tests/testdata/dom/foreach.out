@@ -1,0 +1,4 @@
+render: <div id="app"><div><ul><li class="apple">apple</li></ul><p><b>1</b><b>2</b>;<b>3</b>;</p><button id="more">More</button><button id="clear">Clear</button></div></div>
+click #more: <div id="app"><div><ul><li class="apple">apple</li><li class="banana">banana(yellow)</li></ul><p><b>1</b><b>2</b>;<b>3</b>;</p><button id="more">More</button><button id="clear">Clear</button></div></div>
+click #more: <div id="app"><div><ul><li class="apple">apple</li><li class="banana">banana(yellow)</li><li class="cherry">cherry</li></ul><p><b>1</b><b>2</b>;<b>3</b>;</p><button id="more">More</button><button id="clear">Clear</button></div></div>
+click #clear: <div id="app"><div><ul></ul><button id="more">More</button><button id="clear">Clear</button></div></div>

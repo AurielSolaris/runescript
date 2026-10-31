@@ -77,7 +77,7 @@ func (v *verifier) fn(f *Func) {
 func (v *verifier) storable(t *types.Type, what string) {
 	switch t.Kind {
 	case types.Signed, types.Unsigned, types.Bool, types.String, types.Func, types.Float, types.Error,
-		types.Element, types.Signal, types.Char, types.Array, types.Struct, types.Opaque:
+		types.Element, types.Signal, types.Char, types.Array, types.Struct, types.Opaque, types.Class:
 		return
 	}
 	v.fail("%s has type %s, which cannot hold a value", what, t)
@@ -117,6 +117,9 @@ func (v *verifier) stmt(s Stmt) {
 		t := v.array(s.X, "element assignment")
 		v.index(s.I)
 		v.same(t.Elem, s.Value, "element assignment")
+	case *ObjectSet:
+		t := v.object(s.X, s.Index)
+		v.same(t.Fields[s.Index].Type, s.Value, "field "+t.Fields[s.Index].Name)
 	case *Return:
 		if s.Value == nil {
 			if v.result.Kind != types.Void {
@@ -236,6 +239,15 @@ func (v *verifier) expr(e Expr) *types.Type {
 		}
 	case *GetField:
 		v.field(e.X, e.Index)
+	case *ObjectNew:
+		if e.T.Kind != types.Class || len(e.Fields) != len(e.T.Fields) {
+			v.fail("new object of %s with %d fields", e.T, len(e.Fields))
+		}
+		for i, x := range e.Fields {
+			v.same(e.T.Fields[i].Type, x, "field "+e.T.Fields[i].Name)
+		}
+	case *ObjectGet:
+		v.object(e.X, e.Index)
 	case *WithField:
 		t := v.field(e.X, e.Index)
 		v.same(t.Fields[e.Index].Type, e.Value, "field "+t.Fields[e.Index].Name)
@@ -317,6 +329,7 @@ func (v *verifier) expr(e Expr) *types.Type {
 		switch {
 		case x.Kind == types.Signed || x.Kind == types.Unsigned || x.Kind == types.Float || x.Kind == types.Char:
 		case !ordered && x.Kind == types.Struct && types.Comparable(x):
+		case !ordered && x.Kind == types.Class:
 		case !ordered && (x.Kind == types.Bool || x.Kind == types.String):
 		default:
 			v.fail("operator %s is not defined on %s", e.Op, x)
@@ -365,7 +378,7 @@ func (v *verifier) expr(e Expr) *types.Type {
 	case *Trace:
 		for _, a := range e.Args {
 			switch t := v.expr(a); t.Kind {
-			case types.Signed, types.Unsigned, types.Bool, types.String, types.Float, types.Error, types.Char:
+			case types.Signed, types.Unsigned, types.Bool, types.String, types.Float, types.Error, types.Char, types.Class:
 			case types.Struct:
 				if !types.Traceable(t) {
 					v.fail("trace of %s", t)
@@ -378,6 +391,15 @@ func (v *verifier) expr(e Expr) *types.Type {
 		v.fail("unexpected expression %T", e)
 	}
 	return e.Type()
+}
+
+// object checks that x is an object with a field i, and returns its class.
+func (v *verifier) object(x Expr, i int) *types.Type {
+	t := v.expr(x)
+	if t.Kind != types.Class || i < 0 || i >= len(t.Fields) {
+		v.fail("field %d of a %s", i, t)
+	}
+	return t
 }
 
 func (v *verifier) field(x Expr, i int) *types.Type {
@@ -492,6 +514,13 @@ func (v *verifier) tnodes(nodes []TNode) {
 				v.tnodes(n.Branches[i])
 			}
 			v.tnodes(n.Else)
+		case *TForEach:
+			t := v.array(n.X, "$foreach")
+			if t.Kind == types.Array && !types.IsSubtype(t.Elem, n.Var.Type) {
+				v.fail("$foreach variable %s: expected %s, found %s", n.Var.Name, n.Var.Type, t.Elem)
+			}
+			v.storable(n.Var.Type, "variable "+n.Var.Name)
+			v.tnodes(n.Body)
 		}
 	}
 }

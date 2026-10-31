@@ -15,9 +15,16 @@ import (
 // panics if info is incomplete, which would be a checker bug, not a user
 // error.
 func Lower(info *checker.Info) *Program {
-	p := &Program{EntrySite: info.Entry.Name.Span}
+	p := &Program{EntrySite: info.Entry.Name.Span, Spans: map[Stmt]Span{}}
 	l := &lowerer{info: info, prog: p, funcs: map[*ast.FuncDecl]*Func{}, syms: map[*checker.FuncSym]*Func{},
-		externs: map[*checker.ExternSym]*Extern{}}
+		externs: map[*checker.ExternSym]*Extern{}, classOf: map[*ast.ClassDecl]*checker.ClassSym{},
+		methodOf: map[*ast.FuncDecl]*checker.ClassSym{}, ctors: map[*checker.ClassSym]*Func{}}
+	for _, cs := range info.Classes {
+		l.classOf[cs.Decl] = cs
+		for _, m := range cs.Methods {
+			l.methodOf[m.Def] = cs
+		}
+	}
 	for _, file := range info.Program.Files {
 		for _, fd := range file.AST.Funcs {
 			if fd.Body != nil {
@@ -25,6 +32,24 @@ func Lower(info *checker.Info) *Program {
 				f.Pkg = file.Package.Name
 				p.Funcs = append(p.Funcs, f)
 			}
+		}
+	}
+	// Methods and constructors are top-level functions taking the object
+	// first (methods) or returning it (constructors).
+	for _, file := range info.Program.Files {
+		for _, d := range file.AST.Classes {
+			cs := l.classOf[d]
+			for _, md := range d.Methods {
+				if m := cs.Methods[md.Name.Name]; m != nil && m.Def == md {
+					f := l.funcDecl(md)
+					f.Pkg = file.Package.Name
+					p.Funcs = append(p.Funcs, f)
+				}
+			}
+			f := l.ctor(cs)
+			l.buildCtor(cs, f)
+			f.Pkg = file.Package.Name
+			p.Funcs = append(p.Funcs, f)
 		}
 	}
 	p.Entry = l.funcs[info.Entry]
@@ -45,6 +70,14 @@ type lowerer struct {
 	// found in outer, the chains of the enclosing functions.
 	scopes []map[string]*Var
 	outer  [][]map[string]*Var
+
+	// Classes: the class of each declaration and method, the constructor
+	// of each class, and, while lowering a constructor's body, its object
+	// (a bare return returns it).
+	classOf  map[*ast.ClassDecl]*checker.ClassSym
+	methodOf map[*ast.FuncDecl]*checker.ClassSym
+	ctors    map[*checker.ClassSym]*Func
+	ctorThis *Var
 }
 
 func (l *lowerer) ice(format string, args ...any) {
@@ -61,6 +94,9 @@ func (l *lowerer) fn(sym *checker.FuncSym) *Func {
 	f := l.declOf(sym.Def)
 	if f.Type == nil {
 		f.Type = sym.Type // the body may not have been lowered yet
+		if cs := l.methodOf[sym.Def]; cs != nil {
+			f.Type = types.NewFunc(append([]*types.Type{cs.Type}, sym.Type.Params...), sym.Type.Result)
+		}
 	}
 	l.syms[sym] = f
 	return f
@@ -71,18 +107,99 @@ func (l *lowerer) declOf(fd *ast.FuncDecl) *Func {
 		return f
 	}
 	f := &Func{Name: fd.Name.Name, Span: fd.Span}
+	if cs := l.methodOf[fd]; cs != nil {
+		f.Name = cs.Type.Name + "$" + fd.Name.Name // '$' cannot clash with a RuneScript name
+	}
 	l.funcs[fd] = f
 	return f
+}
+
+// ctor returns the constructor function of class cs, creating it on first
+// use; buildCtor gives it its body. It creates the object with every field at its initial value (the
+// field's initializer, in declaration order, or its zero value), runs the
+// constructor's body, and returns the object.
+func (l *lowerer) ctor(cs *checker.ClassSym) *Func {
+	if f, ok := l.ctors[cs]; ok {
+		return f
+	}
+	f := &Func{Name: cs.Type.Name + "$new", Type: types.NewFunc(cs.Ctor.Type.Params, cs.Type), Span: cs.Decl.Span}
+	if cs.Ctor.Def != nil {
+		f.Span = cs.Ctor.Def.Span
+	}
+	l.ctors[cs] = f
+	return f
+}
+
+// buildCtor lowers the body of f, the constructor of cs.
+func (l *lowerer) buildCtor(cs *checker.ClassSym, f *Func) {
+	defer l.boundary()()
+	def := cs.Ctor.Def
+	if def != nil {
+		for i, p := range def.Params {
+			f.Params = append(f.Params, l.declare(p.Name.Name, cs.Ctor.Type.Params[i], true))
+		}
+	}
+	// The field values: initializers (or zero values) in declaration
+	// order, then the constructor's prefix that sets fields before the
+	// object is used (checker.ClassSym.CtorPrefix). With such a prefix,
+	// each value is computed into a hidden variable first, in that order.
+	body := &Block{}
+	values := make([]Expr, len(cs.Fields))
+	for i, fd := range cs.Fields {
+		switch {
+		case fd.Init != nil:
+			values[i] = l.expr(fd.Init)
+		case types.HasZero(cs.Type.Fields[i].Type):
+			values[i] = zero(cs.Type.Fields[i].Type)
+		}
+		if cs.CtorPrefix > 0 && values[i] != nil {
+			v := l.declare("init$"+fd.Name.Name, cs.Type.Fields[i].Type, false)
+			d := &Decl{Var: v, Init: values[i]}
+			l.prog.Spans[d] = fd.Span
+			body.Stmts = append(body.Stmts, d)
+			values[i] = &Load{Var: v}
+		}
+	}
+	var rest []ast.Stmt
+	if def != nil {
+		for _, st := range def.Body.Stmts[:cs.CtorPrefix] {
+			s := st.(*ast.SetStmt)
+			name := unparenAST(s.Target).(*ast.SelectorExpr).Name.Name
+			i := types.FieldIndex(cs.Type, name)
+			v := l.declare("set$"+name, cs.Type.Fields[i].Type, false)
+			d := &Decl{Var: v, Init: l.expr(s.Value)}
+			l.prog.Spans[d] = s.Span
+			body.Stmts = append(body.Stmts, d)
+			values[i] = &Load{Var: v}
+		}
+		rest = def.Body.Stmts[cs.CtorPrefix:]
+	}
+	this := l.declare("this", cs.Type, false)
+	create := &Decl{Var: this, Init: &ObjectNew{T: cs.Type, Fields: values}}
+	l.prog.Spans[create] = cs.Decl.Name.Span
+	body.Stmts = append(body.Stmts, create)
+	if def != nil {
+		l.ctorThis = this
+		body.Stmts = append(body.Stmts, l.block(&ast.Block{Stmts: rest, Span: def.Body.Span}))
+		l.ctorThis = nil
+	}
+	body.Stmts = append(body.Stmts, &Return{Value: &Load{Var: this}})
+	f.Body = body
 }
 
 // funcDecl lowers a function definition's signature and body.
 func (l *lowerer) funcDecl(fd *ast.FuncDecl) *Func {
 	f := l.declOf(fd)
-	params := make([]*types.Type, len(fd.Params))
+	var params []*types.Type
 	defer l.boundary()()
-	for i, p := range fd.Params {
-		f.Params = append(f.Params, l.declare(p.Name.Name, l.typeOf(p.Type), true))
-		params[i] = f.Params[i].Type
+	if cs := l.methodOf[fd]; cs != nil { // a method: the object comes first
+		f.Params = append(f.Params, l.declare("this", cs.Type, true))
+		params = append(params, cs.Type)
+	}
+	for _, p := range fd.Params {
+		v := l.declare(p.Name.Name, l.typeOf(p.Type), true)
+		f.Params = append(f.Params, v)
+		params = append(params, v.Type)
 	}
 	f.Type = types.NewFunc(params, l.typeOf(fd.Result))
 	f.Body = l.block(fd.Body)
@@ -141,11 +258,12 @@ func (l *lowerer) typeOf(ref *ast.TypeRef) *types.Type {
 }
 
 func (l *lowerer) boundary() (restore func()) {
-	saved := l.scopes
+	saved, this := l.scopes, l.ctorThis
 	l.outer = append(l.outer, saved)
 	l.scopes = []map[string]*Var{{}}
+	l.ctorThis = nil // a return in a nested function returns from it
 	return func() {
-		l.scopes = saved
+		l.scopes, l.ctorThis = saved, this
 		l.outer = l.outer[:len(l.outer)-1]
 	}
 }
@@ -182,6 +300,9 @@ func (l *lowerer) block(b *ast.Block) *Block {
 	out := &Block{}
 	for _, s := range b.Stmts {
 		if st := l.stmt(s); st != nil {
+			if _, ok := l.prog.Spans[st]; !ok {
+				l.prog.Spans[st] = s.NodeSpan()
+			}
 			out.Stmts = append(out.Stmts, st)
 		}
 	}
@@ -231,6 +352,9 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 	case *ast.ExprStmt:
 		return &Eval{X: l.expr(s.Call)}
 	case *ast.ReturnStmt:
+		if s.Value == nil && l.ctorThis != nil {
+			return &Return{Value: &Load{Var: l.ctorThis}} // a constructor returns its object
+		}
 		if s.Value == nil {
 			return &Return{}
 		}
@@ -303,7 +427,12 @@ func (l *lowerer) store(target ast.Expr, useOld bool, update func(old Expr) Expr
 		st := l.concrete(t.X, l.info.Types[t.X])
 		i := types.FieldIndex(st, t.Name.Name)
 		if i < 0 {
-			l.ice("struct %s has no field %s", st, t.Name.Name)
+			l.ice("%s has no field %s", st, t.Name.Name)
+		}
+		if st.Kind == types.Class { // an object: set its field in place
+			set := &ObjectSet{X: l.expr(t.X), Index: i, Compound: useOld}
+			set.Value = update(&IndexOld{T: st.Fields[i].Type})
+			return set
 		}
 		return l.store(t.X, true, func(old Expr) Expr {
 			return &WithField{X: old, Index: i, Value: update(&GetField{X: old, Index: i})}
@@ -363,7 +492,16 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		l.ice("float literal at %s was not given a type", e.Span.Start)
 	case *ast.CastExpr:
 		return &Convert{X: widen(l.expr(e.X)), To: l.concrete(e, l.info.Types[e]), Site: e.Span}
+	case *ast.ThisExpr:
+		return &Load{Var: l.lookup("this")}
 	case *ast.NewExpr:
+		if t := l.concrete(e, l.info.Types[e]); t.Kind == types.Class {
+			args := make([]Expr, len(e.Args))
+			for i, a := range e.Args {
+				args[i] = l.expr(a)
+			}
+			return &CallFunc{Func: l.ctor(l.info.Classes[t]), Args: args, Site: e.Span}
+		}
 		n := &NewError{T: l.concrete(e, l.info.Types[e])}
 		if len(e.Args) > 0 {
 			n.Message = l.expr(e.Args[0])
@@ -382,6 +520,9 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		}
 		if x.Type().Kind == types.Struct {
 			return &GetField{X: x, Index: types.FieldIndex(x.Type(), e.Name.Name)}
+		}
+		if x.Type().Kind == types.Class {
+			return &ObjectGet{X: x, Index: types.FieldIndex(x.Type(), e.Name.Name)}
 		}
 		return &Field{X: x, Name: e.Name.Name, T: l.concrete(e, l.info.Types[e])}
 	case *ast.ParenExpr:
@@ -529,6 +670,16 @@ func (l *lowerer) call(e *ast.CallExpr) Expr {
 		}
 		return call
 	}
+	if mc, ok := l.info.MethodCalls[e]; ok {
+		args := []Expr{l.expr(mc.Recv)} // the object, then the arguments
+		for _, a := range e.Args {
+			args = append(args, l.expr(a))
+		}
+		if mc.Method != nil {
+			return &CallFunc{Func: l.fn(mc.Method), Args: args, Site: e.Span}
+		}
+		return &CallValue{Callee: &ObjectGet{X: args[0], Index: mc.Field}, Args: args[1:], Site: e.Span}
+	}
 	var callee Expr
 	if e.Callee != nil {
 		callee = l.expr(e.Callee) // evaluated before the arguments
@@ -656,6 +807,13 @@ func (l *lowerer) tnodes(nodes []ast.Markup) []TNode {
 			}
 			t.Else = l.tnodes(n.Else)
 			out = append(out, t)
+		case *ast.MForEach:
+			x := l.expr(n.X)
+			l.scopes = append(l.scopes, map[string]*Var{})
+			t := &TForEach{Var: l.declare(n.Name.Name, l.typeOf(n.Type), false), X: x}
+			t.Body = l.tnodes(n.Body)
+			l.scopes = l.scopes[:len(l.scopes)-1]
+			out = append(out, t)
 		}
 	}
 	return out
@@ -704,14 +862,16 @@ func (l *lowerer) forEach(s *ast.ForEachStmt) Stmt {
 	arr := l.declare("each$a", x.Type(), false)
 	i := l.declare("each$i", types.Int, false)
 	elem := l.declare(s.Name.Name, l.typeOf(s.Type), false)
+	get := &Decl{Var: elem, Init: &Index{X: &Load{Var: arr}, I: &Load{Var: i}, Site: s.Span}}
 	loop := &For{
 		Init: &Decl{Var: i, Init: &IntConst{T: types.Int, Value: 0}},
 		Cond: &Compare{Op: "<", X: &Load{Var: i}, Y: &ArrayLen{X: &Load{Var: arr}}},
 		Post: &Assign{Var: i, Value: &Arith{Op: "+", T: types.Int, X: &Load{Var: i}, Y: &IntConst{T: types.Int, Value: 1}, Site: s.Span}},
-		Body: &Block{Stmts: []Stmt{
-			&Decl{Var: elem, Init: &Index{X: &Load{Var: arr}, I: &Load{Var: i}, Site: s.Span}},
-			l.block(s.Body),
-		}},
+		Body: &Block{Stmts: []Stmt{get, l.block(s.Body)}},
 	}
-	return &Block{Stmts: []Stmt{&Decl{Var: arr, Init: x}, loop}}
+	init := &Decl{Var: arr, Init: x}
+	for _, st := range []Stmt{get, loop, init} {
+		l.prog.Spans[st] = s.Span
+	}
+	return &Block{Stmts: []Stmt{init, loop}}
 }

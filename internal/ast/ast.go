@@ -16,7 +16,34 @@ type File struct {
 	Funcs   []*FuncDecl
 	Externs []*ExternDecl
 	Structs []*StructDecl
+	Classes []*ClassDecl
 }
+
+// ClassDecl is `visibility class Name { members }` at the top level of a
+// file (OQ-CLASS-01): fields, methods, and at most one constructor, each
+// with its own access modifier. Ctors holds every constructor written, so
+// the checker can reject a second one.
+type ClassDecl struct {
+	Visibility Visibility
+	Name       *Ident
+	Fields     []*MemberField
+	Methods    []*FuncDecl
+	Ctors      []*FuncDecl // `public Name(params) { … }`; Result is a made-up void
+	Span       Span
+}
+
+// MemberField is a field of a class: `visibility Type name;` or
+// `visibility Type name = init;`.
+type MemberField struct {
+	Visibility Visibility
+	Type       *TypeRef
+	Name       *Ident
+	Init       Expr // nil: the type's zero value
+	Span       Span
+}
+
+func (d *ClassDecl) NodeSpan() Span   { return d.Span }
+func (d *MemberField) NodeSpan() Span { return d.Span }
 
 // StructDecl is `visibility struct Name { Type field; ... }` at the top
 // level of a file (OQ-STRUCT-01).
@@ -403,13 +430,18 @@ type CastExpr struct {
 	Span Span
 }
 
-// NewExpr is `new Type(args)`. Only the built-in error types can be
-// constructed so far.
+// NewExpr is `new Type(args)`: an error value, or an object of a class.
 type NewExpr struct {
 	Type *TypeRef
 	Args []Expr
 	Span Span
 }
+
+// ThisExpr is `this`, the object a method or constructor runs on.
+type ThisExpr struct{ Span Span }
+
+func (e *ThisExpr) NodeSpan() Span { return e.Span }
+func (*ThisExpr) expr()            {}
 
 // IndexExpr is `x[i]`, an element of an array.
 type IndexExpr struct {
@@ -547,6 +579,19 @@ type MIf struct {
 	HasElse  bool
 	Span     Span
 }
+
+// MForEach is `$foreach (T name in x) … $endforeach`: Body is repeated for
+// every element of the array x.
+type MForEach struct {
+	Type *TypeRef
+	Name *Ident
+	X    Expr
+	Body []Markup
+	Span Span
+}
+
+func (n *MForEach) NodeSpan() Span { return n.Span }
+func (*MForEach) markup()          {}
 
 func (n *MElement) NodeSpan() Span { return n.Span }
 func (n *MText) NodeSpan() Span    { return n.Span }

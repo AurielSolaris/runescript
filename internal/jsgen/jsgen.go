@@ -47,32 +47,66 @@ var runtimeJS string
 type Options struct {
 	// Version is the compiler version recorded in the output's header.
 	Version string
+	// SourceMap asks for a source map (see GenerateMap). The module then
+	// ends with a sourceMappingURL comment naming MapURL, or holding the
+	// map itself when MapURL is "".
+	SourceMap bool
+	MapURL    string
+	// File is the generated file's name, recorded in the map.
+	File string
+	// SourcePath, if not nil, turns a source file's name (as diagnostics
+	// show it) into the path the map records, e.g. relative to the map.
+	SourcePath func(name string) string
+}
+
+// Output is a generated module and, if asked for, its source map.
+type Output struct {
+	JS  []byte
+	Map []byte
 }
 
 // Generate compiles p to a JavaScript module. Diagnostics report programs
 // the JavaScript target cannot represent; err reports an internal compiler
 // error.
 func Generate(p *ir.Program, opts Options) (out []byte, diags []*diagnostics.Diagnostic, err error) {
+	o, diags, err := GenerateMap(p, opts)
+	return o.JS, diags, err
+}
+
+// GenerateMap is Generate, also returning the source map when
+// opts.SourceMap is set. The map points each generated statement and
+// function at the RuneScript source it came from.
+func GenerateMap(p *ir.Program, opts Options) (out Output, diags []*diagnostics.Diagnostic, err error) {
 	if err := ir.Verify(p); err != nil {
-		return nil, nil, err
+		return Output{}, nil, err
 	}
 	g := &gen{indent: 1, sites: map[diagnostics.Pos]int{}, files: map[*diagnostics.Source]int{},
 		helpers: map[string]bool{}, tables: map[string]bool{}, stdPkgs: map[string]bool{},
-		formatters: map[*types.Type]string{}, vnames: map[*ir.Var]string{}}
+		formatters: map[*types.Type]string{}, classes: map[*types.Type]string{}, vnames: map[*ir.Var]string{}}
 	pkgs := map[string]bool{}
 	for _, f := range p.Funcs {
 		pkgs[f.Pkg] = true
 	}
+	g.spans = p.Spans
 	g.name(p.Funcs, len(pkgs) > 1)
 	g.externNames(p.Externs)
 	for _, f := range p.Funcs {
 		g.funcDecl(f)
 	}
 	if len(g.diags) > 0 {
-		return nil, g.diags, nil
+		return Output{}, g.diags, nil
 	}
 	entrySite := g.site(p.EntrySite)
-	return []byte(g.module(p, opts, entrySite)), nil, nil
+	js, maps := unmark(g.module(p, opts, entrySite), g.marks)
+	if !opts.SourceMap {
+		return Output{JS: []byte(js)}, nil, nil
+	}
+	m := buildMap(maps, opts.File, opts.SourcePath)
+	url := opts.MapURL
+	if url == "" {
+		url = inlineMapURL(m)
+	}
+	return Output{JS: []byte(js + "//# sourceMappingURL=" + url + "\n"), Map: m}, nil, nil
 }
 
 // Runtime returns the runtime with every section and table present. It is
@@ -89,7 +123,7 @@ func Runtime() string {
 var helperSections = map[string]string{
 	"ext":    "extern",
 	"signal": "dom", "el": "dom", "text": "dom", "attr": "dom", "bindText": "dom",
-	"bindNode": "dom", "bindAttr": "dom", "on": "dom", "when": "dom", "renderApp": "dom",
+	"bindNode": "dom", "bindAttr": "dom", "on": "dom", "when": "dom", "each": "dom", "renderApp": "dom",
 }
 
 // sections removes the optional runtime sections not in keep, and the
@@ -140,8 +174,10 @@ type gen struct {
 	helpers map[string]bool             // runtime members used, e.g. "addI"
 	tables  map[string]bool             // Unicode tables used, e.g. "upper"
 	stdPkgs map[string]bool             // standard library packages called, e.g. "string"
-	// formatters are the trace formatters of struct types, defined in fmts.
+	// formatters are the trace formatters of struct types, and classes the
+	// JavaScript classes of RuneScript classes, defined in fmts.
 	formatters map[*types.Type]string
+	classes    map[*types.Type]string
 	fmts       strings.Builder
 	tmps       int // template node variables so far
 	diags      []*diagnostics.Diagnostic
@@ -159,6 +195,13 @@ type gen struct {
 	// variables of the current function that have each name.
 	vnames map[*ir.Var]string
 	taken  map[string]int
+
+	// Source maps: spans locates IR statements in the source, marks are
+	// the positions markers refer to, and pending is the marker that the
+	// next line written starts with (see sourcemap.go).
+	spans   map[ir.Stmt]diagnostics.Span
+	marks   []diagnostics.Pos
+	pending string
 }
 
 type jsImport struct{ module, ns string }
@@ -172,6 +215,8 @@ type adapter struct {
 
 func (g *gen) line(format string, args ...any) {
 	g.b.WriteString(strings.Repeat("  ", g.indent))
+	g.b.WriteString(g.pending)
+	g.pending = ""
 	fmt.Fprintf(&g.b, format, args...)
 	g.b.WriteByte('\n')
 }
@@ -297,6 +342,7 @@ func (g *gen) module(p *ir.Program, opts Options, entrySite int) string {
 	fmt.Fprintf(&m, "    entrySite: %d,\n", entrySite)
 	m.WriteString("  };\n")
 	m.WriteString("})($rt);\n\n")
+	m.WriteString(unmapped) // the footer is not RuneScript code
 	m.WriteString(moduleFooter)
 	return m.String()
 }
@@ -406,7 +452,9 @@ func ints(v []int64) string {
 // in blocks are block-scoped in strict mode, matching nested functions.
 func (g *gen) funcDecl(f *ir.Func) {
 	defer g.enterFunc()()
-	g.line("function %s(%s) {", g.funcName(f), g.params(f))
+	params := g.params(f)
+	g.pending = g.marker(f.Span)
+	g.line("function %s(%s) {", g.funcName(f), params)
 	g.indent++
 	g.funcBody(f)
 	g.indent--
@@ -474,10 +522,14 @@ func (g *gen) block(b *ir.Block) {
 }
 
 func (g *gen) stmt(s ir.Stmt) {
+	if span, ok := g.spans[s]; ok {
+		g.pending = g.marker(span)
+	}
+	defer func() { g.pending = "" }()
 	switch s := s.(type) {
 	case *ir.FuncStmt:
 		g.funcDecl(s.Func)
-	case *ir.Decl, *ir.Assign, *ir.Eval, *ir.IndexSet:
+	case *ir.Decl, *ir.Assign, *ir.Eval, *ir.IndexSet, *ir.ObjectSet:
 		g.line("%s;", g.simple(s))
 	case *ir.Return:
 		if s.Value == nil {
@@ -598,6 +650,13 @@ func (g *gen) simple(s ir.Stmt) string {
 		}
 		return fmt.Sprintf("%s(%s, %s, %s, %d)", g.use("aset"), g.expr(s.X, precAssign),
 			g.expr(s.I, precAssign), g.expr(s.Value, precAssign), site)
+	case *ir.ObjectSet:
+		key := fieldKey(s.X.Type().Fields[s.Index].Name)
+		if s.Compound {
+			// $o is the old field (ir.IndexOld) in the value.
+			return fmt.Sprintf("%s(%s, %s, ($o) => %s)", g.use("fupd"), g.expr(s.X, precAssign), quote(key), g.expr(s.Value, precAssign))
+		}
+		return fmt.Sprintf("%s.%s = %s", g.expr(s.X, precCall), key, g.expr(s.Value, precAssign))
 	}
 	panic(fmt.Sprintf("jsgen: unexpected simple statement %T", s))
 }
@@ -665,6 +724,14 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 		return "({" + strings.Join(parts, ", ") + "})", precCall
 	case *ir.GetField:
 		return g.expr(e.X, precCall) + "." + fieldKey(e.X.Type().Fields[e.Index].Name), precCall
+	case *ir.ObjectGet:
+		return g.expr(e.X, precCall) + "." + fieldKey(e.X.Type().Fields[e.Index].Name), precCall
+	case *ir.ObjectNew:
+		parts := make([]string, len(e.Fields))
+		for i, x := range e.Fields {
+			parts[i] = g.expr(x, precAssign)
+		}
+		return "new " + g.class(e.T) + "(" + strings.Join(parts, ", ") + ")", precCall
 	case *ir.WithField:
 		return fmt.Sprintf("%s(%s, %s, %s)", g.use("withField"), g.expr(e.X, precAssign),
 			quote(fieldKey(e.X.Type().Fields[e.Index].Name)), g.expr(e.Value, precAssign)), precCall
@@ -889,6 +956,8 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 				parts[i] = "String.fromCodePoint(" + g.expr(a, precAssign) + ")"
 			} else if t.Kind == types.Struct {
 				parts[i] = g.formatter(t) + "(" + parts[i] + ")"
+			} else if t.Kind == types.Class {
+				parts[i] = "(" + parts[i] + ", " + quote("[object "+t.Name+"]") + ")" // evaluated, shown as AS3 does
 			}
 		}
 		return g.use("trace") + "(" + strings.Join(parts, ", ") + ")", precCall
@@ -926,13 +995,13 @@ func (g *gen) native(name string) {
 func (g *gen) lambda(f *ir.Func) string {
 	defer g.enterFunc()()
 	ps := g.params(f)
-	saved := g.b
-	g.b = strings.Builder{}
+	saved, pending := g.b, g.pending
+	g.b, g.pending = strings.Builder{}, ""
 	g.indent++
 	g.funcBody(f)
 	g.indent--
 	body := g.b.String()
-	g.b = saved
+	g.b, g.pending = saved, pending
 	return fmt.Sprintf("(%s) => {\n%s%s}", ps, body, strings.Repeat("  ", g.indent))
 }
 
@@ -1013,6 +1082,8 @@ func (g *gen) formatter(t *types.Type) string {
 			v = g.use("f32str") + "(" + v + ")"
 		case ft.Kind == types.Struct:
 			v = g.formatter(ft) + "(" + v + ")"
+		case ft.Kind == types.Class:
+			v = quote("[object " + ft.Name + "]")
 		default:
 			v = "String(" + v + ")"
 		}
@@ -1028,6 +1099,25 @@ func (g *gen) formatter(t *types.Type) string {
 	}
 	body += ` + "}"`
 	fmt.Fprintf(&g.fmts, "  const %s = (v) => %s;\n", name, body)
+	return name
+}
+
+// class returns the name of the JavaScript class whose instances are the
+// objects of class t, defining it on first use. Its constructor takes the
+// fields' values in declaration order.
+func (g *gen) class(t *types.Type) string {
+	if name, ok := g.classes[t]; ok {
+		return name
+	}
+	name := "$class" + strconv.Itoa(len(g.classes)) + "_" + t.Name
+	g.classes[t] = name
+	params := make([]string, len(t.Fields))
+	sets := make([]string, len(t.Fields))
+	for i, f := range t.Fields {
+		params[i] = "f" + strconv.Itoa(i)
+		sets[i] = " this." + fieldKey(f.Name) + " = " + params[i] + ";"
+	}
+	fmt.Fprintf(&g.fmts, "  class %s extends %s { constructor(%s) { super();%s } }\n", name, g.use("Obj"), strings.Join(params, ", "), strings.Join(sets, ""))
 	return name
 }
 
@@ -1218,6 +1308,10 @@ func (g *gen) tnodes(b *strings.Builder, nodes []ir.TNode, parent, pad string) {
 				g.tnodes(b, br, "$p", pad+"    ")
 				fmt.Fprintf(b, "%s  }\n", pad)
 			}
+			fmt.Fprintf(b, "%s});\n", pad)
+		case *ir.TForEach:
+			fmt.Fprintf(b, "%s%s(%s, () => %s, (%s, $p) => {\n", pad, g.use("each"), parent, g.expr(n.X, precAssign), g.vname(n.Var))
+			g.tnodes(b, n.Body, "$p", pad+"  ")
 			fmt.Fprintf(b, "%s});\n", pad)
 		}
 	}

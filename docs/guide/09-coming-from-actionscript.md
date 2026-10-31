@@ -19,7 +19,8 @@ package {
 }
 ```
 
-RuneScript (v0.1 has no classes yet, so this is a top-level function):
+RuneScript, as a top-level function (no class is needed; a class version
+is in [chapter 24](24-classes.md)):
 
 ```actionscript
 package main;
@@ -100,8 +101,10 @@ top-level `protected int main()` function, and no class is needed.
 
 ## Not yet available
 
-Classes, interfaces, `static`, array methods beyond `push` and
-`pop`, metadata, E4X XML, and graphics (a native graphics package is
-planned). See the [roadmap](../ROADMAP.md).
+Inheritance, interfaces, `static`, metadata, E4X XML, and graphics (a
+native graphics package is planned). Classes exist, without inheritance
+([chapter 24](24-classes.md)); unlike AS3, `this` is required to reach a
+field or method, and the constructor is written without `function`:
+`public Point(int x, int y) { ... }`. See the [roadmap](../ROADMAP.md).
 
 Next: [Standard library: `std:string`](10-std-string.md)

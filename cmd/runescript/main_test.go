@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -152,6 +153,64 @@ protected int main() {
 	}
 	if _, err := os.Stat("tool.js"); err != nil {
 		t.Error(err)
+	}
+}
+
+// build --source-map writes <out>.map beside the module, naming every
+// source file relative to the map, and points the module at it.
+func TestBuildSourceMap(t *testing.T) {
+	dir := t.TempDir()
+	for name, src := range map[string]string{
+		"app/main.rsc":     "package app;\nuse \"./app/lib/geom.rsm\";\nprotected int main() {\n    trace(geom.area(2));\n    return 0;\n}\n",
+		"app/lib/geom.rsm": "package geom;\npublic int area(int s) {\n    return s * s;\n}\n",
+	} {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
+	if err := os.Mkdir("dist", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr strings.Builder
+	if code := cli([]string{"build", "--source-map", "-o", "dist/app.js", "app/main.rsc"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	js, err := os.ReadFile("dist/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(string(js), "\n//# sourceMappingURL=app.js.map\n") {
+		t.Errorf("module does not end with the map's URL: %q", js[len(js)-80:])
+	}
+	data, err := os.ReadFile("dist/app.js.map")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Version int
+		File    string
+		Sources []string
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Version != 3 || m.File != "app.js" || strings.Join(m.Sources, " ") != "../app/main.rsc ../app/lib/geom.rsm" {
+		t.Errorf("map: %+v", m)
+	}
+	// Without the flag, no map and no comment.
+	if code := cli([]string{"build", "-o", "dist/plain.js", "app/main.rsc"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if plain, _ := os.ReadFile("dist/plain.js"); strings.Contains(string(plain), "sourceMappingURL") {
+		t.Error("a sourceMappingURL without --source-map")
+	}
+	if _, err := os.Stat("dist/plain.js.map"); err == nil {
+		t.Error("a map without --source-map")
 	}
 }
 

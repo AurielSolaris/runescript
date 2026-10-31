@@ -1,0 +1,22 @@
+eval count initializer
+eval constructor body
+changed to 3
+changed to 13
+13 clicks 2 Vec{x: 2, y: 0} true false [object Counter]
+now 14
+now -1
+eval count initializer
+eval constructor body
+false
+changed to 6
+eval count initializer
+eval constructor body
+1 false Vec{x: 1, y: 7}
+10 2 3 true 4
+segment made 14 6
+-8 segment
+0
+1 42
+true false Pair{c: [object Counter], tag: 1}
+now 15
+15

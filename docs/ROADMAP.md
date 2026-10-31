@@ -69,7 +69,6 @@ conditionals, loops, and basic functions.
 - [x] `std:string` in JavaScript with UTF-8 byte offsets and Go-derived Unicode tables
 - [x] `runescript build [--target js] [-o out.js]`; modules run with `node` or `import { run }`
 - [x] Differential tests (interpreter vs. Node.js) for every example and runtime program, and randomized `std:string` conformance
-- [ ] Source maps
 - [ ] JavaScript interop: moved to "JavaScript target, part 2" below
 - [ ] Measure generated-code performance before optimizing (e.g. inlining range checks)
 
@@ -87,15 +86,16 @@ conditionals, loops, and basic functions.
 - [x] Boundary checks on every result (scalars and errors; float32 rounded): `ASX-RUN-007` `TypeError`; JavaScript exceptions are `ASX-RUN-008` `Error`; error values cross as the exported `RSError` class
 - [x] The interpreter rejects programs with externs (`ASX-TARGET-002`); Node.js tests in `tests/testdata/extern`
 - [x] Arguments and environment: `std:process` on both targets instead of a JavaScript-only `rune:process` (2026-10-17)
-- [ ] Objects, arrays, and callbacks across the boundary (need classes and arrays first)
-- [ ] Source maps
+- [ ] Objects, arrays, and callbacks across the boundary (classes and arrays exist now; design the crossing first)
+- [x] Source maps: `runescript build --source-map` writes `<out>.map` (statements and functions mapped, sources included); `runescript dev` inlines one (2026-11-01)
 
 ### DOM interop (owner decisions, 2026-10-16; started)
 - [x] Internal list of HTML4 and HTML5 elements (`internal/dom`): void and obsolete elements with hints, typed attributes per element (string, url, bool, int, uint, float, keywords, id references, tokens, events), global attributes and event handlers, `data-*`/`aria-*`, and obsolete HTML4 presentational attributes; cross-checked against independent element lists
 - [x] SVG 1.1 and SVG 2 elements in their own namespace (case-sensitive names; SVG 1.1 elements SVG 2 removed are obsolete with hints), typed attributes including lengths, presentation attributes with CSS-wide keywords, `href` with obsolete `xlink:href`
 - [x] Declarative, component-based UI like React's, but without JSX and without a virtual DOM: state changes update the affected DOM nodes directly
 - [x] Templates in `.rsc` files, in the style of Vue/Svelte components and Laravel Blade: `$if`/`$elseif`/`$else`/`$endif`, `{{ }}` interpolation that escapes HTML by default; `Element` is a type imported with `use "rune:dom";` (2026-10-16)
-- [ ] `$foreach` (needs arrays)
+- [x] `$foreach (T x in a) … $endforeach`, header checked like `for each`; the list is rebuilt when a rune its array expression read changes (2026-11-01)
+- [ ] Keyed `$foreach` updates (rebuild only the items that changed)
 - [x] Reactivity through explicit SolidJS-style signals, called runes: `Signal<int> count = signal(0);`, read `count()` or `count.get()`, written `count.set(n)`; setting one updates only the DOM nodes that read it; nested functions and lambdas may use the runes around them
 - [x] Elements: HTML4 (obsolete ones warn), HTML5, and SVG; attributes typed per element, checked for static values and `{{ }}` types; bound keyword and URL values checked at run time
 - [x] Mounting without a router: `use "./App.rsc";` then `dom.renderApp(app.App, "#app");` renders one component into the element the selector names; any CSS selector works, with a warning unless it is an id selector
@@ -245,9 +245,12 @@ Depends on: `use` (v0.3), floats (v0.5), and structs for colours and vectors (v0
 
 ## v0.8: Classes
 
-- [ ] `class` declarations, fields, methods, constructors
-- [ ] Visibility enforcement
+- [x] Simple classes (owner decisions, 2026-11-01): `public class Name { … }` with fields, methods, and one constructor `public Name(…) { … }`; objects made with `new` (`new pkg.Name(…)`), shared by reference, `==` by identity, traced as `[object Name]`; `this` required; no nested classes. Both targets, guide chapter 24 (2026-11-01)
+- [x] Visibility enforcement on members: `public` / `protected` (package) / `private` (file), as at the top level (2026-11-01)
+- [x] No null: fields without a zero value need an initializer or a first value at the start of the constructor (2026-11-01, provisional)
 - [ ] Inheritance / interfaces (design first)
+- [ ] `static` members, methods as values, getters and setters
+- [ ] Objects across the JavaScript boundary
 - [x] `std:string` additions that need arrays: `split`, `splitN`, `splitAfter`, `splitAfterN`, `fields`, `fieldsFunc`, `join` (2026-10-16)
 - [ ] `std:string` additions that need multiple returns or classes (`cut`, builder/replacer)
 
@@ -266,6 +269,5 @@ Depends on: floats (v0.5), arrays (v0.6), classes or opaque native types (v0.8),
 ## Later
 
 - [ ] A `runescript` flag to resolve uses from a directory other than the working directory, if wanted
-- [ ] Standard library modules (`stdlib/`)
 - [ ] Better parser error recovery (report more than one syntax error)
 - [ ] Further performance work (bytecode VM, a native-binary build mode) only if the closure compiler is measured and found not fast enough

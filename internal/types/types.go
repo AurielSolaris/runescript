@@ -55,7 +55,15 @@ const (
 	// but see inside them only through the package's functions. Each one
 	// is its own type, held by reference and never changed once made.
 	Opaque
+	// Class is a user-defined class (OQ-CLASS-01): a reference type with
+	// named Fields. Each declaration is its own type; assigning or passing
+	// an object shares it, and == compares identity.
+	Class
 )
+
+// NewClass returns a new class type named name. Its fields are set once
+// the declaration's field types are resolved.
+func NewClass(name string) *Type { return &Type{Kind: Class, Name: name} }
 
 // NewOpaque returns a new opaque type, e.g. NewOpaque("json.Value").
 func NewOpaque(name string) *Type { return &Type{Kind: Opaque, Name: name} }
@@ -77,7 +85,7 @@ type Type struct {
 	Super *Type
 	// Elem is the value type of a Signal or an Array.
 	Elem *Type
-	// Fields are the fields of a Struct, in declaration order.
+	// Fields are the fields of a Struct or a Class, in declaration order.
 	Fields []*Field
 }
 
@@ -91,8 +99,8 @@ type Field struct {
 // the declaration's field types are resolved.
 func NewStruct(name string) *Type { return &Type{Kind: Struct, Name: name} }
 
-// FieldIndex returns the index of the field named name in struct type t,
-// or -1.
+// FieldIndex returns the index of the field named name in struct or class
+// type t, or -1.
 func FieldIndex(t *Type, name string) int {
 	for i, f := range t.Fields {
 		if f.Name == name {
@@ -103,10 +111,11 @@ func FieldIndex(t *Type, name string) int {
 }
 
 // Comparable reports whether == and != apply to values of type t: numbers,
-// bools, strings, chars, and structs whose fields are all comparable.
+// bools, strings, chars, objects (by identity), and structs whose fields
+// are all comparable.
 func Comparable(t *Type) bool {
 	switch t.Kind {
-	case Signed, Unsigned, Float, Bool, String, Char:
+	case Signed, Unsigned, Float, Bool, String, Char, Class:
 		return true
 	case Struct:
 		for _, f := range t.Fields {
@@ -121,10 +130,10 @@ func Comparable(t *Type) bool {
 
 // Traceable reports whether trace can print values of type t: anything
 // but void, functions, arrays, the rune:dom types, and structs holding
-// one of those.
+// one of those. An object is shown as [object Name].
 func Traceable(t *Type) bool {
 	switch t.Kind {
-	case Signed, Unsigned, Float, Bool, String, Char, Error:
+	case Signed, Unsigned, Float, Bool, String, Char, Error, Class:
 		return true
 	case Struct:
 		for _, f := range t.Fields {
@@ -151,7 +160,7 @@ func NewArray(elem *Type) *Type {
 // value type except the rune:dom types, which belong to the web layer.
 func IsElemType(t *Type) bool {
 	switch t.Kind {
-	case Signed, Unsigned, Float, Bool, String, Char, Func, Error, Array, Struct, Opaque:
+	case Signed, Unsigned, Float, Bool, String, Char, Func, Error, Array, Struct, Opaque, Class:
 		return true
 	}
 	return false
@@ -283,7 +292,7 @@ func Identical(a, b *Type) bool {
 	switch a.Kind {
 	case Float, Signed, Unsigned:
 		return a.Bits == b.Bits
-	case Error, Struct, Opaque:
+	case Error, Struct, Opaque, Class:
 		return a == b
 	case Signal, Array:
 		return Identical(a.Elem, b.Elem)
@@ -305,8 +314,8 @@ func Identical(a, b *Type) bool {
 // HasZero reports whether t has a zero value, the value of `T x;`
 // (OQ-VAR-01): 0 for numbers, U+0000 for char, "" for string, false for
 // bool, an empty array, and a struct whose fields all have zero values.
-// Functions, errors, elements, and runes have none: RuneScript has no
-// null to stand for "not set yet".
+// Functions, errors, objects, elements, and runes have none: RuneScript
+// has no null to stand for "not set yet".
 func HasZero(t *Type) bool {
 	switch t.Kind {
 	case Signed, Unsigned, Float, Char, String, Bool, Array:

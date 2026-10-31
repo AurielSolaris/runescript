@@ -140,6 +140,10 @@ func (a *analysis) describeIdent(n *ast.Ident, parent, grand node) string {
 		if n == p.Name {
 			return code(typeText(info, p.Type) + " " + n.Name)
 		}
+	case *ast.MForEach:
+		if n == p.Name {
+			return code(typeText(info, p.Type) + " " + n.Name)
+		}
 	case *ast.CatchClause:
 		if t := info.CatchTypes[p]; t != nil {
 			return code(t.String() + " " + n.Name)
@@ -693,6 +697,8 @@ func (a *analysis) locals(off int) []local {
 			}
 		case *ast.ForEachStmt:
 			addVar(n.Name, n.Type)
+		case *ast.MForEach:
+			addVar(n.Name, n.Type)
 		case *ast.ForStmt:
 			if vd, ok := n.Init.(*ast.VarDecl); ok {
 				addVar(vd.Name, vd.Type)
@@ -768,6 +774,19 @@ func (s *Server) documentSymbols(uri string) []documentSymbol {
 		for _, fl := range sd.Fields {
 			fsp, _ := spanOf(fl)
 			ds.Children = append(ds.Children, sym(fl.Name.Name, fl.Type.String(), symbolField, fsp, fl.Name.Span))
+		}
+		out = append(out, ds)
+	}
+	for _, cd := range f.Classes {
+		ds := sym(cd.Name.Name, "class", symbolClass, cd.Span, cd.Name.Span)
+		for _, fl := range cd.Fields {
+			ds.Children = append(ds.Children, sym(fl.Name.Name, fl.Type.String(), symbolField, fl.Span, fl.Name.Span))
+		}
+		for _, c := range cd.Ctors {
+			ds.Children = append(ds.Children, sym(c.Name.Name, "constructor", symbolCtor, c.Span, c.Name.Span))
+		}
+		for _, m := range cd.Methods {
+			ds.Children = append(ds.Children, sym(m.Name.Name, declSig(m), symbolMethod, m.Span, m.Name.Span))
 		}
 		out = append(out, ds)
 	}

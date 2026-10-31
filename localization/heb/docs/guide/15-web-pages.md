@@ -211,6 +211,49 @@ protected int main() {
 
 <div dir="rtl">
 
+## `$foreach`
+
+`$foreach (Type name in array) … $endforeach` חוזר על התוכן שלו עבור כל
+איבר במערך, ו־`name` מחזיק את האיבר; הכותרת נכתבת כמו בלולאת `for each`.
+הרשימה כולה נבנית מחדש כשמשתנה rune שביטוי המערך קורא. שינויים במערך עצמו
+(`push`, `pop`, השמה לאיבר) אינם במעקב, ולכן שמרו את מצב הרשימה ב־rune
+וחשבו ממנו את המערך, כמו כאן:
+
+```actionscript
+package main;
+
+use "rune:dom";
+
+public Array<string> first(Array<string> all, int n) {
+    Array<string> out = [];
+    for (int i = 0; i < n && i < all.length; i++) {
+        out.push(all[i]);
+    }
+    return out;
+}
+
+public Element Tasks() {
+    Array<string> tasks = ["Write the docs", "Test the list", "Ship it"];
+    Signal<int> shown = signal(1);
+
+    template {
+        <div>
+            <ul>
+                $foreach (string task in first(tasks, shown()))
+                    <li>{{ task }}</li>
+                $endforeach
+            </ul>
+            <button type="button" onclick={{ () => shown.set(shown() + 1) }}>Show more</button>
+        </div>
+    }
+}
+
+protected int main() {
+    dom.renderApp(Tasks, "#app");
+    return 0;
+}
+```
+
 ## רכיבי ילד
 
 רכיב הוא פונקציה, ולכן רכיב אחר משבץ אותו באינטרפולציה שהערך שלה הוא `Element`:
@@ -319,7 +362,6 @@ prog.rsc:8:10: error ASX-TMPL-002: unknown element <dvi>
 
 ## עדיין לא זמין
 
-- `$foreach`, שמחכה למערכים.
 - תגי רכיבים עם מאפיינים (`<Badge label="new"/>`): משבצים רכיבים עם `{{ Badge("new") }}`.
 - אובייקטי אירוע, ולכן מטפל עדיין לא יכול לקרוא את הערך של שדה קלט, וקשירה דו-כיוונית.
 - הכנסת HTML גולמי, MathML, אלמנטים מותאמים אישית ורינדור בצד השרת.

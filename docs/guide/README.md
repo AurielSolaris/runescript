@@ -27,10 +27,11 @@ complete program in these pages is compiled by the test suite
 21. [JSON](21-json.md): `std:json`: parsing, reading with checked functions, building, and writing JSON
 22. [CSV, matrices, and versions](22-csv-matrix-semver.md): `std:csv`, `std:matrix`, and `std:semver`
 23. [Editors](23-editors.md): VS Code, Vim, Neovim, and Emacs, and the language server `runescript lsp`
+24. [Classes](24-classes.md): fields, methods, constructors, `this`, and objects as references
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).
 
-> **Not yet available:** classes. Their keyword is reserved, and using it
-> gives a clear "not implemented yet" error. Objects, arrays, structs, and
-> callbacks can't cross the JavaScript boundary yet either.
+> **Not yet available:** inheritance, interfaces, and `static` members of
+> classes. Objects, arrays, structs, and callbacks can't cross the
+> JavaScript boundary yet either.

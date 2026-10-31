@@ -2,8 +2,8 @@
 // JavaScript must still work on the JavaScript target.
 package tests.js;
 
-public int function(int this) {
-    return this + 1;
+public int function(int super) {
+    return super + 1;
 }
 
 public int Math(int x) {

@@ -53,6 +53,12 @@ func tree(n ast.Markup) string {
 			s += "]"
 		}
 		return s + ")"
+	case *ast.MForEach:
+		s := "(foreach " + n.Type.String() + " " + n.Name.Name + " ["
+		for _, c := range n.Body {
+			s += tree(c)
+		}
+		return s + "])"
 	}
 	return "?"
 }
@@ -80,6 +86,9 @@ func TestParseTemplate(t *testing.T) {
 		`<div>$if (a) <b>A</b> $elseif (b) B $else C $endif</div>`:                                                       `(div (if [" "(b "A")" "] [" B "] else[" C "]))`,
 		`<div>$if (a) x $endif</div>`: `(div (if [" x "]))`,
 		`<div/>`:                      `(div)`,
+		`<ul>$foreach (string s in names)<li>{{ s }}</li>$endforeach</ul>`:                      `(ul (foreach string s [(li {{}})]))`,
+		`<p>$foreach (Array<int> r in g)$foreach (int x in r){{ x }}$endforeach$endforeach</p>`: `(p (foreach Array<int> r [(foreach int x [{{}}])]))`,
+		`<p>$foreach (int x in a)$if (x > 0)+$endif$endforeach</p>`:                             `(p (foreach int x [(if ["+"])]))`,
 	}
 	for markup, want := range cases {
 		if got := tree(parseTemplate(t, markup).Root); got != want {
@@ -96,10 +105,17 @@ func TestParseTemplateErrors(t *testing.T) {
 		`text`:                 "exactly one root element",
 		``:                     "the template is empty",
 		`<div>$if (a) x</div>`: "$endif",
-		`<div>$if (a) x $else y $else z $endif</div>`: "a second $else",
-		`<div>$else</div>`:                            "$else inside <div>",
-		`<p><br></br></p>`:                            "void element",
-		`<p class=></p>`:                              "",
+		`<div>$if (a) x $else y $else z $endif</div>`:         "a second $else",
+		`<div>$else</div>`:                                    "$else inside <div>",
+		`<p><br></br></p>`:                                    "void element",
+		`<p class=></p>`:                                      "",
+		`<ul>$foreach (string s in names)<li>x</li></ul>`:     "$endforeach",
+		`<ul>$foreach (string s in names) x $endif</ul>`:      "$endif inside $foreach",
+		`<ul>$if (a) x $endforeach</ul>`:                      "$endforeach inside an $if",
+		`<ul>$endforeach</ul>`:                                "$endforeach inside <ul>, which its $foreach",
+		`<ul>$foreach (s in names) x $endforeach</ul>`:        "before 'in'",
+		`<ul>$foreach (string s of names) x $endforeach</ul>`: "expected 'in'",
+		`<ul><li>$foreach (int x in a)</li>$endforeach</ul>`:  "$foreach has no $endforeach",
 	}
 	for markup, want := range cases {
 		_, diags := Parse([]byte(component(markup)))

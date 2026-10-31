@@ -72,6 +72,7 @@ func TestMarkupErrors(t *testing.T) {
 		{"template { <p>{{ x </p> }", diagnostics.LexUnterminatedTemplate},
 		{`template { <p title="x> }`, diagnostics.LexUnterminatedString},
 		{"template { $if x }", diagnostics.LexUnexpectedChar},
+		{"template { $foreach x }", diagnostics.LexUnexpectedChar},
 		{"template { <p # > }", diagnostics.LexUnexpectedChar},
 		{"template { <!-- x }", diagnostics.LexUnterminatedBlock},
 	}

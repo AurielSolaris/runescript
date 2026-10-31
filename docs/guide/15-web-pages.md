@@ -209,6 +209,50 @@ protected int main() {
 }
 ```
 
+## `$foreach`
+
+`$foreach (Type name in array) … $endforeach` repeats its content for every
+element of an array, with `name` holding the element; the header is
+written as in a `for each` loop. The whole list is built again when a rune
+that the array expression reads changes. Changes to the array itself
+(`push`, `pop`, setting an element) are not tracked, so keep the list's
+state in a rune and compute the array from it, as here:
+
+```actionscript
+package main;
+
+use "rune:dom";
+
+public Array<string> first(Array<string> all, int n) {
+    Array<string> out = [];
+    for (int i = 0; i < n && i < all.length; i++) {
+        out.push(all[i]);
+    }
+    return out;
+}
+
+public Element Tasks() {
+    Array<string> tasks = ["Write the docs", "Test the list", "Ship it"];
+    Signal<int> shown = signal(1);
+
+    template {
+        <div>
+            <ul>
+                $foreach (string task in first(tasks, shown()))
+                    <li>{{ task }}</li>
+                $endforeach
+            </ul>
+            <button type="button" onclick={{ () => shown.set(shown() + 1) }}>Show more</button>
+        </div>
+    }
+}
+
+protected int main() {
+    dom.renderApp(Tasks, "#app");
+    return 0;
+}
+```
+
 ## Child components
 
 A component is a function, so another component embeds it with an
@@ -311,7 +355,6 @@ prog.rsc:8:10: error ASX-TMPL-002: unknown element <dvi>
 
 ## Not yet available
 
-- `$foreach`, which waits for arrays.
 - Component tags with properties (`<Badge label="new"/>`): embed
   components with `{{ Badge("new") }}`.
 - Event objects, so a handler can't read an input's value yet, and

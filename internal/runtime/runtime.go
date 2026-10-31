@@ -57,6 +57,15 @@ type Value struct {
 	// json.Value: whatever the standard library package made. It is
 	// never changed, so sharing it is the same as copying it.
 	Opq any
+	// Obj is an object of a class. Objects are held by reference:
+	// copying the Value shares the object, and == compares identity.
+	Obj *ObjectValue
+}
+
+// ObjectValue holds the fields of an object of class T.
+type ObjectValue struct {
+	T      *types.Type
+	Fields []Value
 }
 
 // StructValue holds the fields of a struct of type T.
@@ -80,6 +89,8 @@ func (v Value) String() string {
 		return v.Err.String()
 	case types.Char:
 		return string(rune(v.Int))
+	case types.Class:
+		return "[object " + v.Obj.T.Name + "]" // as in ActionScript 3
 	case types.Unsigned:
 		if v.Bits == 64 {
 			return strconv.FormatUint(uint64(v.Int), 10)
@@ -306,6 +317,8 @@ func (in *interp) stmt(f *frame, s ir.Stmt) control {
 		in.expr(f, s.X)
 	case *ir.IndexSet:
 		in.indexSet(f, s)
+	case *ir.ObjectSet:
+		in.objectSet(f, s)
 	case *ir.Return:
 		if s.Value != nil {
 			f.ret = in.expr(f, s.Value)
@@ -558,6 +571,10 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 		return Value{Kind: types.Struct, St: st}
 	case *ir.GetField:
 		return in.expr(f, e.X).St.Fields[e.Index]
+	case *ir.ObjectNew:
+		return Value{Kind: types.Class, Obj: &ObjectValue{T: e.T, Fields: in.exprs(f, e.Fields)}}
+	case *ir.ObjectGet:
+		return in.expr(f, e.X).Obj.Fields[e.Index]
 	case *ir.WithField:
 		old := in.expr(f, e.X).St
 		v := in.expr(f, e.Value)
@@ -630,6 +647,10 @@ func compare(op string, x, y Value) bool {
 		}
 	case types.Bool:
 		if x.Bool != y.Bool {
+			c = 1
+		}
+	case types.Class:
+		if x.Obj != y.Obj { // == and != only: the same object or not
 			c = 1
 		}
 	case types.Unsigned:
@@ -1134,6 +1155,22 @@ func (in *interp) indexSet(f *frame, s *ir.IndexSet) {
 		v = in.expr(f, s.Value)
 	}
 	a.Elems[in.checkIndex(a, i, s.Site)] = v
+}
+
+// objectSet runs o.f = v or o.f op= v (ir.ObjectSet): the object is
+// evaluated first, then the value, which reads the old field through
+// ir.IndexOld for a compound assignment.
+func (in *interp) objectSet(f *frame, s *ir.ObjectSet) {
+	o := in.expr(f, s.X).Obj
+	var v Value
+	if s.Compound {
+		in.olds = append(in.olds, o.Fields[s.Index])
+		v = in.expr(f, s.Value)
+		in.olds = in.olds[:len(in.olds)-1]
+	} else {
+		v = in.expr(f, s.Value)
+	}
+	o.Fields[s.Index] = v
 }
 
 // arrayCall runs an array method (ir.ArrayCall).

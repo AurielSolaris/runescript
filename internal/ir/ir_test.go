@@ -84,6 +84,13 @@ var pointT = func() *types.Type {
 	return t
 }()
 
+// counterT is class Counter { int n; }.
+var counterT = func() *types.Type {
+	t := types.NewClass("Counter")
+	t.Fields = []*types.Field{{Name: "n", Type: types.Int}}
+	return t
+}()
+
 // Verify catches IR that breaks the typing rules, whatever produced it.
 func TestVerifyRejects(t *testing.T) {
 	u := &Var{Name: "u", Type: types.Uint}
@@ -138,6 +145,18 @@ func TestVerifyRejects(t *testing.T) {
 			Attrs: []*TAttr{{Name: "type", Mode: AttrText, Values: []string{"text"}, Value: &Load{Var: s}}}}}},
 		"event without handler": &Eval{X: &Template{Root: &TElement{Tag: "button",
 			Attrs: []*TAttr{{Name: "onclick", Mode: AttrEvent, Value: &StringConst{}}}}}},
+		"object missing a field":         &Eval{X: &ObjectNew{T: counterT}},
+		"object field of wrong type":     &Eval{X: &ObjectNew{T: counterT, Fields: []Expr{&StringConst{}}}},
+		"new object of a struct":         &Eval{X: &ObjectNew{T: pointT, Fields: []Expr{&IntConst{T: types.Int}, &IntConst{T: types.Int}}}},
+		"object field of a struct":       &Eval{X: &ObjectGet{X: &StructLit{T: pointT, Inits: []FieldInit{{Index: 0, Value: &IntConst{T: types.Int}}, {Index: 1, Value: &IntConst{T: types.Int}}}}, Index: 0}},
+		"object field out of range":      &Eval{X: &ObjectGet{X: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}}, Index: 1}},
+		"set object field to wrong type": &ObjectSet{X: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}}, Index: 0, Value: &BoolConst{}},
+		"order objects": &Eval{X: &Compare{Op: "<", X: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}},
+			Y: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}}}},
+		"foreach over a non-array": &Eval{X: &Template{Root: &TElement{Tag: "ul",
+			Children: []TNode{&TForEach{Var: &Var{Name: "x", Type: types.Int}, X: &Load{Var: s}}}}}},
+		"foreach variable of the wrong type": &Eval{X: &Template{Root: &TElement{Tag: "ul",
+			Children: []TNode{&TForEach{Var: &Var{Name: "x", Type: types.StringT}, X: &ArrayLit{T: types.NewArray(types.Int)}}}}}},
 	}
 	for name, stmt := range cases {
 		f := &Func{Name: "main", Type: types.NewFunc([]*types.Type{types.Int}, types.VoidT), Params: []*Var{s},

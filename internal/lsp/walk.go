@@ -88,6 +88,9 @@ func children(n node) []node {
 		for _, d := range n.Structs {
 			add(d)
 		}
+		for _, d := range n.Classes {
+			add(d)
+		}
 		for _, d := range n.Externs {
 			add(d)
 		}
@@ -103,6 +106,19 @@ func children(n node) []node {
 		}
 	case *ast.FieldDecl:
 		add(n.Type, n.Name)
+	case *ast.ClassDecl:
+		add(n.Name)
+		for _, f := range n.Fields {
+			add(f)
+		}
+		for _, c := range n.Ctors {
+			add(c)
+		}
+		for _, m := range n.Methods {
+			add(m)
+		}
+	case *ast.MemberField:
+		add(n.Type, n.Name, n.Init)
 	case *ast.ExternDecl:
 		add(n.Result, n.Name)
 		for _, p := range n.Params {
@@ -163,6 +179,11 @@ func children(n node) []node {
 		add(n.Body)
 	case *ast.ForEachStmt:
 		add(n.Type, n.Name, n.X, n.Body)
+	case *ast.MForEach:
+		add(n.Type, n.Name, n.X)
+		for _, c := range n.Body {
+			add(c)
+		}
 	case *ast.ThrowStmt:
 		add(n.Value)
 	case *ast.TryStmt:

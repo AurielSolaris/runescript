@@ -62,6 +62,7 @@ uint8 uint16 uint32 uint64            [2026-10-17]
 try catch finally throw new           [v0.3]
 extern                                [2026-10-16]
 struct                                [2026-10-17]
+class this                            [2026-11-01]
 ```
 
 `as` is a keyword only after a `use` path (§4.2). `Error`, `RangeError`,
@@ -74,7 +75,7 @@ Reserved for planned features **[v0.1, provisional]**. They are rejected
 with `ASX-PARSE-002`:
 
 ```
-class array matrix
+array matrix
 ```
 
 **[2026-10-26]** `matrix` may still qualify a call, `matrix.mul(a, b)`,
@@ -130,7 +131,8 @@ redeclared.
 EBNF. `{ x }` means zero or more, `[ x ]` means optional.
 
 ```ebnf
-File         = PackageDecl { UseDecl } { FuncDecl | ExternDecl } EOF ;
+File         = PackageDecl { UseDecl } { FuncDecl | ExternDecl | StructDecl | ClassDecl } EOF ;
+                                                   (* §5.1e, §5.1g *)
 ExternDecl   = "extern" StringLit Type Ident "(" [ Params ] ")" ";" ;   (* §12 *)
 PackageDecl  = "package" Ident { "." Ident } ";" ;
 UseDecl      = "use" StringLit [ "as" Ident ] ";" ;   (* "as" is contextual *)
@@ -184,10 +186,10 @@ CastType     = "int" | "sint" | "uint" | "int8" | "int16" | "int32" | "int64"
              | "float" | "float32" | "float64" | "string" | "bool" | "char" ;
 Postfix      = Primary { "(" [ Expr { "," Expr } ] ")" | "." Ident | "[" Expr "]" } ;   (* calls, fields, elements *)
 Primary      = IntLit | FloatLit | StringLit | InterpString | CharLit | "true" | "false"
-             | Ident | Call | Lambda | New | "(" Expr ")"
+             | Ident | Call | Lambda | New | "this" | "(" Expr ")"
              | "[" [ Expr { "," Expr } ] "]" ;   (* array literal, §5.1c *)
 InterpString = '$"' { Text | "{" Expr "}" } '"' ;   (* §2.4 *)
-New          = "new" Ident "(" [ Expr { "," Expr } ] ")" ;
+New          = "new" [ Ident "." ] Ident "(" [ Expr { "," Expr } ] ")" ;   (* errors; classes, §5.1g *)
 Lambda       = "(" [ Type Ident { "," Type Ident } ] ")" "=>" ( Expr | Block ) ;
 Call         = [ Qualifier "." ] Ident "(" [ Expr { "," Expr } ] ")" ;
 Qualifier    = Ident | "string" ;   (* the package qualifier; see §4.2 *)
@@ -209,8 +211,8 @@ Notes:
 - **[v0.3]** `(` followed by a type keyword and `)` is a conversion, which
   binds like a unary operator: `(int) x + 1` is `((int) x) + 1`. A type
   keyword can't begin an expression, so this is unambiguous.
-- **[v0.1]** A `Type` that is an identifier parses, but it is reported as
-  `ASX-TYPE-010 unknown type` until user-defined types exist.
+- **[v0.1]** A `Type` that is an identifier names a struct or a class
+  (§5.1e, §5.1g); any other name is `ASX-TYPE-010 unknown type`.
 
 ## 4. Program structure
 
@@ -349,8 +351,8 @@ protected int main() {
 }
 ```
 
-**[undecided]** Whether a class member can be the entry point (classes
-are not designed yet).
+**[undecided]** Whether a class member can be the entry point (it can't
+yet: `main` is a top-level function).
 
 ## 5. Types
 
@@ -533,10 +535,59 @@ through the package's functions. Each opaque type is its own type.
 - `json.Value(json.Value) f` declares a function value whose types are
   qualified, as for structs of other packages.
 
+### 5.1g Classes **[decided 2026-11-01, details provisional]**
+```ebnf
+ClassDecl   = Visibility "class" Ident "{" { Member } "}" ;
+Member      = Visibility ( Type Ident [ "=" Expr ] ";"        (* field *)
+                         | Type Ident "(" [ Params ] ")" Block  (* method *)
+                         | Ident "(" [ Params ] ")" Block ) ;   (* constructor: the class's name *)
+```
+Owner decisions:
+- A class is a **reference type**: assigning, passing, returning, or
+  storing an object shares it. `==` and `!=` compare identity; objects
+  are not ordered. `trace` shows `[object Name]`, as ActionScript 3 does.
+- An object is created with `new Name(args)` (`new pkg.Name(args)` for a
+  class of another package), which calls the constructor. The constructor
+  is named after the class and has no result type.
+- Every member has an access modifier, with its top-level meaning:
+  `public` everywhere, `protected` this package, `private` this file
+  (`ASX-NAME-011`). A function in the class's file may use its private
+  members.
+- Inside methods and the constructor, `this` is the object, and it is
+  required: fields are `this.x` and methods `this.m()`; a bare name is a
+  local or a parameter (`ASX-NAME-001`).
+- No nested classes (`ASX-PARSE-001`).
+
+Provisional (owner to confirm):
+- At most one constructor; methods are not overloaded; fields and methods
+  share one set of names (`ASX-NAME-002`). A method can't be named after
+  its class. Without a constructor, a class has one taking no arguments,
+  as visible as the class.
+- `new` gives every field its initial value in declaration order (its
+  initializer, or its type's zero value), then runs the constructor's
+  body. A bare `return;` in the constructor ends it, keeping the object.
+- There is no null, so every field always has a value: a field whose type
+  has no zero value (§7.1) needs an initializer, or must be set by the
+  statements the constructor starts with that only set fields
+  (`this.f = e;`, with no other use of `this`), which run before the
+  object exists (`ASX-TYPE-028` otherwise). A variable of a class type has
+  no zero value either.
+- Field initializers and nested functions and lambdas can't use `this`
+  (`ASX-NAME-001`, `ASX-NAME-009`): functions don't capture.
+- A method can only be called; `p.m` without a call is `ASX-NAME-004`. A
+  field of a function type is called as `p.f(args)`.
+- `p.x = v` writes a field of any object, even one held by a parameter or
+  returned by a call, since the object is shared. A struct field of an
+  object is written in place (`this.pos.x = 1`).
+- Objects can't be converted or interpolated, and can't cross the
+  JavaScript boundary. Objects of a class are array elements, struct
+  fields, and class fields like any value.
+- **[undecided]** Inheritance, interfaces, abstract classes, `static`
+  members, getters and setters, methods as values, and generic classes.
+
 ### 5.2 Planned types **[planned/undecided]**
-`class`. It is not implemented; its name is reserved. Matrices are not a
-type: they are `Array<Array<float64>>` and the functions of `std:matrix`
-(§8.2), and `matrix` stays reserved.
+Matrices are not a type: they are `Array<Array<float64>>` and the
+functions of `std:matrix` (§8.2), and `matrix` stays reserved.
 
 ### 5.3 Integer constants **[v0.1, provisional]**
 Integer literals, and expressions built only from literals using
@@ -727,8 +778,8 @@ Modelled on ActionScript 3 (owner decision).
   (`string`, the type's name), and `errorID` (`int`). Errors are values:
   they can be stored, passed, returned, and traced (`trace(e)` prints
   `RangeError: message`, or just the name if the message is empty), but not
-  compared. `new` can create only error types until classes exist
-  (`ASX-TYPE-019`).
+  compared. `new` creates errors and objects of classes (§5.1g); any other
+  type is `ASX-TYPE-019`.
 - **`throw e;`** throws an error value (anything else is `ASX-TYPE-021`). A
   throw ends a path for the definite-return rule (§7.5).
 - **`try { } catch (T e) { } … finally { }`** runs the block. If it throws,
@@ -760,7 +811,7 @@ Modelled on ActionScript 3 (owner decision).
   program stops for it, catch clauses don't run and neither do `finally`
   blocks.
 - **[undecided]** Stack traces (`getStackTrace()`), methods such as
-  `toString()`, and user-defined error types (with classes).
+  `toString()`, and user-defined error types (with class inheritance).
 
 ## 8. Built-ins
 
@@ -879,7 +930,7 @@ and UI as a standard package brought in with `use` **[planned]**. The
 recommended backend is raylib; this is not yet confirmed.
 
 AS3 and Apache Royale features that are **[undecided]** for RuneScript:
-classes and interfaces, `static`, abstract classes, private constructors,
+class inheritance and interfaces, `static`, abstract classes,
 metadata, E4X XML, `Vector.<T>` (vs. `Array<T>` generics), type inference,
 `?.`, `??`, import aliases, and verbatim strings.
 
@@ -983,7 +1034,13 @@ a JavaScript module. Rules:
 - The interpreter does not run extern functions: `runescript run` reports
   `ASX-TARGET-002`, while `check` and `build` accept the program. A bundled
   JavaScript runtime is planned (Node.js, ES2022, stays the reference).
-- **[planned]** Source maps.
+- **[2026-11-01]** Source maps: `runescript build --source-map` also writes
+  `<out>.map` (Source Map Revision 3) and ends the module with a
+  `//# sourceMappingURL=` comment naming it. Every statement and function
+  of the generated code is mapped to its source position; the runtime and
+  the module's footer are unmapped. Sources are named relative to the map,
+  and their text is included (`sourcesContent`). `runescript dev` puts the
+  map inside the module as a `data:` URL.
 
 ## 13. Web pages: `rune:dom` **[decided 2026-10-16]**
 
@@ -995,11 +1052,12 @@ JavaScript target (`ASX-TARGET-002` in the interpreter).
 
 ```ebnf
 TemplateStmt = "template" "{" Content "}" ;      (* exactly one root Element *)
-Content      = { Element | Text | "{{" Expr "}}" | If } ;
+Content      = { Element | Text | "{{" Expr "}}" | If | ForEach } ;
 Element      = "<" Name { Attribute } ( "/>" | ">" Content "</" Name ">" ) ;
 Attribute    = Name [ "=" ( Quoted | "{{" Expr "}}" ) ] ;
 If           = "$if" "(" Expr ")" Content { "$elseif" "(" Expr ")" Content }
                [ "$else" Content ] "$endif" ;
+ForEach      = "$foreach" "(" Type Ident "in" Expr ")" Content "$endforeach" ;
 ```
 
 - A component is a function returning `Element` whose last statement is
@@ -1024,6 +1082,11 @@ If           = "$if" "(" Expr ")" Content { "$elseif" "(" Expr ")" Content }
   computed again when a rune it read changes, and only its own part of the
   DOM is updated. `$if` rebuilds a branch only when the chosen branch
   changes; a removed branch's bindings are disposed.
+- **[2026-11-01]** `$foreach (T x in a)` checks its header like `for each`
+  (§7.4) and repeats its content for each element, with `x` in scope only
+  there. The array expression is a binding: when a rune it read changes,
+  the whole list is disposed and built again. Changes to the array itself
+  are not tracked.
 - At run time, a bound keyword attribute with a value outside its list, and
   a bound URL that would run script (`javascript:`, `vbscript:`, `data:`),
   throw a `TypeError` (`ASX-RUN-010`). Static URLs of that kind are
@@ -1051,6 +1114,6 @@ an `Error` (`ASX-RUN-009`). There is no router.
 
 ### 13.4 Not yet specified
 
-`$foreach` (needs arrays), component tags with properties, event objects
+Keyed `$foreach` updates, component tags with properties, event objects
 and two-way binding, raw HTML, MathML, custom elements, server-side
 rendering, and hot module replacement.

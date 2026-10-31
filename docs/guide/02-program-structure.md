@@ -86,12 +86,13 @@ protected int main() {
 
 No class is needed. Programs are made of top-level functions, which can
 appear in any order. Functions can also be nested inside other functions.
+Classes are available when you want objects ([chapter 24](24-classes.md)).
 
 ## Names
 
 Identifiers are made of ASCII letters, digits, and `_`, and can't start
 with a digit. They are case-sensitive. Keywords such as `if`, `int`, `use`,
 and `return` can't be used as names. Words reserved for future features
-(`class`, `array`, and `matrix`) can't be used either.
+(`array` and `matrix`) can't be used either.
 
 Next: [Types and variables](03-types-and-variables.md)

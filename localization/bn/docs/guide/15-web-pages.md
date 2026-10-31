@@ -201,6 +201,50 @@ protected int main() {
 }
 ```
 
+## `$foreach`
+
+`$foreach (Type name in array) … $endforeach` একটি অ্যারের প্রতিটি
+উপাদানের জন্য এর ভেতরের অংশ একবার করে দেখায়, আর `name` সেই উপাদানটি
+ধরে রাখে; হেডার `for each` লুপের মতো করেই লেখা হয়। অ্যারের এক্সপ্রেশন যে
+রুন পড়ে সেটি বদলালে পুরো তালিকা আবার তৈরি হয়। অ্যারেটি নিজে বদলানো
+(`push`, `pop`, কোনো উপাদানে মান বসানো) ট্র্যাক করা হয় না, তাই তালিকার
+অবস্থা একটি রুনে রাখুন এবং এখানের মতো তা থেকে অ্যারেটি তৈরি করুন:
+
+```actionscript
+package main;
+
+use "rune:dom";
+
+public Array<string> first(Array<string> all, int n) {
+    Array<string> out = [];
+    for (int i = 0; i < n && i < all.length; i++) {
+        out.push(all[i]);
+    }
+    return out;
+}
+
+public Element Tasks() {
+    Array<string> tasks = ["Write the docs", "Test the list", "Ship it"];
+    Signal<int> shown = signal(1);
+
+    template {
+        <div>
+            <ul>
+                $foreach (string task in first(tasks, shown()))
+                    <li>{{ task }}</li>
+                $endforeach
+            </ul>
+            <button type="button" onclick={{ () => shown.set(shown() + 1) }}>Show more</button>
+        </div>
+    }
+}
+
+protected int main() {
+    dom.renderApp(Tasks, "#app");
+    return 0;
+}
+```
+
 ## চাইল্ড কম্পোনেন্ট
 
 একটি কম্পোনেন্ট একটি ফাংশন, তাই আরেকটি কম্পোনেন্ট এটিকে এমন একটি ইন্টারপোলেশন দিয়ে
@@ -299,7 +343,6 @@ prog.rsc:8:10: error ASX-TMPL-002: unknown element <dvi>
 
 ## এখনো নেই
 
-- `$foreach`, যা অ্যারের জন্য অপেক্ষা করছে।
 - প্রপার্টিসহ কম্পোনেন্ট ট্যাগ (`<Badge label="new"/>`): কম্পোনেন্ট বসান
   `{{ Badge("new") }}` দিয়ে।
 - ইভেন্ট অবজেক্ট, তাই একটি হ্যান্ডলার এখনো একটি ইনপুটের মান পড়তে পারে না, এবং দ্বিমুখী

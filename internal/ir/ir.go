@@ -38,6 +38,10 @@ type Program struct {
 	// Externs are the extern functions called anywhere in the program, in
 	// order of first call.
 	Externs []*Extern
+	// Spans locates the source statement each statement of a block was
+	// lowered from (for source maps). Statements made up by lowering may
+	// be missing.
+	Spans map[Stmt]Span
 }
 
 // Extern is a function implemented in JavaScript by Module. Its argument
@@ -104,6 +108,16 @@ type (
 		Compound bool
 		Site     Span
 	}
+	// ObjectSet stores Value in field Index of the object X. X is
+	// evaluated first, then Value. For a compound assignment (o.x += v,
+	// or a change to a field of a struct held in the field), Value reads
+	// the old field through IndexOld.
+	ObjectSet struct {
+		X        Expr
+		Index    int
+		Value    Expr
+		Compound bool
+	}
 	// Return returns Value, or nothing when Value is nil.
 	Return struct{ Value Expr }
 	// If runs Then when Cond holds, otherwise Else (nil, *Block, or *If).
@@ -160,20 +174,21 @@ type Catch struct {
 	Body *Block
 }
 
-func (*FuncStmt) stmt() {}
-func (*Decl) stmt()     {}
-func (*Assign) stmt()   {}
-func (*Eval) stmt()     {}
-func (*IndexSet) stmt() {}
-func (*Return) stmt()   {}
-func (*If) stmt()       {}
-func (*While) stmt()    {}
-func (*For) stmt()      {}
-func (*Break) stmt()    {}
-func (*Continue) stmt() {}
-func (*Throw) stmt()    {}
-func (*Try) stmt()      {}
-func (*Block) stmt()    {}
+func (*FuncStmt) stmt()  {}
+func (*Decl) stmt()      {}
+func (*Assign) stmt()    {}
+func (*Eval) stmt()      {}
+func (*IndexSet) stmt()  {}
+func (*ObjectSet) stmt() {}
+func (*Return) stmt()    {}
+func (*If) stmt()        {}
+func (*While) stmt()     {}
+func (*For) stmt()       {}
+func (*Break) stmt()     {}
+func (*Continue) stmt()  {}
+func (*Throw) stmt()     {}
+func (*Try) stmt()       {}
+func (*Block) stmt()     {}
 
 // Expr is any expression. Type is never invalid or untyped.
 type Expr interface{ Type() *types.Type }
@@ -224,8 +239,21 @@ type (
 		X, I Expr
 		Site Span
 	}
-	// IndexOld is the old element in the Value of a compound IndexSet.
+	// IndexOld is the old element in the Value of a compound IndexSet, or
+	// the old field in the Value of a compound ObjectSet.
 	IndexOld struct{ T *types.Type }
+	// ObjectNew creates an object of class T (OQ-CLASS-01) whose fields
+	// hold Fields, one per field in declaration order, evaluated in that
+	// order. Objects are references: copying one shares it.
+	ObjectNew struct {
+		T      *types.Type
+		Fields []Expr
+	}
+	// ObjectGet reads field Index of the object X.
+	ObjectGet struct {
+		X     Expr
+		Index int
+	}
 	// ArrayLen is X.length.
 	ArrayLen struct{ X Expr }
 	// ArrayPush appends V to the array X.
@@ -407,6 +435,8 @@ func (e *GetField) Type() *types.Type    { return e.X.Type().Fields[e.Index].Typ
 func (e *WithField) Type() *types.Type   { return e.X.Type() }
 func (e *Index) Type() *types.Type       { return e.X.Type().Elem }
 func (e *IndexOld) Type() *types.Type    { return e.T }
+func (e *ObjectNew) Type() *types.Type   { return e.T }
+func (e *ObjectGet) Type() *types.Type   { return e.X.Type().Fields[e.Index].Type }
 func (e *ArrayLen) Type() *types.Type    { return types.Int }
 func (e *ArrayPush) Type() *types.Type   { return types.VoidT }
 func (e *ArrayPop) Type() *types.Type    { return e.X.Type().Elem }
@@ -517,9 +547,18 @@ type (
 		Branches [][]TNode
 		Else     []TNode
 	}
+	// TForEach repeats Body for every element of the array X, with Var
+	// holding the element. The whole list is rebuilt when a rune read by
+	// X changes; changes to the array itself are not tracked.
+	TForEach struct {
+		Var  *Var
+		X    Expr
+		Body []TNode
+	}
 )
 
 func (*TElement) tnode() {}
 func (*TText) tnode()    {}
 func (*TInterp) tnode()  {}
 func (*TIf) tnode()      {}
+func (*TForEach) tnode() {}

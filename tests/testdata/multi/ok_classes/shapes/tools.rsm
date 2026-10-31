@@ -1,0 +1,12 @@
+package shapes;
+
+// Another file of package shapes: it may use Circle's protected members.
+public Circle doubled(Circle c) {
+    Circle d = new Circle(c.radius);
+    d.scale(2);
+    return d;
+}
+
+public int count(Circle c) {
+    return c.resized;
+}

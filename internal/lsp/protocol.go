@@ -210,6 +210,9 @@ type documentSymbol struct {
 // Symbol kinds.
 const (
 	symbolFunction = 12
+	symbolClass    = 5
+	symbolMethod   = 6
+	symbolCtor     = 9
 	symbolField    = 8
 	symbolStruct   = 23
 )

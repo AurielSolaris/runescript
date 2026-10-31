@@ -40,7 +40,7 @@
 (defconst runescript-keywords
   '("package" "use" "as" "return" "if" "else" "while" "for" "each" "in"
     "break" "continue" "try" "catch" "finally" "throw" "new"
-    "public" "protected" "private" "extern" "struct" "template")
+    "public" "protected" "private" "extern" "struct" "class" "this" "template")
   "RuneScript keywords, and the contextual words each, in, as, template.")
 
 (defconst runescript-types
@@ -56,7 +56,7 @@
 (defconst runescript-builtins '("trace" "isNaN" "isFinite")
   "RuneScript's built-in functions.")
 
-(defconst runescript-reserved '("class" "array")
+(defconst runescript-reserved '("array")
   "Words reserved for planned features.")
 
 (defvar runescript-font-lock-keywords
@@ -65,7 +65,7 @@
     (,(regexp-opt runescript-constants 'symbols) . font-lock-constant-face)
     (,(regexp-opt runescript-builtins 'symbols) . font-lock-builtin-face)
     (,(regexp-opt runescript-reserved 'symbols) . font-lock-warning-face)
-    ("\\_<struct\\_>[ \t]+\\([A-Za-z_][A-Za-z0-9_]*\\)" 1 font-lock-type-face)
+    ("\\_<\\(?:struct\\|class\\)\\_>[ \t]+\\([A-Za-z_][A-Za-z0-9_]*\\)" 1 font-lock-type-face)
     ("\\_<package\\_>[ \t]+\\([A-Za-z0-9_.]+\\)" 1 font-lock-constant-face)
     ("\\_<\\([A-Za-z_][A-Za-z0-9_]*\\)[ \t]*(" 1 font-lock-function-name-face)
     ("\\_<\\(?:0x[0-9A-Fa-f_]+\\|0b[01_]+\\|0o[0-7_]+\\|[0-9][0-9_]*\\(?:\\.[0-9][0-9_]*\\)?\\(?:[eE][-+]?[0-9][0-9_]*\\)?\\)\\_>"

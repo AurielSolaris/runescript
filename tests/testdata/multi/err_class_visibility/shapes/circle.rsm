@@ -1,0 +1,31 @@
+package shapes;
+
+public class Circle {
+    public int radius;
+    private int secret = 7;
+
+    public Circle(int radius) {
+        this.radius = radius;
+    }
+
+    protected void scale(int by) {
+        this.radius *= by;
+    }
+}
+
+protected class Hidden {
+    public int n;
+}
+
+// A public class whose constructor only package shapes may call.
+public class Locked {
+    public int n;
+
+    protected Locked() {
+        this.n = 1;
+    }
+}
+
+private class Square {
+    public int side;
+}

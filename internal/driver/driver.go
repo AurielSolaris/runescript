@@ -207,6 +207,17 @@ func BuildJSInput(in Input, opts jsgen.Options) ([]byte, []*diagnostics.Diagnost
 	return js, sorted(diags), err
 }
 
+// BuildJSMapInput is BuildJSInput, also returning the source map when
+// opts.SourceMap is set.
+func BuildJSMapInput(in Input, opts jsgen.Options) (jsgen.Output, []*diagnostics.Diagnostic, error) {
+	info, diags, err := CheckInput(in)
+	if diags != nil || err != nil {
+		return jsgen.Output{}, diags, err
+	}
+	out, diags, err := jsgen.GenerateMap(ir.Lower(info), opts)
+	return out, sorted(diags), err
+}
+
 // Check type-checks a single in-memory file.
 func Check(src []byte) (*checker.Info, []*diagnostics.Diagnostic) {
 	info, diags, _ := CheckInput(Memory("", src))

@@ -219,6 +219,8 @@ func (c *checker) exprInner(e ast.Expr) operand {
 		return operand{typ: c.cast(e)}
 	case *ast.NewExpr:
 		return operand{typ: c.newExpr(e)}
+	case *ast.ThisExpr:
+		return operand{typ: c.thisExpr(e)}
 	case *ast.SelectorExpr:
 		if k, ok := c.stdConst(e); ok {
 			return k
@@ -295,6 +297,9 @@ func (c *checker) ident(e *ast.Ident) *types.Type {
 	case sym.st != nil:
 		c.errorf(diagnostics.NameNotAValue, e.Span, "'%s' is a struct type, not a value", e.Name).
 			WithHelp(fmt.Sprintf("build one with a literal, e.g. %s{...}", e.Name))
+	case sym.cl != nil:
+		c.errorf(diagnostics.NameNotAValue, e.Span, "'%s' is a class, not a value", e.Name).
+			WithHelp(fmt.Sprintf("create an object with new %s(...)", e.Name))
 	case sym.ext != nil:
 		c.externValueError(e)
 	case crossed && !isRune(sym):
@@ -365,6 +370,13 @@ func (c *checker) binaryType(op string, x, y operand, xe, ye ast.Expr, opSpan di
 	case "==", "!=":
 		if x.typ.Kind == y.typ.Kind && (x.typ.Kind == types.Bool || x.typ.Kind == types.String) {
 			return operand{typ: types.BoolT}
+		}
+		if x.typ.Kind == types.Class || y.typ.Kind == types.Class {
+			if !types.Identical(x.typ, y.typ) {
+				c.errorf(diagnostics.TypeBadOperand, opSpan, "operator '%s' compares '%s' with '%s'", op, x.typ, y.typ)
+				return invalid
+			}
+			return operand{typ: types.BoolT} // the same object or not
 		}
 		if x.typ.Kind == types.Struct || y.typ.Kind == types.Struct {
 			switch {
@@ -635,6 +647,9 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 			if t.Kind == types.Array {
 				return c.arrayMethod(e, sel.Name, t)
 			}
+			if t.Kind == types.Class {
+				return c.methodCall(e, sel.X, sel.Name, t)
+			}
 			ft := c.selectorOf(sel, t)
 			c.info.Types[sel] = ft
 			return c.callValue(ft, e, fmt.Sprintf("a value of type '%s'", ft))
@@ -679,6 +694,9 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 	case sym.st != nil:
 		c.errorf(diagnostics.NameNotCallable, e.Fn.Span, "'%s' is a struct type, not a function", name).
 			WithHelp(fmt.Sprintf("build a struct with a literal naming its fields, e.g. %s{%s}", name, literalHint(sym.st.Type)))
+	case sym.cl != nil:
+		c.errorf(diagnostics.NameNotCallable, e.Fn.Span, "'%s' is a class, not a function", name).
+			WithHelp(fmt.Sprintf("create an object with new %s(...)", name))
 	case sym.ext != nil:
 		c.info.Externs[e] = sym.ext
 		return c.checkArgs(sym.ext.Type, e, "extern function '"+name+"'")
@@ -790,6 +808,9 @@ func (c *checker) qualifiedCall(e *ast.CallExpr) *types.Type {
 		}
 		if t.Kind == types.Array {
 			return c.arrayMethod(e, e.Fn, t)
+		}
+		if t.Kind == types.Class {
+			return c.methodCall(e, e.Pkg, e.Fn, t)
 		}
 		c.errorf(diagnostics.TypeNoField, e.Fn.Span, "values of type '%s' have no methods", t).
 			WithHelp(fieldHelp(t))
@@ -1022,18 +1043,23 @@ func convertible(from, to *types.Type) bool {
 	return false
 }
 
-// newExpr checks `new T(message, id)`. Only the built-in error types can
-// be constructed so far. As in ActionScript 3, both arguments are
-// optional: the message defaults to "" and the id to 0.
+// newExpr checks `new T(args)`: an object of class T, or an error,
+// `new T(message, id)`. As in ActionScript 3, both arguments of an error
+// are optional: the message defaults to "" and the id to 0.
 func (c *checker) newExpr(e *ast.NewExpr) *types.Type {
 	t := c.resolveType(e.Type)
 	if t.Kind == types.Invalid {
 		c.exprs(e.Args)
 		return types.InvalidT
 	}
+	if t.Kind == types.Class {
+		return c.newObject(e, t)
+	}
 	if t.Kind != types.Error {
-		c.errorf(diagnostics.TypeBadNew, e.Type.Span, "'new' can only create error values so far, not '%s'", t).
-			WithHelp("classes are planned; the error types are Error, RangeError, TypeError, and ArgumentError")
+		d := c.errorf(diagnostics.TypeBadNew, e.Type.Span, "'new' creates objects of classes and error values, not '%s'", t)
+		if t.Kind == types.Struct {
+			d.WithHelp(fmt.Sprintf("a struct is built with a literal, e.g. %s{%s}", t, literalHint(t)))
+		}
 		c.exprs(e.Args)
 		return types.InvalidT
 	}
@@ -1085,6 +1111,8 @@ func (c *checker) selectorOf(e *ast.SelectorExpr, t *types.Type) *types.Type {
 		return c.arrayField(e, t)
 	case t.Kind == types.Struct:
 		return c.structField(e, t)
+	case t.Kind == types.Class:
+		return c.classField(e, t)
 	case t.Kind != types.Error:
 		c.errorf(diagnostics.TypeNoField, e.Name.Span, "values of type '%s' have no fields", t)
 		return types.InvalidT

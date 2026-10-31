@@ -32,7 +32,7 @@ variable turns it off for `auto`, the default.
 | Code | Meaning |
 |---|---|
 | `ASX-PARSE-001` | Something unexpected, e.g. a missing `;`, a missing `package`, a function without an access modifier, an AS3-style `function` keyword, a declaration without `=` or `;` |
-| `ASX-PARSE-002` | A reserved word for a feature that isn't implemented yet (`class`, `char`, …) |
+| `ASX-PARSE-002` | A reserved word or construct for a feature that isn't implemented yet (`array`, `extends`, `static` members, …) |
 
 The parser stops at the first syntax error.
 

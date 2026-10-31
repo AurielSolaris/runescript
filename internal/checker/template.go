@@ -61,6 +61,12 @@ func (c *checker) markupNodes(nodes []ast.Markup, svg bool) {
 				c.markupNodes(n.Branches[i], svg)
 			}
 			c.markupNodes(n.Else, svg)
+		case *ast.MForEach:
+			t := c.eachHeader("$foreach", n.Type, n.Name, n.X)
+			c.push(false)
+			c.declareVar(n.Name, t, false)
+			c.markupNodes(n.Body, svg)
+			c.pop()
 		}
 	}
 }

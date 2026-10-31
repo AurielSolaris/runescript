@@ -107,70 +107,103 @@ func (c *checker) cycle(t, target *types.Type, path []string) []string {
 	return nil
 }
 
-// structType resolves a struct name as a type: Name, or pkg.Name for a
-// struct of another package. It returns nil if ref names no struct.
+// structType resolves a struct or class name as a type: Name, or pkg.Name
+// for one of another package. It returns nil if ref names neither.
 func (c *checker) structType(ref *ast.TypeRef) *types.Type {
-	st := c.findStruct(ref.Pkg, ref.Name, ref.Span)
-	if st == nil {
+	sym := c.findTypeSym(ref.Pkg, ref.Name, ref.Span)
+	if sym == nil {
 		return nil
 	}
-	return st.Type
+	return sym.typ
 }
 
 // findStruct finds the struct name, qualified by pkg if not nil, and
-// checks that it is visible here. It reports an error and returns nil
-// when there is no such struct.
+// checks that it is visible here. It returns nil when there is no struct
+// or class of that name, and a StructSym of the invalid type after
+// reporting an error.
 func (c *checker) findStruct(pkg *ast.Ident, name string, span diagnostics.Span) *StructSym {
+	sym := c.findTypeSym(pkg, name, span)
+	switch {
+	case sym == nil:
+		return nil
+	case sym.cl != nil:
+		c.errorf(diagnostics.TypeStructLit, span, "%s is a class, not a struct", name).
+			WithHelp(fmt.Sprintf("create an object with new %s(...)", name))
+		return &StructSym{Type: types.InvalidT}
+	case sym.st == nil:
+		return &StructSym{Type: types.InvalidT}
+	}
+	return sym.st
+}
+
+// invalidType stands for a struct or class name that was reported.
+var invalidType = &symbol{typ: types.InvalidT}
+
+// userType describes the struct or class of sym: "struct" or "class", its
+// access modifier, and where it is declared.
+func (s *symbol) userType() (kind string, vis ast.Visibility, file *loader.File, pkg *loader.Package) {
+	if s.cl != nil {
+		return "class", s.cl.Decl.Visibility, s.cl.File, s.cl.Pkg
+	}
+	return "struct", s.st.Decl.Visibility, s.st.File, s.st.Pkg
+}
+
+// findTypeSym finds the struct or class name, qualified by pkg if not
+// nil, and checks that it is visible here. It returns nil when there is
+// none, and invalidType after reporting an error.
+func (c *checker) findTypeSym(pkg *ast.Ident, name string, span diagnostics.Span) *symbol {
 	if pkg == nil {
 		sym, _ := c.lookup(name)
-		if sym == nil || sym.st == nil {
-			if st := c.privateStructElsewhere(c.file.Package, name); st != nil {
-				c.errorf(diagnostics.NameNotVisible, span, "struct %s is private to %s", name, st.File.Source.Name).
-					WithHelp(fmt.Sprintf("declare it protected to share it within package %s", st.Pkg.Name))
-				return &StructSym{Type: types.InvalidT}
+		if sym == nil || (sym.st == nil && sym.cl == nil) {
+			if other := c.privateTypeElsewhere(c.file.Package, name); other != nil {
+				kind, _, file, p := other.userType()
+				c.errorf(diagnostics.NameNotVisible, span, "%s %s is private to %s", kind, name, file.Source.Name).
+					WithHelp(fmt.Sprintf("declare it protected to share it within package %s", p.Name))
+				return invalidType
 			}
 			return nil
 		}
-		return sym.st
+		return sym
 	}
 	b := c.quals[pkg.Name]
 	switch {
 	case b == nil && !c.broken:
 		c.errorf(diagnostics.NamePackageNotUsed, pkg.Span, "package '%s' is not in scope", pkg.Name)
-		return &StructSym{Type: types.InvalidT}
+		return invalidType
 	case b == nil || (b.pkg == nil && b.std == nil && b.rune == ""):
-		return &StructSym{Type: types.InvalidT} // a use that could not be loaded (reported)
+		return invalidType // a use that could not be loaded (reported)
 	case b.pkg == nil:
-		c.errorf(diagnostics.NameNotInPackage, span, "%s has no struct %s", pkg.Name, name)
-		return &StructSym{Type: types.InvalidT}
+		c.errorf(diagnostics.NameNotInPackage, span, "%s has no struct or class %s", pkg.Name, name)
+		return invalidType
 	}
 	b.used = true
 	sym := c.pkgs[b.pkg].syms[name]
-	if sym == nil || sym.st == nil {
-		if st := c.privateStructElsewhere(b.pkg, name); st != nil {
-			c.errorf(diagnostics.NameNotVisible, span, "struct %s is private to %s", name, st.File.Source.Name).
+	if sym == nil || (sym.st == nil && sym.cl == nil) {
+		if other := c.privateTypeElsewhere(b.pkg, name); other != nil {
+			kind, _, file, _ := other.userType()
+			c.errorf(diagnostics.NameNotVisible, span, "%s %s is private to %s", kind, name, file.Source.Name).
 				WithHelp("declare it public to use it from other packages")
 		} else {
-			c.errorf(diagnostics.NameNotInPackage, span, "package %s has no struct %s", b.pkg.Name, name)
+			c.errorf(diagnostics.NameNotInPackage, span, "package %s has no struct or class %s", b.pkg.Name, name)
 		}
-		return &StructSym{Type: types.InvalidT}
+		return invalidType
 	}
-	if sym.st.Decl.Visibility == ast.VisProtected && sym.st.Pkg != c.file.Package {
-		c.errorf(diagnostics.NameNotVisible, span, "struct %s is protected: only package %s can use it", name, sym.st.Pkg.Name).
+	if kind, vis, _, p := sym.userType(); vis == ast.VisProtected && p != c.file.Package {
+		c.errorf(diagnostics.NameNotVisible, span, "%s %s is protected: only package %s can use it", kind, name, p.Name).
 			WithHelp("declare it public to use it from other packages")
 	}
-	return sym.st
+	return sym
 }
 
-// privateStructElsewhere returns a private struct named name in another
-// file of pkg, or nil.
-func (c *checker) privateStructElsewhere(pkg *loader.Package, name string) *StructSym {
+// privateTypeElsewhere returns the symbol of a private struct or class
+// named name in another file of pkg, or nil.
+func (c *checker) privateTypeElsewhere(pkg *loader.Package, name string) *symbol {
 	for _, f := range pkg.Files {
 		if f == c.file {
 			continue
 		}
-		if sym := c.files[f].syms[name]; sym != nil && sym.st != nil {
-			return sym.st
+		if sym := c.files[f].syms[name]; sym != nil && (sym.st != nil || sym.cl != nil) {
+			return sym
 		}
 	}
 	return nil
@@ -301,7 +334,11 @@ func (c *checker) place(e ast.Expr) *types.Type {
 		var xt *types.Type
 		switch unparen(e.X).(type) {
 		case *ast.Ident, *ast.IndexExpr, *ast.SelectorExpr:
-			xt = c.place(e.X)
+			if pt := c.peekType(e.X); pt != nil && pt.Kind == types.Class {
+				xt = c.defaulted(e.X).typ // an object is a reference: changing its field changes no variable
+			} else {
+				xt = c.place(e.X)
+			}
 		default:
 			xt = c.defaulted(e.X).typ
 			if xt.Kind == types.Struct {
@@ -315,6 +352,10 @@ func (c *checker) place(e ast.Expr) *types.Type {
 			return types.InvalidT
 		case types.Struct:
 			t := c.structField(e, xt)
+			c.info.Types[e] = t
+			return t
+		case types.Class:
+			t := c.classField(e, xt)
 			c.info.Types[e] = t
 			return t
 		case types.Array:

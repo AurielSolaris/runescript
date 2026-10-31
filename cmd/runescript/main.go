@@ -32,9 +32,10 @@ const usage = `usage:
                              runs it again whenever one of its files
                              changes
   runescript check [flags] <file>   check a program without running it
-  runescript build [flags] [--target js] [-o <out.js>] <file>
+  runescript build [flags] [--target js] [-o <out.js>] [--source-map] <file>
                              compile a program to a JavaScript module
-                             (default output: <file> with a .js extension)
+                             (default output: <file> with a .js extension);
+                             --source-map also writes <out.js>.map
   runescript dev [flags] [--port <n>] [--open] <file>
                              serve the program on localhost and reload the
                              browser whenever one of its files changes
@@ -246,6 +247,7 @@ func build(args []string, stderr io.Writer) int {
 	fs, policy := flags("build", stderr)
 	target := fs.String("target", "js", "")
 	out := fs.String("o", "", "")
+	sourceMap := fs.Bool("source-map", false, "")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 1 || policy.err != nil {
 		usageError(stderr, policy.err)
 		return exitUsage
@@ -268,7 +270,15 @@ func build(args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage
 	}
-	js, diags, err := driver.BuildJSInput(in, jsgen.Options{Version: Version})
+	opts := jsgen.Options{Version: Version}
+	if *sourceMap {
+		opts.SourceMap = true
+		opts.File = filepath.Base(*out)
+		opts.MapURL = opts.File + ".map"
+		opts.SourcePath = mapSourcePath(in.Dir, filepath.Dir(*out))
+	}
+	built, diags, err := driver.BuildJSMapInput(in, opts)
+	js := built.JS
 	if diags != nil {
 		report(stderr, diags)
 		return exitCompileError
@@ -285,7 +295,35 @@ func build(args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage
 	}
+	if *sourceMap {
+		if err := os.WriteFile(*out+".map", built.Map, 0o644); err != nil {
+			fmt.Fprintf(stderr, "runescript: %v\n", err)
+			return exitUsage
+		}
+	}
 	return 0
+}
+
+// mapSourcePath returns how a source map in outDir names a source file
+// whose diagnostics name is relative to dir (or absolute): relative to
+// outDir, with '/' separators.
+func mapSourcePath(dir, outDir string) func(string) string {
+	return func(name string) string {
+		path := filepath.FromSlash(name)
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(dir, path)
+		}
+		from, err1 := filepath.Abs(outDir)
+		abs, err2 := filepath.Abs(path)
+		if err1 != nil || err2 != nil {
+			return name
+		}
+		rel, err := filepath.Rel(from, abs)
+		if err != nil {
+			return filepath.ToSlash(abs)
+		}
+		return filepath.ToSlash(rel)
+	}
 }
 
 // same reports whether paths a and b name the same file.

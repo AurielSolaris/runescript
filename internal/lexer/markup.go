@@ -9,8 +9,9 @@ import (
 
 // Templates (rune:dom, OQ-DOM-01). `template {` switches the lexer to
 // markup: tags, attributes, and text, until the matching `}`. Inside
-// markup, `{{ expr }}` and the condition of `$if (cond)` and
-// `$elseif (cond)` are lexed as ordinary RuneScript tokens.
+// markup, `{{ expr }}`, the condition of `$if (cond)` and
+// `$elseif (cond)`, and the header of `$foreach (T x in a)` are lexed as
+// ordinary RuneScript tokens.
 //
 // In template text, '{' and '}' are reserved: `{{` starts an
 // interpolation and a lone `}` ends the template, so a literal brace is
@@ -29,7 +30,7 @@ const (
 	MAttrValue                     // a quoted attribute value
 	MInterpOpen                    // `{{`
 	MInterpClose                   // `}}`
-	MDirective                     // `$if`, `$elseif`, `$else`, `$endif`
+	MDirective                     // `$if`, `$elseif`, `$else`, `$endif`, `$foreach`, `$endforeach`
 )
 
 func init() {
@@ -41,7 +42,7 @@ func init() {
 	}
 }
 
-var directives = []string{"$elseif", "$endif", "$else", "$if"} // longest first
+var directives = []string{"$endforeach", "$foreach", "$elseif", "$endif", "$else", "$if"} // longest first
 
 // atTemplate reports whether the last token is the identifier template
 // and the next character, after spaces and comments, is '{'.
@@ -119,7 +120,7 @@ func (l *lexer) markup() {
 			d := l.directive()
 			l.skip(len(d))
 			l.emit(MDirective, d, start)
-			if d == "$if" || d == "$elseif" {
+			if d == "$if" || d == "$elseif" || d == "$foreach" {
 				l.condition(d)
 			}
 		default:
@@ -268,8 +269,12 @@ func (l *lexer) interpolation(start diagnostics.Pos) {
 func (l *lexer) condition(d string) {
 	l.skipSpaceAndComments()
 	if l.off >= len(l.src) || l.src[l.off] != '(' {
-		l.errorf(diagnostics.LexUnexpectedChar, l.pos(), "%s needs a condition in parentheses", d).
-			WithHelp(d + " (count() > 0)")
+		help := d + " (count() > 0)"
+		if d == "$foreach" {
+			help = "$foreach (string name in names) … $endforeach"
+		}
+		l.errorf(diagnostics.LexUnexpectedChar, l.pos(), "%s needs %s in parentheses", d, map[bool]string{true: "a header", false: "a condition"}[d == "$foreach"]).
+			WithHelp(help)
 		return
 	}
 	depth := 0

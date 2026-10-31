@@ -77,6 +77,21 @@ A program with extern functions imports their modules, so it runs only
 where those modules exist: a module using `rune:fs` runs in Node.js, not in
 a browser.
 
+## Source maps
+
+With `--source-map`, `build` also writes a source map beside the module
+and ends the module with a `//# sourceMappingURL=` comment that points at
+it. Debuggers that read source maps (browser developer tools, Node.js's
+inspector, VS Code) then show the RuneScript source: each statement and
+function of the module maps to the line it came from, and breakpoints can
+be set in the `.rsc` file. The map names the source files relative to
+itself and also holds their text, so it works even where the sources
+aren't served. `runescript dev` always includes a map, inside the module.
+
+```sh
+runescript build --source-map -o dist/app.js app.rsc   # also writes dist/app.js.map
+```
+
 ## How strict typing survives the translation
 
 JavaScript has one number type and no static types, so RuneScript checks

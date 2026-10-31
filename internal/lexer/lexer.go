@@ -64,13 +64,12 @@ var keywords = map[string]bool{
 	"int8": true, "int16": true, "int32": true, "int64": true,
 	"uint8": true, "uint16": true, "uint32": true, "uint64": true,
 	"try": true, "catch": true, "finally": true, "throw": true, "new": true,
-	"extern": true, "struct": true,
+	"extern": true, "struct": true, "class": true, "this": true,
 }
 
 // reserved words named by the specification for features that are not yet
 // implemented. Reserving them now keeps today's programs valid later.
 var reserved = map[string]bool{
-	"class": true,
 	"array": true, "matrix": true,
 }
 

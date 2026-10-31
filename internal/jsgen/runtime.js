@@ -394,14 +394,26 @@ const $rt = (() => {
     return r;
   }
   // structEq is == on two structs of the same type, whose fields are all
-  // comparable: numbers (NaN equals nothing), strings, bools, chars, and
-  // structs.
+  // comparable: numbers (NaN equals nothing), strings, bools, chars,
+  // structs, and objects (by identity).
   function structEq(a, b) {
     for (const k in a) {
       const x = a[k], y = b[k];
-      if (typeof x === "object" ? !structEq(x, y) : x !== y) return false;
+      if (typeof x === "object" && !(x instanceof Obj) ? !structEq(x, y) : x !== y) return false;
     }
     return true;
+  }
+
+  // ---- classes (OQ-CLASS-01) ----
+  //
+  // An object is an instance of a JavaScript class the program defines
+  // for its RuneScript class, extending Obj, with one property per field.
+  // Objects are references, compared with ===. fupd is a compound field
+  // assignment (o.x += v): f computes the new value from the old one.
+
+  class Obj {}
+  function fupd(o, k, f) {
+    o[k] = f(o[k]);
   }
 
   // ---- calls ----
@@ -715,6 +727,27 @@ const $rt = (() => {
       branch = scope(holder);
       const frag = document.createDocumentFragment();
       if (i >= 0) within(branch, () => build(i, frag));
+      nodes = Array.from(frag.childNodes);
+      anchor.parentNode.insertBefore(frag, anchor);
+    });
+  }
+
+  // each is $foreach: items() returns the array, and build(x, frag) builds
+  // the nodes for element x. The list is rebuilt when a rune that items()
+  // read changes. As in for each, the length is read before every element.
+  function each(parent, items, build) {
+    const anchor = parent.appendChild(document.createComment(""));
+    const holder = owner;
+    let nodes = [], list = null;
+    bind(() => {
+      const a = items();
+      if (list) dispose(list);
+      for (const n of nodes) n.remove();
+      list = scope(holder);
+      const frag = document.createDocumentFragment();
+      within(list, () => {
+        for (let i = 0; i < a.length; i++) build(a[i], frag);
+      });
       nodes = Array.from(frag.childNodes);
       anchor.parentNode.insertBefore(frag, anchor);
     });
@@ -3484,13 +3517,13 @@ const $rt = (() => {
     addI, subI, mulI, divI, modI, addU, subU, mulU, divU, modU, arN, arW, ga, shift,
     f32str, cast, isNaN: Number.isNaN, isFinite: Number.isFinite,
     newError, thrown, caught, isA, fatal: () => fatal,
-    enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop, ainsert, aremove, aslice, aindex, areverse, asort, strLess, withField, structEq,
+    enter, leave, unwind, trace, native, RSError, run, aget, aset, aupd, apop, ainsert, aremove, aslice, aindex, areverse, asort, strLess, withField, structEq, Obj, fupd,
     //@section extern
     ext,
     //@end
     std,
     //@section dom
-    signal, el, text, attr, bindText, bindNode, bindAttr, on, when, renderApp,
+    signal, el, text, attr, bindText, bindNode, bindAttr, on, when, each, renderApp,
     //@end
   };
 })();

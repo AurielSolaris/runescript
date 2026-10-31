@@ -23,6 +23,9 @@ func (p *parser) templateStmt() *ast.TemplateStmt {
 	case lexer.MTagClose:
 		p.fail(diagnostics.ParseUnexpected, end.Span, "</%s> closes no open element", end.Text)
 	case lexer.MDirective:
+		if end.Text == "$endforeach" {
+			p.fail(diagnostics.ParseUnexpected, end.Span, "$endforeach without $foreach")
+		}
 		p.fail(diagnostics.ParseUnexpected, end.Span, "%s without $if", end.Text)
 	}
 	p.expect(lexer.RBrace, "'}' to close the template")
@@ -65,10 +68,14 @@ func (p *parser) markupNodes(svg bool) []ast.Markup {
 			end := p.expect(lexer.MInterpClose, "'}}' to close the interpolation")
 			nodes = append(nodes, &ast.MInterp{X: x, Span: span(t.Span, end.Span)})
 		case lexer.MDirective:
-			if t.Text != "$if" {
+			switch t.Text {
+			case "$if":
+				nodes = append(nodes, p.markupIf(svg))
+			case "$foreach":
+				nodes = append(nodes, p.markupForEach(svg))
+			default:
 				return nodes
 			}
-			nodes = append(nodes, p.markupIf(svg))
 		default:
 			return nodes
 		}
@@ -118,7 +125,7 @@ func (p *parser) element(svg bool) *ast.MElement {
 		}
 		p.failHelp(diagnostics.ParseUnexpected, end.Span, help, "</%s> does not close <%s>, opened at %s", end.Text, e.Name, open.Span.Start)
 	case end.Kind == lexer.MDirective:
-		p.fail(diagnostics.ParseUnexpected, end.Span, "%s inside <%s>, which its $if does not contain: close <%s> first", end.Text, e.Name, e.Name)
+		p.fail(diagnostics.ParseUnexpected, end.Span, "%s inside <%s>, which its %s does not contain: close <%s> first", end.Text, e.Name, opener(end.Text), e.Name)
 	default:
 		p.failHelp(diagnostics.ParseUnexpected, open.Span, "close it with </"+e.Name+">, or write <"+e.Name+" />",
 			"<%s> is not closed", e.Name)
@@ -168,6 +175,9 @@ func (p *parser) markupIf(svg bool) *ast.MIf {
 		if t.Kind != lexer.MDirective {
 			p.failHelp(diagnostics.ParseUnexpected, start.Span, "end it with $endif", "$if has no $endif")
 		}
+		if t.Text == "$endforeach" {
+			p.fail(diagnostics.ParseUnexpected, t.Span, "$endforeach inside an $if: end the $if with $endif first")
+		}
 		p.next()
 		switch t.Text {
 		case "$elseif":
@@ -189,6 +199,43 @@ func (p *parser) markupIf(svg bool) *ast.MIf {
 			p.fail(diagnostics.ParseUnexpected, t.Span, "unexpected $if") // unreachable: markupNodes parses it
 		}
 	}
+}
+
+// opener names the directive that a continuing or ending directive belongs to.
+func opener(d string) string {
+	if d == "$endforeach" {
+		return "$foreach"
+	}
+	return "$if"
+}
+
+// markupForEach parses `$foreach (T name in x) … $endforeach`, the header
+// written as in `for each`.
+func (p *parser) markupForEach(svg bool) *ast.MForEach {
+	start := p.next()
+	p.expect(lexer.LParen, "'(' after $foreach")
+	n := &ast.MForEach{Type: p.typeRef("the element type of $foreach")}
+	if t := p.tok(); t.Kind == lexer.Ident && t.Text == "in" && !(p.peekTok(1).Kind == lexer.Ident && p.peekTok(1).Text == "in") {
+		p.fail(diagnostics.ParseUnexpected, n.Type.Span, "expected a type and a variable name before 'in', e.g. $foreach (string s in names)")
+	}
+	n.Name = p.ident("a variable name after the element type")
+	if t := p.tok(); t.Kind != lexer.Ident || t.Text != "in" {
+		p.fail(diagnostics.ParseUnexpected, t.Span, "expected 'in' after the $foreach variable, found %s", t.Describe())
+	}
+	p.next()
+	n.X = p.expr()
+	p.expect(lexer.RParen, "')' after the array of $foreach")
+	n.Body = p.markupNodes(svg)
+	t := p.tok()
+	if t.Kind != lexer.MDirective {
+		p.failHelp(diagnostics.ParseUnexpected, start.Span, "end it with $endforeach", "$foreach has no $endforeach")
+	}
+	if t.Text != "$endforeach" {
+		p.fail(diagnostics.ParseUnexpected, t.Span, "%s inside $foreach, which has no matching $if: end the $foreach with $endforeach first", t.Text)
+	}
+	p.next()
+	n.Span = span(start.Span, t.Span)
+	return n
 }
 
 // normText applies the white-space rule: white space that contains a line

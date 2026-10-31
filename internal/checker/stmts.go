@@ -253,6 +253,8 @@ func zeroHelp(t *types.Type) string {
 		return "one of its fields has a type without a zero value; initialize it with a struct literal"
 	case types.Opaque:
 		return "initialize it with a value made by one of its package's functions"
+	case types.Class:
+		return fmt.Sprintf("there is no null: create an object, e.g. `= new %s(...);`", t.Name)
 	}
 	return "initialize it when declaring it"
 }

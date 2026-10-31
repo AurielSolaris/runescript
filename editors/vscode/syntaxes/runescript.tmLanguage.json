@@ -46,7 +46,7 @@
       }
     },
     "struct": {
-      "match": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "match": "\\b(struct|class)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
         "1": { "name": "storage.type.struct.runescript" },
         "2": { "name": "entity.name.type.struct.runescript" }
@@ -104,8 +104,9 @@
         { "name": "keyword.other.import.runescript", "match": "\\b(use|as)\\b" },
         { "name": "storage.modifier.runescript", "match": "\\b(public|protected|private|extern)\\b" },
         { "name": "keyword.operator.new.runescript", "match": "\\bnew\\b" },
+        { "name": "variable.language.this.runescript", "match": "\\bthis\\b" },
         { "name": "keyword.other.template.runescript", "match": "\\btemplate(?=\\s*\\{)" },
-        { "name": "invalid.deprecated.reserved.runescript", "match": "\\b(class|array)\\b" },
+        { "name": "invalid.deprecated.reserved.runescript", "match": "\\barray\\b" },
         { "name": "keyword.other.package.runescript", "match": "\\bpackage\\b" }
       ]
     },

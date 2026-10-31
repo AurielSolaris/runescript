@@ -12,8 +12,8 @@ language tag, `lang="he"`, which browsers and screen readers expect.)
 | বাংলা (Bengali) | [`bn/`](bn/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
 | עברית (Hebrew) | [`heb/`](heb/README.md) | README, the guide (`docs/guide/`) | AI, checked by hand by the author |
 
-**Status:** the README, the guide index, and all 23 chapters are translated
-in both languages.
+**Status:** the README, the guide index, and chapters 1 to 23 are
+translated in both languages. Chapter 24 (classes) is English only so far.
 
 **Help is appreciated.** If you speak one of these languages, corrections
 and better wording are very welcome; so are new languages. Open an issue or

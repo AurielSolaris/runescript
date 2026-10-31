@@ -64,6 +64,9 @@ protected int main() {
   targets ([guide](docs/guide/18-numbers.md))
 - Structs: value types built with `Point{x: 1, y: 2}`, copied on
   assignment, compared field by field ([guide](docs/guide/19-structs.md))
+- Classes: fields, methods, one constructor, and `this`; objects are
+  created with `new`, shared by reference, and compared by identity. No
+  inheritance yet ([guide](docs/guide/24-classes.md))
 - Text and lists for scripting: `+` and `$"{count} files"` for strings,
   `char`, and `Array<T>` with bounds-checked indexing, nested arrays,
   `for each (T x in a)` loops, slicing, searching, and stable sorting
@@ -93,10 +96,11 @@ protected int main() {
   ([guide](docs/guide/22-csv-matrix-semver.md))
 - Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
   in browsers and Node.js and behaves exactly like the interpreter for every
-  program the interpreter can run ([guide](docs/guide/11-javascript.md))
+  program the interpreter can run, with optional source maps
+  (`--source-map`) ([guide](docs/guide/11-javascript.md))
 - Web pages with `rune:dom`: components with HTML and SVG templates whose
   every element and attribute is checked at compile time, escaped `{{ }}`
-  text, `$if`/`$elseif`/`$else`, events, and runes (signals) that update
+  text, `$if`/`$elseif`/`$else`, `$foreach`, events, and runes (signals) that update
   exactly what read them, with no virtual DOM
   ([guide](docs/guide/15-web-pages.md), [examples](examples/web/))
 - Calling JavaScript through `extern` declarations, including the
@@ -119,10 +123,10 @@ TypeScript, which trusts its declarations and erases them, RuneScript
 checks every value that crosses in from JavaScript, and it has no `any`, no
 implicit conversions, and no unchecked casts.
 
-**Not yet implemented:** classes, `go:`
-packages, `std:symrs`, objects, arrays, structs, and callbacks across the
-JavaScript boundary, `$foreach` and component tags in templates, and the
-planned native graphics package. See the [roadmap](docs/ROADMAP.md).
+**Not yet implemented:** class inheritance, interfaces, and `static`
+members, `go:` packages, `std:symrs`, objects, arrays, structs, and
+callbacks across the JavaScript boundary, component tags in templates, and
+the planned native graphics package. See the [roadmap](docs/ROADMAP.md).
 
 ## Install
 
@@ -255,6 +259,7 @@ test suite; the web examples run on a fake DOM under Node.js.
 - [No null, no any, no generics](docs/guide/17-no-null-any-generics.md)
 - [Numbers in depth: widths, literals, bits, std:math](docs/guide/18-numbers.md)
 - [Structs](docs/guide/19-structs.md)
+- [Classes](docs/guide/24-classes.md)
 - [Files, input, and output: std:io, std:process, std:fs, std:path](docs/guide/20-files-and-input.md)
 - [JSON: std:json](docs/guide/21-json.md)
 - [CSV, matrices, and versions: std:csv, std:matrix, std:semver](docs/guide/22-csv-matrix-semver.md)

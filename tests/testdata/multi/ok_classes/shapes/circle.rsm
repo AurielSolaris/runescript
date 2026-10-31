@@ -1,0 +1,21 @@
+package shapes;
+
+public class Circle {
+    public int radius;
+    private int scaled = 0; // private to this file
+    protected int resized = 0; // visible in package shapes
+
+    public Circle(int radius) {
+        this.radius = radius;
+    }
+
+    public int area() {
+        return 3 * this.radius * this.radius;
+    }
+
+    protected void scale(int by) {
+        this.radius *= by;
+        this.scaled += 1;
+        this.resized += 1;
+    }
+}

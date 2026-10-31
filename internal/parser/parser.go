@@ -135,6 +135,10 @@ func (p *parser) file() *ast.File {
 			f.Structs = append(f.Structs, p.structDecl())
 			continue
 		}
+		if p.isClassDecl() {
+			f.Classes = append(f.Classes, p.classDecl())
+			continue
+		}
 		f.Funcs = append(f.Funcs, p.funcDecl())
 	}
 	return f
@@ -182,6 +186,102 @@ func (p *parser) structDecl() *ast.StructDecl {
 	end := p.next()
 	d.Span = span(start, end.Span)
 	return d
+}
+
+// isClassDecl reports whether a class declaration starts here:
+// `visibility class`, or `class` without the required modifier.
+func (p *parser) isClassDecl() bool {
+	if p.isKeyword("class") {
+		return true
+	}
+	_, vis := visibilities[p.tok().Text]
+	t := p.peekTok(1)
+	return vis && p.tok().Kind == lexer.Keyword && t.Kind == lexer.Keyword && t.Text == "class"
+}
+
+// classDecl parses `visibility class Name { members }` (OQ-CLASS-01).
+// Every member starts with an access modifier: a field `Type name;` or
+// `Type name = init;`, a method `Type name(params) { … }`, or the
+// constructor `Name(params) { … }`.
+func (p *parser) classDecl() *ast.ClassDecl {
+	start := p.tok().Span
+	d := &ast.ClassDecl{}
+	if p.isKeyword("class") {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span,
+			"write `public|private|protected class Name { ... }`, e.g. `public class Point { public int x; }`",
+			"a class declaration needs an access modifier")
+	}
+	d.Visibility = visibilities[p.next().Text]
+	p.expectKeyword("class")
+	d.Name = p.ident("class name")
+	p.noTypeParams()
+	if t := p.tok(); t.Kind == lexer.Ident && (t.Text == "extends" || t.Text == "implements") {
+		p.failHelp(diagnostics.ParseNotImplemented, t.Span, "inheritance and interfaces are not designed yet",
+			"'%s' is not supported", t.Text)
+	}
+	p.expect(lexer.LBrace, "'{' to begin the class's members")
+	for !p.is(lexer.RBrace, "") {
+		if p.is(lexer.EOF, "") {
+			p.unexpected("'}' to end the class")
+		}
+		p.member(d)
+	}
+	end := p.next()
+	d.Span = span(start, end.Span)
+	return d
+}
+
+// member parses one member of class d and adds it to d.
+func (p *parser) member(d *ast.ClassDecl) {
+	t := p.tok()
+	start := t.Span
+	switch {
+	case p.isClassDecl(), p.isStructDecl():
+		p.failHelp(diagnostics.ParseUnexpected, t.Span, "declare it at the top level of the file, beside this class",
+			"nested type declarations are not supported")
+	case t.Kind == lexer.Ident && (t.Text == "static" || t.Text == "override" || t.Text == "final" || t.Text == "abstract"):
+		p.failHelp(diagnostics.ParseNotImplemented, t.Span, "classes have instance fields, methods, and one constructor for now",
+			"'%s' members are not supported", t.Text)
+	case t.Kind == lexer.Ident && t.Text == "function":
+		p.failHelp(diagnostics.ParseUnexpected, t.Span,
+			"write a method as `public|private|protected <return type> <name>(...) { ... }`",
+			"RuneScript does not use the 'function' keyword")
+	}
+	vis, ok := visibilities[t.Text]
+	if !ok || t.Kind != lexer.Keyword {
+		p.failHelp(diagnostics.ParseUnexpected, t.Span,
+			"write `public|private|protected` first, e.g. `public int x;` or `public void move() { ... }`",
+			"a class member needs an access modifier, found %s", t.Describe())
+	}
+	p.next()
+	if _, again := visibilities[p.tok().Text]; again && p.tok().Kind == lexer.Keyword {
+		p.fail(diagnostics.ParseUnexpected, p.tok().Span, "multiple access modifiers")
+	}
+	if p.isKeyword("class") || p.isKeyword("struct") {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span, "declare it at the top level of the file, beside this class",
+			"nested type declarations are not supported")
+	}
+	if n := p.tok(); n.Kind == lexer.Ident && n.Text == d.Name.Name && p.peekTok(1).Kind == lexer.LParen {
+		name := p.ident("constructor name")
+		fn := &ast.FuncDecl{Visibility: vis, Name: name, Result: &ast.TypeRef{Name: "void", Span: name.Span}}
+		d.Ctors = append(d.Ctors, p.funcRest(fn, start, false))
+		return
+	}
+	typ := p.typeRef("member type")
+	name := p.ident("member name")
+	if p.is(lexer.LParen, "") {
+		fn := &ast.FuncDecl{Visibility: vis, Result: typ, Name: name}
+		d.Methods = append(d.Methods, p.funcRest(fn, start, false))
+		return
+	}
+	f := &ast.MemberField{Visibility: vis, Type: typ, Name: name}
+	if p.is(lexer.Assign, "") {
+		p.next()
+		f.Init = p.expr()
+	}
+	end := p.expect(lexer.Semicolon, "';' after the field")
+	f.Span = span(start, end.Span)
+	d.Fields = append(d.Fields, f)
 }
 
 // externDecl parses `extern "module" Type name(Type p, ...);`.
@@ -295,6 +395,13 @@ func (p *parser) funcDecl() *ast.FuncDecl {
 	}
 	fn.Result = p.typeRef("return type")
 	fn.Name = p.ident("function name")
+	return p.funcRest(fn, start, true)
+}
+
+// funcRest parses the parameters and the body of a function whose
+// modifier, result type, and name have been parsed; with allowProto, a
+// ';' instead of the body makes it a prototype.
+func (p *parser) funcRest(fn *ast.FuncDecl, start diagnostics.Span, allowProto bool) *ast.FuncDecl {
 	p.noTypeParams()
 	p.expect(lexer.LParen, "'(' after function name")
 	if !p.is(lexer.RParen, "") {
@@ -311,6 +418,10 @@ func (p *parser) funcDecl() *ast.FuncDecl {
 		}
 	}
 	p.expect(lexer.RParen, "')' after parameters")
+	if p.is(lexer.Semicolon, "") && !allowProto {
+		p.failHelp(diagnostics.ParseUnexpected, p.tok().Span, "give the method its body: { … }",
+			"methods have no prototypes")
+	}
 	if p.is(lexer.Semicolon, "") {
 		end := p.next()
 		fn.Span = span(start, end.Span)
@@ -585,6 +696,9 @@ func (p *parser) stmt() ast.Stmt {
 	case t.Kind == lexer.Keyword && visibilities[t.Text] != ast.VisNone && p.isStructDecl():
 		p.failHelp(diagnostics.ParseUnexpected, t.Span, "declare structs at the top level of the file, outside any function",
 			"struct declarations are not allowed inside a function")
+	case p.isClassDecl():
+		p.failHelp(diagnostics.ParseUnexpected, t.Span, "declare classes at the top level of the file, outside any function",
+			"class declarations are not allowed inside a function")
 	case t.Kind == lexer.Keyword && visibilities[t.Text] != ast.VisNone:
 		return p.funcDecl() // nested function or prototype
 	}
@@ -639,7 +753,7 @@ func (p *parser) simpleStmt(allowDecl bool) ast.Stmt {
 		init := p.expr()
 		return &ast.VarDecl{Type: typ, Name: name, Init: init, Span: span(typ.Span, init.NodeSpan())}
 	}
-	if p.isQualifiedStart() || t.Kind == lexer.LParen {
+	if p.isQualifiedStart() || t.Kind == lexer.LParen || (t.Kind == lexer.Keyword && (t.Text == "this" || t.Text == "new")) {
 		return p.exprOrSet()
 	}
 	if t.Kind != lexer.Ident {
@@ -961,16 +1075,25 @@ func (p *parser) primary() ast.Expr {
 			p.next()
 			return &ast.BoolLit{Value: t.Text == "true", Span: t.Span}
 		}
+		if t.Text == "this" {
+			p.next()
+			return &ast.ThisExpr{Span: t.Span}
+		}
 		if t.Text == "new" {
 			p.next()
 			// A built-in type keyword is accepted here so that the checker
-			// can explain that only error types can be created.
+			// can explain which types can be created.
 			nt := p.tok()
 			if nt.Kind != lexer.Ident && !(nt.Kind == lexer.Keyword && typeKeywords[nt.Text]) {
 				p.unexpected("type name after 'new'")
 			}
 			p.next()
 			typ := &ast.TypeRef{Name: nt.Text, Span: nt.Span}
+			if nt.Kind == lexer.Ident && p.is(lexer.Dot, "") { // new geom.Point(…)
+				p.next()
+				name := p.ident("class name after '" + nt.Text + ".'")
+				typ = &ast.TypeRef{Pkg: &ast.Ident{Name: nt.Text, Span: nt.Span}, Name: name.Name, Span: span(nt.Span, name.Span)}
+			}
 			call := p.callArgs(nil)
 			return &ast.NewExpr{Type: typ, Args: call.Args, Span: diagnostics.Span{Start: t.Span.Start, End: call.Span.End}}
 		}

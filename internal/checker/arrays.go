@@ -198,25 +198,32 @@ func (c *checker) arrayMethod(e *ast.CallExpr, name *ast.Ident, t *types.Type) *
 // forEach checks `for each (T x in a) { }`. a must be an array whose
 // elements can be assigned to T; x is a new variable of the loop body.
 func (c *checker) forEach(s *ast.ForEachStmt) {
-	at := c.defaulted(s.X).typ
-	t := c.resolveType(s.Type)
+	t := c.eachHeader("for each", s.Type, s.Name, s.X)
+	c.push(false)
+	c.declareVar(s.Name, t, false)
+	c.loopBody(s.Body)
+	c.pop()
+}
+
+// eachHeader checks the header `T name in x` of a for-each loop or a
+// template $foreach and returns the loop variable's type.
+func (c *checker) eachHeader(what string, typ *ast.TypeRef, name *ast.Ident, x ast.Expr) *types.Type {
+	at := c.defaulted(x).typ
+	t := c.resolveType(typ)
 	if t.Kind == types.Void {
-		c.errorf(diagnostics.TypeVoidValue, s.Type.Span, "variable '%s' cannot have type 'void'", s.Name.Name)
+		c.errorf(diagnostics.TypeVoidValue, typ.Span, "variable '%s' cannot have type 'void'", name.Name)
 		t = types.InvalidT
 	}
 	switch {
 	case at.Kind == types.Invalid || t.Kind == types.Invalid:
 	case at.Kind != types.Array:
-		d := c.errorf(diagnostics.TypeMismatch, s.X.NodeSpan(), "for each needs an array, found '%s'", describe(at))
+		d := c.errorf(diagnostics.TypeMismatch, x.NodeSpan(), "%s needs an array, found '%s'", what, describe(at))
 		if at.Kind == types.String {
 			d.WithHelp("split the string first, e.g. string.split(s, \"\")")
 		}
 	case !types.IsSubtype(at.Elem, t):
-		c.errorf(diagnostics.TypeMismatch, s.Type.Span, "the elements of '%s' have type '%s', not '%s'", at, at.Elem, t).
-			WithHelp(fmt.Sprintf("declare the loop variable as %s %s", at.Elem, s.Name.Name))
+		c.errorf(diagnostics.TypeMismatch, typ.Span, "the elements of '%s' have type '%s', not '%s'", at, at.Elem, t).
+			WithHelp(fmt.Sprintf("declare the loop variable as %s %s", at.Elem, name.Name))
 	}
-	c.push(false)
-	c.declareVar(s.Name, t, false)
-	c.loopBody(s.Body)
-	c.pop()
+	return t
 }

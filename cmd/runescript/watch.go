@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	goruntime "runtime"
 	"strconv"
+	"strings"
 
 	"github.com/AurielSolaris/runescript/internal/devserver"
 	"github.com/AurielSolaris/runescript/internal/diagnostics"
@@ -80,7 +81,14 @@ func dev(args []string, stderr io.Writer) int {
 		p.Report = func(ws []*diagnostics.Diagnostic) { b.Warnings = ws }
 		in.Warnings = p
 		in.Files = func(paths []string) { b.Files = paths }
-		b.JS, b.Errors, b.Err = driver.BuildJSInput(in, jsgen.Options{Version: Version})
+		// An inline source map lets the browser's developer tools show
+		// the RuneScript source. The module is served from the entry
+		// file's folder, so the map names sources relative to it.
+		opts := jsgen.Options{Version: Version, SourceMap: true, File: strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)) + ".js",
+			SourcePath: mapSourcePath(in.Dir, filepath.Dir(path))}
+		var out jsgen.Output
+		out, b.Errors, b.Err = driver.BuildJSMapInput(in, opts)
+		b.JS = out.JS
 		return b
 	}
 	s := devserver.New(path, build, stderr)

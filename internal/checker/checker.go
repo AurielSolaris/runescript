@@ -85,6 +85,11 @@ type Info struct {
 	// go-to-definition); the back ends do not.
 	VarRefs map[*ast.Ident]*ast.Ident
 	Structs map[*types.Type]*StructSym
+
+	// Classes maps each class type to its declaration, and MethodCalls
+	// maps calls on an object, x.name(args), to what they call.
+	Classes     map[*types.Type]*ClassSym
+	MethodCalls map[*ast.CallExpr]*MethodCall
 }
 
 // FuncSym is a named function: top-level or nested, possibly declared by a
@@ -95,9 +100,11 @@ type FuncSym struct {
 	Def   *ast.FuncDecl // nil until the definition is seen
 	Proto *ast.FuncDecl // the prototype, if any
 	// For top-level functions, the file and package declaring them; nil
-	// for nested functions.
+	// for nested functions. Methods and constructors have them too.
 	File *loader.File
 	Pkg  *loader.Package
+	// Class is the class of a method or constructor, or nil.
+	Class *ClassSym
 }
 
 // TopLevel reports whether f is a top-level function.
@@ -114,6 +121,7 @@ type symbol struct {
 	fn      *FuncSym   // non-nil for named functions
 	ext     *ExternSym // non-nil for extern functions (typ is their type)
 	st      *StructSym // non-nil for struct types (typ is the struct type)
+	cl      *ClassSym  // non-nil for class types (typ is the class type)
 	decl    *ast.Ident // where a variable or parameter is declared
 	read    bool       // the variable's value is used somewhere
 	written bool       // the variable is assigned after its declaration
@@ -132,6 +140,7 @@ type checker struct {
 	// structs are the declared structs, in declaration order; fileQuals
 	// and fileBroken are each file's use qualifiers, bound once.
 	structs    []*StructSym
+	classes    []*ClassSym
 	fileQuals  map[*loader.File]map[string]*binding
 	fileBroken map[*loader.File]bool
 	info       *Info
@@ -154,6 +163,10 @@ type checker struct {
 	result       *types.Type // nil while inferring a lambda's result type
 	loopDepth    int
 	lastTemplate *ast.TemplateStmt // the template that may end this function's body
+	// this is the class of the method or constructor being checked, or
+	// nil; thisHidden is set inside a nested function or lambda of one.
+	this       *ClassSym
+	thisHidden bool
 }
 
 // operand is the checked form of an expression.
@@ -198,6 +211,8 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 			TypeRefs:    map[*ast.TypeRef]*types.Type{},
 			VarRefs:     map[*ast.Ident]*ast.Ident{},
 			Structs:     map[*types.Type]*StructSym{},
+			Classes:     map[*types.Type]*ClassSym{},
+			MethodCalls: map[*ast.CallExpr]*MethodCall{},
 
 			TemplateElems: map[*ast.MElement]*dom.Element{},
 			TemplateAttrs: map[*ast.MAttr]*dom.Attr{},
@@ -230,8 +245,12 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 		for _, d := range f.AST.Structs {
 			c.declareStruct(d)
 		}
+		for _, d := range f.AST.Classes {
+			c.declareClass(d)
+		}
 	}
 	c.structFields()
+	c.classMembers()
 	sigs := map[*ast.FuncDecl]*types.Type{}
 	for _, f := range prog.Files {
 		c.enterFile(f)
@@ -250,6 +269,7 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 				c.funcBody(fn, sigs[fn])
 			}
 		}
+		c.classBodies()
 		c.reportUnusedUses()
 	}
 	for _, f := range prog.Files {
@@ -435,7 +455,7 @@ func (c *checker) shadows(id *ast.Ident) bool {
 		return false
 	}
 	prev, crossed := c.lookup(id.Name)
-	if prev == nil || crossed || prev.decl == nil || prev.fn != nil || prev.ext != nil || prev.st != nil {
+	if prev == nil || crossed || prev.decl == nil || prev.fn != nil || prev.ext != nil || prev.st != nil || prev.cl != nil {
 		return false
 	}
 	what := "variable"
@@ -613,6 +633,8 @@ func (c *checker) declareIn(s *scope, fn *ast.FuncDecl, topLevel bool) *types.Ty
 				WithHelp("functions cannot be overloaded; a prototype may appear once, before the definition")
 		case existing.st != nil:
 			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "'%s' is already declared as a struct", name)
+		case existing.cl != nil:
+			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "'%s' is already declared as a class", name)
 		default:
 			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "'%s' is already declared in this function", name)
 		}
@@ -659,9 +681,12 @@ func (c *checker) funcBody(fn *ast.FuncDecl, t *types.Type) {
 // saveFuncState saves the per-function state and returns a function that
 // restores it, for checking nested functions and lambdas.
 func (c *checker) saveFuncState() func() {
-	name, result, loops, tmpl := c.fnName, c.result, c.loopDepth, c.lastTemplate
+	name, result, loops, tmpl, this, hidden := c.fnName, c.result, c.loopDepth, c.lastTemplate, c.this, c.thisHidden
 	c.loopDepth, c.lastTemplate = 0, nil
-	return func() { c.fnName, c.result, c.loopDepth, c.lastTemplate = name, result, loops, tmpl }
+	c.this, c.thisHidden = nil, this != nil || hidden // functions do not capture `this`
+	return func() {
+		c.fnName, c.result, c.loopDepth, c.lastTemplate, c.this, c.thisHidden = name, result, loops, tmpl, this, hidden
+	}
 }
 
 // checkReturns reports a non-void body that can finish without returning.

@@ -13,21 +13,22 @@ set cpo&vim
 syn keyword runescriptConditional if else
 syn keyword runescriptRepeat      while for each in
 syn keyword runescriptStatement   return break continue throw new
+syn keyword runescriptThis        this
 syn keyword runescriptException   try catch finally
 syn keyword runescriptInclude     package use as
 syn keyword runescriptStorage     public protected private extern
-syn keyword runescriptStructure   struct
+syn keyword runescriptStructure   struct class
 syn keyword runescriptType        int sint uint int8 int16 int32 int64 uint8 uint16 uint32 uint64
 syn keyword runescriptType        float float32 float64 bool string char void
 syn keyword runescriptType        Array Signal Element Error RangeError TypeError ArgumentError
 syn keyword runescriptBoolean     true false
 syn keyword runescriptConstant    NaN Infinity
 syn keyword runescriptBuiltin     trace isNaN isFinite
-syn keyword runescriptReserved    class array
+syn keyword runescriptReserved    array
 syn match   runescriptTemplate    "\<template\ze\s*{"
 
 syn match   runescriptFunction    "\<\h\w*\ze\s*("
-syn match   runescriptStructName  "\(\<struct\s\+\)\@<=\h\w*"
+syn match   runescriptStructName  "\(\<\(struct\|class\)\s\+\)\@<=\h\w*"
 
 syn match   runescriptNumber      "\<0x[0-9A-Fa-f_]\+\>"
 syn match   runescriptNumber      "\<0b[01_]\+\>"
@@ -54,6 +55,7 @@ hi def link runescriptException   Exception
 hi def link runescriptInclude     Include
 hi def link runescriptStorage     StorageClass
 hi def link runescriptStructure   Structure
+hi def link runescriptThis        Special
 hi def link runescriptType        Type
 hi def link runescriptBoolean     Boolean
 hi def link runescriptConstant    Constant
