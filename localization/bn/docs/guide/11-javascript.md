@@ -4,6 +4,34 @@
 
 # ১১. JavaScript-এ কম্পাইল
 
+## একাধিক পেজের সাইট বিল্ড
+
+`runescript build --target web` প্রতিটি HTML পেজের জন্য আলাদা RuneScript
+এন্ট্রি থেকে একটি স্ট্যাটিক সাইট তৈরি করে। একই রানটাইম দরকার হলে পেজগুলো
+একটি JavaScript মডিউল ভাগ করে। `public/`-এ HTML ও অ্যাসেট রাখুন। প্রতিটি
+পেজের হেডে একটি `<!-- runescript -->` মার্কার দিন এবং প্রজেক্টের রুটে
+`runescript.web.json`-এ এন্ট্রিগুলো লিখুন।
+
+```json
+{
+  "pages": {
+    "index.html": "home.rsc",
+    "about/index.html": "about.rsc"
+  }
+}
+```
+
+```sh
+runescript build --target web --source-map --extract-css -o site-dist examples/multi-page
+python -m http.server --bind 127.0.0.1 --directory site-dist 8000
+```
+
+`--extract-css` টেমপ্লেটের সাধারণ স্ট্যাটিক `style` অ্যাট্রিবিউট থেকে
+আলাদা CSS ফাইল তৈরি করে। ডায়নামিক বাইন্ডিং ও জটিল CSS ইনলাইন থাকে।
+পেজের জন্য ইনলাইন স্টাইলের অগ্রাধিকার দরকার হলে অপশনটি বাদ দিন।
+
+## একটি JavaScript মডিউল বিল্ড
+
 `runescript build` একটি প্রোগ্রামকে এমন একটি JavaScript মডিউলে কম্পাইল করে, যা
 ব্রাউজারে বা Node.js-এ চলে। প্রোগ্রামটি RuneScript-এর নিয়মগুলো বজায় রাখে: টাইপ
 চেকার যা প্রত্যাখ্যান করে তা এখনো প্রত্যাখ্যাত, আর ইন্টারপ্রেটারে যা রানটাইম এরর
@@ -16,7 +44,7 @@ runescript build -o web/app.js examples/hello.rsc # choose the output file
 node examples/fizzbuzz.js a b                     # runs it with arguments; main's result is the exit code
 ```
 
-`--target js` হলো ডিফল্ট, এবং আপাতত একমাত্র টার্গেট। কয়েকটি ফাইলের একটি প্রোগ্রাম
+`--target js` হলো ডিফল্ট। কয়েকটি ফাইলের একটি প্রোগ্রাম
 (দেখুন [প্যাকেজ ও ফাইল](12-packages-and-files.md)) একটি মডিউলে পরিণত হয়, আর
 রানটাইম এরর জানায় কোন ফাইলে সেটি ঘটেছে।
 

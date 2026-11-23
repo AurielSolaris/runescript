@@ -60,6 +60,12 @@ go run ./cmd/runescript dev examples/web/counter/app.rsc
 Node.js, clicks what its `// click:` comments name, and compares the HTML
 with `tests/testdata/web/<name>.out`.
 
+## Multi-page site
+
+[`multi-page/`](multi-page/) contains two HTML pages with independent
+RuneScript entry points. They share a runtime module and can share
+extracted CSS. [Web build guide](../docs/guide/11-javascript.md#build-a-multi-page-site)
+
 ## Native games
 
 The graphics-enabled CLI runs these examples in a desktop window.

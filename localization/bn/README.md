@@ -21,10 +21,9 @@ RuneScript ActionScript-এর পরিচয় ধরে রাখে (`packa
 সেমিকোলন বাধ্যতামূলক। এর টাইপ-চেকিং কঠোর: কোনো কিছুই নিজে থেকে `any` হয় না,
 আর সাইনড ও আনসাইনড পূর্ণসংখ্যা কখনো নিঃশব্দে মিশে যায় না।
 
-এটি একটি স্বতন্ত্র প্রোগ্রাম হিসেবে চলে: ব্রাউজার, HTML বা Flash Player লাগে না।
-ওয়েবের জন্য এটি একটি JavaScript মডিউলেও কম্পাইল হতে পারে, একই কঠোর টাইপিং
-এবং একই রানটাইম এরর সহ। এটি ActionScript 3-এর সঙ্গে সোর্স-সামঞ্জস্যপূর্ণ
-**নয়**।
+RuneScript একটি স্বতন্ত্র CLI থেকে চলে, JavaScript মডিউল তৈরি করতে পারে,
+এবং একাধিক পেজের স্ট্যাটিক সাইট বিল্ড করতে পারে। raylib গ্রাফিক্স ডেস্কটপে
+চলে এবং WebAssembly দিয়ে ব্রাউজারে চলে।
 
 ```actionscript
 package main;
@@ -144,6 +143,8 @@ go build -o runescript ./cmd/runescript
 ./runescript check examples/signedness_error.rsc   # shows a compile-time error
 ./runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
+./runescript build --target web --extract-css -o site-dist examples/multi-page
+./runescript build --target wasm -o game-web examples/native/keep-up.rsc
 ./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
 ./runescript run --watch examples/hello.rsc         # runs it again on every save
 ./runescript run examples/brainfuck.rsc examples/bf/hello.bf   # arguments follow the file
@@ -180,53 +181,11 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 
 ## বেঞ্চমার্ক
 
-[`bench/`](../../bench/README.md) RuneScript-কে **TypeScript 1.0 RC**-এর সঙ্গে তুলনা
-করে (npm-এর `typescript@0.9.7`, যা `bench/`-এ `npm install` চালালে স্থানীয়ভাবে
-ইনস্টল হয়)। প্রতিটি প্রোগ্রাম তিনভাবে চলে: ইন্টারপ্রেটারে (RS-VM), JavaScript-এ
-কম্পাইল করে (RS-JS), এবং একই অ্যালগরিদম TypeScript-এ লিখে (TS)। RS-VM ছাড়া
-তিনটিই Node.js-এ চলে। প্রতিটি বেঞ্চমার্ক একটি স্বয়ংসম্পূর্ণ ডিরেক্টরি। একটি
-বিভাগ চালাতে `go run ./bench/rsbench run`, `size`, `compile` বা `diag` ব্যবহার
-করুন, আর সঠিকতা যাচাই করুন `go run ./bench/rsbench verify` দিয়ে।
-
-প্রথম ফলাফল, ২০২৬-১০-২০ (v0.6.0-dev, Windows 10 x64, Node 24.16, ছোট ইনপুট,
-৫ বার চালানোর মধ্যমা)। এগুলো প্রাথমিক সংখ্যা। ছোট ইনপুটে ইন্টারপ্রেটারের রান ছোট
-থাকে, তাই TypeScript-এর কয়েকটি সময় Node-এর চালু হওয়ার সময়ের চেয়ে মাত্র কয়েক
-মিলিসেকেন্ড বেশি।
-
-| | RS-VM | RS-JS | TS |
-|---|---:|---:|---:|
-| থ্রি-বডি সিমুলেশন, ১ লাখ ধাপ (নিট ms) | ১২৭৬ | ৬৫ | ৮ |
-| মার্জ সর্ট, ৫০ হাজার পূর্ণসংখ্যা (নিট ms) | ১০৪০ | ৬৬ | ২৩ |
-| ম্যাট্রিক্স গুণ, ৬৪×৬৪ float64 (নিট ms) | ১৭২ | ২৮ | ৮ |
-| রিকার্সিভ ফিবোনাচি, n = ২৪ (নিট ms) | ১১৫ | ১০ | ৫ |
-| ২০ হাজার এরর থ্রো ও ক্যাচ (নিট ms) | ৯৭ | ৩৯ | ১৮২ |
-| খালি প্রোগ্রাম, মিনিফাই + gzip (বাইট) | – | ৪,৮২৩ | ২০ |
-| ২,০০০ ফাংশনের একটি ফাইল কম্পাইল (ms) | – | ১৭১ | ১,৪৬৪ |
-
-- **সঠিকতা।** প্রতিটি বেঞ্চমার্ক তিনটি বাস্তবায়নেই একই আউটপুট দেয়। তিনটি
-  কনফরম্যান্স প্রোগ্রাম ইচ্ছে করেই TypeScript থেকে আলাদা: ওভারফ্লো, float32
-  প্রিন্ট করা, এবং স্ট্রিংয়ের একক (বাইট বনাম UTF-16)। প্রতিটি পার্থক্য সেই
-  প্রোগ্রামের নোটে লেখা ও ব্যাখ্যা করা আছে।
-- **গতি।** RuneScript-এর তৈরি JavaScript সাধারণ TypeScript-এর চেয়ে ধীর, পুরো
-  সংগ্রহ জুড়ে ১.২× থেকে ২৫×। এর বেশিরভাগই যাচাই-করা পূর্ণসংখ্যা গণিতের দাম। একই
-  int32 যাচাই সহ একটি TypeScript সংস্করণ (`ts-checked`) যোগের বেঞ্চমার্কে
-  ব্যবধানের বেশিরভাগটা মিটিয়ে দেয়। RuneScript শুধু সেখানেই দ্রুত ছিল যেখানে
-  TypeScript-কে হাতে যাচাই করতে হয়: এরর থ্রো ও ক্যাচ করা (৪.৬×)। ইন্টারপ্রেটার
-  RS-JS-এর চেয়ে ২.৫× থেকে ৩৩× ধীর, শুধু JSON ছাড়া, যেখানে সেটি দ্রুত: এর
-  `std:json` নেটিভ Go কোড।
-- **আকার।** প্রতিটি RuneScript মডিউল প্রায় ৪.৮ KB (মিনিফাই + gzip) রানটাইম বহন
-  করে। `std:math` ব্যবহার করলে আরও প্রায় ৬ KB যোগ হয়, এমনকি শুধু `math.sqrt`-এর
-  জন্যও। তাই আকার কমানোর মূল লক্ষ্য রানটাইম।
-- **কম্পাইলার।** তৈরি করা প্রজেক্টগুলোতে `runescript build` TypeScript 1.0-এর
-  `tsc`-এর চেয়ে ৯× থেকে ৫১× দ্রুত ছিল। আধুনিক Node-এ `tsc` চালু হতেই প্রায় এক
-  সেকেন্ড নেয়।
-- **ডায়াগনস্টিক।** জোড়ায় লেখা ছয়টি ভুলে দুটি কম্পাইলারই প্রথম এররটি সঠিক লাইনে
-  দেখায়। RuneScript-এর signed থেকে unsigned যাচাইয়ের কোনো সমতুল্য TypeScript-এ
-  নেই।
-
-পদ্ধতি, পূর্ণ সারণি, এবং নতুন বেঞ্চমার্ক যোগ করার নিয়ম আছে
-[`bench/README.md`](../../bench/README.md)-এ। বেঞ্চমার্কের ফলাফল শুধু এখানেই
-প্রকাশ করা হয়, ওয়েবসাইটে নয়।
+[`bench/`](../../bench/README.md)-এ RuneScript-এর Go ইঞ্জিন ও তৈরি JavaScript-এর
+সঙ্গে TypeScript 1.0 RC-এর তুলনা আছে। সঠিকতা যাচাই করতে
+`go run ./bench/rsbench verify` চালান। দুই পৃষ্ঠার ওয়েব বিল্ডের আকার ও DOM-এ
+মাউন্ট করার সময় হাতে লেখা JavaScript-এর সঙ্গে তুলনা করতে
+`go run ./bench/rsbench web` চালান। সর্বশেষ ফলাফল [মূল README-তে](../../README.md#benchmarks)।
 
 ## উদাহরণ
 
@@ -257,35 +216,40 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 ## রিপোজিটরির গঠন
 
 ```text
-cmd/runescript/        CLI (run, check, build, dev, version)
-internal/lexer/        tokens and source positions
-internal/parser/       recursive-descent parser → AST
-internal/ast/          syntax tree
-internal/types/        semantic types
-internal/srcenc/       reads source files (UTF-8; UTF-16 and UTF-32 are converted)
-internal/loader/       loads a program's files and resolves uses
-internal/checker/      name resolution, type checking, and warnings
-internal/runtime/      tree-walking interpreter
-internal/conv/         number and string conversions shared by both targets
-internal/ir/           typed intermediate representation and its verifier
-internal/jsgen/        JavaScript code generator and its inlined runtime
-internal/jshost/       host-neutral JavaScript modules (rune:fs)
-internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
-internal/diagnostics/  error codes and formatting
-internal/term/         terminal detection for colored output
-internal/driver/       wires the stages together
-internal/watch/        file watcher for run --watch and dev
-internal/devserver/    the runescript dev server and its browser client
-internal/lsp/          the language server (runescript lsp)
-stdlib/                standard library packages (std:string, std:math, std:io, std:process,
-                       std:fs, std:path, std:json, std:csv, std:matrix, std:semver), implemented
-                       in Go; their JavaScript twins are in internal/jsgen/runtime.js
-examples/              example programs
-editors/               VS Code extension, Vim plugin, and Emacs mode
-tests/                 end-to-end, golden, and documentation tests
-bench/                 benchmark and conformance suite vs TypeScript 1.0 RC (go run ./bench/rsbench)
-assets/                logo: SVG source and PNGs generated from it
-scripts/               render-logo.sh: SVG → PNG via headless Edge/Chrome
+cmd/runescript/        CLI: run, check, build, dev, lsp, version
+internal/
+  srcenc/              Source encoding detection and UTF-8 conversion
+  lexer/               Tokens and source positions
+  parser/              RuneScript and template parser
+  ast/                 Syntax tree
+  loader/              Package and file imports
+  checker/             Name resolution, static types, module metadata, warnings
+  types/               Semantic types
+  ir/                  Typed intermediate representation, lowering, verification
+  runtime/             Go closure engine and reference tree walker
+  jsgen/               JavaScript emission, runtime modules, source maps, CSS
+  jshost/              Host-neutral JavaScript adapters
+  webbuild/            Multi-page HTML and asset assembly
+  wasmbuild/           Go and raylib WebAssembly bundle assembly
+  dom/                 HTML and SVG metadata for template checks
+  devserver/           Local HTTP server and browser live-reload client
+  watch/               File polling for dev and run --watch
+  lsp/                 Language server
+  conv/                Checked conversions and number formatting
+  fmath/               Floating-point math shared by the Go and JS targets
+  diagnostics/         Error and warning codes, positions, and formatting
+  term/                Terminal detection and color support
+  driver/              Shared compiler and execution entry points
+stdlib/                Go-native standard library, graphics, and widgets
+examples/              CLI programs, web templates, multi-page site, and games
+editors/               VS Code, Vim and Neovim, and Emacs integrations
+tests/                 End-to-end and documentation tests with testdata fixtures
+bench/                 rsbench runner, TypeScript suite, profiling, and web benchmark
+docs/                  Language specification, guide, and roadmap
+localization/          Bengali and Hebrew README and guide translations
+assets/                RuneScript SVGs and generated PNGs
+scripts/               Logo rendering and translation status
+install.sh, install.ps1  Per-user installers
 ```
 
 ## অনুবাদ

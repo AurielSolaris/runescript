@@ -21,6 +21,7 @@ import (
 	"github.com/AurielSolaris/runescript/internal/runtime"
 	"github.com/AurielSolaris/runescript/internal/term"
 	"github.com/AurielSolaris/runescript/internal/wasmbuild"
+	"github.com/AurielSolaris/runescript/internal/webbuild"
 )
 
 // Version is the language/implementation version.
@@ -35,6 +36,7 @@ const usage = `usage:
   runescript check [flags] <file>   check a program without running it
   runescript build [flags] [--target js] [-o <out.js>] [--source-map] <file>
   runescript build [flags] --target wasm [-o <directory>] [--asset <file>] <file>
+  runescript build [flags] --target web [-o <directory>] [--source-map] [--extract-css] <project>
                              compile a program to a JavaScript module
                              (default output: <file> with a .js extension);
                              --source-map also writes <out.js>.map
@@ -250,6 +252,7 @@ func build(args []string, stderr io.Writer) int {
 	target := fs.String("target", "js", "")
 	out := fs.String("o", "", "")
 	sourceMap := fs.Bool("source-map", false, "")
+	extractCSS := fs.Bool("extract-css", false, "")
 	var assets []string
 	fs.Func("asset", "", func(path string) error {
 		assets = append(assets, path)
@@ -259,19 +262,41 @@ func build(args []string, stderr io.Writer) int {
 		usageError(stderr, policy.err)
 		return exitUsage
 	}
-	if *target != "js" && *target != "wasm" {
-		fmt.Fprintf(stderr, "runescript: unknown target %q (supported: js, wasm)\n", *target)
+	if *target != "js" && *target != "wasm" && *target != "web" {
+		fmt.Fprintf(stderr, "runescript: unknown target %q (supported: js, wasm, web)\n", *target)
 		return exitUsage
 	}
 	if *target == "wasm" && *sourceMap {
-		fmt.Fprintln(stderr, "runescript: --source-map requires --target js")
+		fmt.Fprintln(stderr, "runescript: --source-map requires --target js or web")
 		return exitUsage
 	}
-	if *target == "js" && len(assets) > 0 {
+	if *target != "wasm" && len(assets) > 0 {
 		fmt.Fprintln(stderr, "runescript: --asset requires --target wasm")
 		return exitUsage
 	}
+	if *extractCSS && *target != "web" {
+		fmt.Fprintln(stderr, "runescript: --extract-css requires --target web")
+		return exitUsage
+	}
 	path := fs.Arg(0)
+	if *target == "web" {
+		if *out == "" {
+			*out = filepath.Join(path, "dist")
+		}
+		ds, err := webbuild.Build(path, *out, webbuild.Options{
+			Version: Version, Warnings: policy.WarningPolicy, Notes: stderr,
+			SourceMap: *sourceMap, ExtractCSS: *extractCSS,
+		})
+		if len(ds) > 0 {
+			report(stderr, ds)
+			return exitCompileError
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "runescript: %v\n", err)
+			return exitUsage
+		}
+		return 0
+	}
 	if *out == "" {
 		*out = strings.TrimSuffix(path, filepath.Ext(path))
 		if *target == "wasm" {

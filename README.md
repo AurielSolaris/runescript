@@ -17,10 +17,10 @@ types come before names, every function starts with an access modifier
 semicolons are required. Its type checking is strict: nothing is implicitly `any`, and
 signed and unsigned integers never mix silently.
 
-It runs as a standalone program: no browser, no HTML, no Flash Player.
-It can also compile to a JavaScript module for the web, with the same
-strict typing and the same runtime errors.
-It is **not** source-compatible with ActionScript 3.
+RuneScript runs from a standalone CLI and can emit JavaScript modules
+or build static multi-page websites. Its raylib graphics packages work
+on desktop and target browsers through WebAssembly. The language uses
+its own syntax and type rules.
 
 ```actionscript
 package main;
@@ -51,9 +51,10 @@ protected int main() {
 - `if`/`else if`/`else`, `while`, `for`, `break`, `continue`, `return`
 - `trace(...)`
 - Standard library: `use "std:string";` gives Go's `strings` functions as `string.toUpper(s)` and so on
-- Multi-file programs: `use "geom";` loads the package in `geom/*.rsm`, and
-  `use "./lib/x.rsc";` loads one file; `public`/`protected`/`private` are
-  enforced ([guide](docs/guide/12-packages-and-files.md))
+- Multi-file programs use packages such as `use "geom";` or direct file
+  imports such as `use "./lib/x.rsc";`. Each `.rsm` module declares its
+  SemVer version and may declare its author and license.
+  [Packages and files](docs/guide/12-packages-and-files.md)
 - `float` (float32 by default, widening without loss), `float32`, `float64`;
   IEEE 754 with `NaN` and `Infinity`, as in ActionScript
 - Checked C-style conversions: `(int) 64.3`, `(float) "64.7"`, `(uint) n`
@@ -62,8 +63,8 @@ protected int main() {
   JavaScript), hex/binary/octal literals with `_` separators, bit
   operators, and `std:math`, whose results are bit-identical on both
   targets ([guide](docs/guide/18-numbers.md))
-- Structs: value types built with `Point{x: 1, y: 2}`, copied on
-  assignment, compared field by field ([guide](docs/guide/19-structs.md))
+- Structs with value semantics, field-by-field equality, named-field
+  literals, methods, and constructors. [Structs](docs/guide/19-structs.md)
 - Classes: fields, methods, one constructor, and `this`; objects are
   created with `new`, shared by reference, and compared by identity. No
   inheritance yet ([guide](docs/guide/24-classes.md))
@@ -94,10 +95,10 @@ protected int main() {
   `Array<Array<float64>>`, bit-identical on both targets), and `std:semver`
   (SemVer 2.0.0 versions compared and matched like npm)
   ([guide](docs/guide/22-csv-matrix-semver.md))
-- Compilation to JavaScript (`runescript build`): an ES2015 module (plus BigInt and `??`) that runs
-  in browsers and Node.js and behaves exactly like the interpreter for every
-  program the interpreter can run, with optional source maps
-  (`--source-map`) ([guide](docs/guide/11-javascript.md))
+- `build --target js` emits a standalone ES module with optional source
+  maps. `build --target web` emits static HTML pages with separate entry
+  modules, shared runtime assets, and optional CSS extraction.
+  [JavaScript and web builds](docs/guide/11-javascript.md)
 - Web pages with `rune:dom`: components with HTML and SVG templates whose
   every element and attribute is checked at compile time, escaped `{{ }}`
   text, `$if`/`$elseif`/`$else`, `$foreach`, events, and runes (signals) that update
@@ -156,6 +157,8 @@ go build -o runescript ./cmd/runescript
 ./runescript check examples/signedness_error.rsc   # shows a compile-time error
 ./runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
+./runescript build --target web --extract-css -o site-dist examples/multi-page
+./runescript build --target wasm -o game-web examples/native/keep-up.rsc
 ./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
 ./runescript run --watch examples/hello.rsc         # runs it again on every save
 ./runescript run examples/brainfuck.rsc examples/bf/hello.bf   # arguments follow the file
@@ -164,7 +167,8 @@ go test ./...
 
 > RuneScript programs use the `.rsc` extension, and package directories hold
 > `.rsm` files. Like Perl, the extension is a convention: the CLI and file
-> `use`s accept any file name, as long as the file contains RuneScript.
+> `use`s accept other file names. For the web target, the manifest uses
+> `.rsc` entry files and `.html` pages.
 
 ## Tests
 
@@ -176,12 +180,13 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 
 The suite includes:
 - unit tests for every compiler stage;
-- golden tests that run every example and compare its output;
+- golden tests for command-line examples, plus build and binding tests
+  for web and graphics examples;
 - error programs whose expected diagnostics are written inline as
   `// expect: CODE line:col`;
 - runtime-error programs;
-- differential tests that run every program on both the interpreter and
-  Node.js and require identical results (skipped if `node` is missing);
+- differential tests that compare the Go execution engine and generated
+  JavaScript for programs they both support (skipped without Node.js);
 - Node.js runs of programs that call JavaScript through `extern`, including
   JavaScript that returns wrong values on purpose;
 - a check that generated JavaScript uses nothing newer than ES2015 plus
@@ -194,53 +199,51 @@ The suite includes:
 
 [`bench/`](bench/README.md) compares RuneScript with **TypeScript 1.0 RC**
 (npm `typescript@0.9.7`, installed locally by `npm install` in `bench/`).
-Each program runs three ways: on the interpreter (RS-VM), compiled to
-JavaScript (RS-JS), and as the same algorithm in TypeScript (TS). All
-three run on Node.js except RS-VM. Every benchmark is a self-contained
+The suite compares the Go CLI (RS-VM), generated JavaScript (RS-JS), and
+equivalent TypeScript (TS). The JavaScript and TypeScript cases run on
+Node.js. Every benchmark is a self-contained
 directory. Run a category with `go run ./bench/rsbench run`, `size`,
 `compile`, or `diag`, and check correctness with `go run ./bench/rsbench
 verify`.
 
-First results, 2026-10-20 (v0.6.0-dev, Windows 10 x64, Node 24.16, small
-inputs, median of 5 runs). These are early numbers. Small inputs keep the
-interpreter runs short, so several TypeScript times are only a few
-milliseconds above Node's startup time.
+Measured on 2026-11-24 with RuneScript v0.7.0-dev, Go 1.25.11, and Node.js
+24.16.0 on Windows x64. Timings are medians of five runs. Runtime rows
+use small inputs and include process startup. The empty program shows
+the startup cost for each runner.
 
 | | RS-VM | RS-JS | TS |
 |---|---:|---:|---:|
-| Three-body simulation, 100k steps (net ms) | 1276 | 65 | 8 |
-| Merge sort, 50k integers (net ms) | 1040 | 66 | 23 |
-| Matrix multiply, 64×64 float64 (net ms) | 172 | 28 | 8 |
-| Recursive Fibonacci, n = 24 (net ms) | 115 | 10 | 5 |
-| Throw and catch 20k errors (net ms) | 97 | 39 | 182 |
-| Empty program, minified + gzip (bytes) | – | 4,823 | 20 |
-| Compile a 2,000-function file (ms) | – | 171 | 1,464 |
+| Empty program (ms) | 635.7 | 86.9 | 84.5 |
+| Three-body simulation, 100k steps (ms) | 1,978.3 | 161.5 | 92.5 |
+| Merge sort, 50k integers (ms) | 1,670.4 | 169.6 | 107.4 |
+| Matrix multiply, 64×64 float64 (ms) | 918.3 | 131.3 | 92.3 |
+| Recursive Fibonacci, n = 24 (ms) | 681.5 | 100.6 | 83.1 |
+| Throw and catch 20k errors (ms) | 727.6 | 134.2 | 347.6 |
+| Empty program, minified + gzip (bytes) | – | 4,862 | 20 |
+| Compile a 2,000-function file (ms) | – | 948.1 | 1,894.9 |
 
-- **Correctness.** Every benchmark gives the same output on all three
-  implementations. Three conformance programs differ from TypeScript on
-  purpose: overflow, float32 printing, and string units (bytes vs UTF-16).
-  Each difference is recorded and explained in that program's notes.
-- **Speed.** RuneScript's generated JavaScript is slower than plain
-  TypeScript, by 1.2× to 25× across the suite. Most of that is the price
-  of checked integer arithmetic. A TypeScript version with the same int32
-  checks (`ts-checked`) closes most of the gap on the addition benchmark.
-  RuneScript was faster only where TypeScript has to check by hand:
-  throwing and catching errors (4.6×). The interpreter is 2.5× to 33×
-  slower than RS-JS, except on JSON, where it is faster: its `std:json`
-  is native Go code.
-- **Size.** Each RuneScript module carries about 4.8 KB (minified +
-  gzip) of runtime. Using `std:math` adds about 6 KB more, even for just
-  `math.sqrt`. That makes the runtime the main size target.
-- **Compiler.** `runescript build` was 9× to 51× faster than TypeScript
-  1.0's `tsc` on the generated projects. `tsc` spends almost a second
-  starting up on modern Node.
-- **Diagnostics.** On six paired mistakes, both compilers put the first
-  error on the right line. TypeScript has no equivalent of RuneScript's
-  signed-to-unsigned check.
+Run `go run ./bench/rsbench web` to build the two-page example and compare
+its payload and mount time with hand-written JavaScript. The two-page
+payload counts identical runtime and CSS assets once. Mount timings use
+a fake DOM and exclude browser layout and paint.
 
-The method, the full tables, and how to add a benchmark are in
-[`bench/README.md`](bench/README.md). Benchmark results are published
-only here, not on the website.
+On the two-page sample with Node.js 24.16, these were the gzipped
+JavaScript and CSS totals, excluding HTML.
+
+| Build | First page | Both pages |
+| --- | ---: | ---: |
+| Hand-written JavaScript and CSS | 399 B | 700 B |
+| Standalone RuneScript modules | 11,739 B | 23,483 B |
+| RuneScript web build with inline CSS | 11,687 B | 12,784 B |
+| RuneScript web build with CSS extraction | 11,796 B | 12,864 B |
+
+Sharing the runtime cut the two-page payload by about 45%. Extracting CSS
+reduced the first page's own gzipped JavaScript from 1,093 B to 1,064 B.
+The separate stylesheet increased the combined payload by 80 B on this
+sample.
+
+See [`bench/README.md`](bench/README.md) for the methodology, commands
+that generate full reports, and instructions for adding a benchmark.
 
 ## Examples
 
@@ -249,8 +252,11 @@ basics, `std:string`, callbacks and lambdas, a prime counter, a
 [Brainfuck interpreter](examples/brainfuck.rsc) with 32,768 cells, two
 programs the compiler rejects on purpose, and web pages in
 [`examples/web/`](examples/web/) (a static page, a counter, a toggle, an
-SVG dial, and a multi-file app). Every example's output is checked by the
-test suite; the web examples run on a fake DOM under Node.js.
+SVG dial, and a multi-file app). There are also a
+[multi-page site](examples/multi-page/) and
+[desktop and WASM games](examples/native/). The suite checks command-line
+output, DOM behavior under Node.js, multi-page build artifacts, and
+graphics bindings.
 
 ## Documentation
 
@@ -268,6 +274,7 @@ test suite; the web examples run on a fake DOM under Node.js.
 - [Editors: VS Code, Vim, Neovim, Emacs, and runescript lsp](docs/guide/23-editors.md)
 - [Compiling to JavaScript](docs/guide/11-javascript.md)
 - [Web pages with rune:dom](docs/guide/15-web-pages.md)
+- [Desktop and WASM graphics](docs/guide/25-native-graphics.md)
 - [Diagnostics reference](docs/guide/08-diagnostics.md)
 - [Coming from ActionScript 3](docs/guide/09-coming-from-actionscript.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -275,35 +282,40 @@ test suite; the web examples run on a fake DOM under Node.js.
 ## Repository layout
 
 ```text
-cmd/runescript/        CLI (run, check, build, dev, version)
-internal/lexer/        tokens and source positions
-internal/parser/       recursive-descent parser → AST
-internal/ast/          syntax tree
-internal/types/        semantic types
-internal/srcenc/       reads source files (UTF-8; UTF-16 and UTF-32 are converted)
-internal/loader/       loads a program's files and resolves uses
-internal/checker/      name resolution, type checking, and warnings
-internal/runtime/      tree-walking interpreter
-internal/conv/         number and string conversions shared by both targets
-internal/ir/           typed intermediate representation and its verifier
-internal/jsgen/        JavaScript code generator and its inlined runtime
-internal/jshost/       host-neutral JavaScript modules (rune:fs)
-internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
-internal/diagnostics/  error codes and formatting
-internal/term/         terminal detection for colored output
-internal/driver/       wires the stages together
-internal/watch/        file watcher for run --watch and dev
-internal/devserver/    the runescript dev server and its browser client
-internal/lsp/          the language server (runescript lsp)
-stdlib/                standard library packages (std:string, std:math, std:io, std:process,
-                       std:fs, std:path, std:json, std:csv, std:matrix, std:semver), implemented
-                       in Go; their JavaScript twins are in internal/jsgen/runtime.js
-examples/              example programs
-editors/               VS Code extension, Vim plugin, and Emacs mode
-tests/                 end-to-end, golden, and documentation tests
-bench/                 benchmark and conformance suite vs TypeScript 1.0 RC (go run ./bench/rsbench)
-assets/                logo: SVG source and PNGs generated from it
-scripts/               render-logo.sh: SVG → PNG via headless Edge/Chrome
+cmd/runescript/        CLI: run, check, build, dev, lsp, version
+internal/
+  srcenc/              Source encoding detection and UTF-8 conversion
+  lexer/               Tokens and source positions
+  parser/              RuneScript and template parser
+  ast/                 Syntax tree
+  loader/              Package and file imports
+  checker/             Name resolution, static types, module metadata, warnings
+  types/               Semantic types
+  ir/                  Typed intermediate representation, lowering, verification
+  runtime/             Go closure engine and reference tree walker
+  jsgen/               JavaScript emission, runtime modules, source maps, CSS
+  jshost/              Host-neutral JavaScript adapters
+  webbuild/            Multi-page HTML and asset assembly
+  wasmbuild/           Go and raylib WebAssembly bundle assembly
+  dom/                 HTML and SVG metadata for template checks
+  devserver/           Local HTTP server and browser live-reload client
+  watch/               File polling for dev and run --watch
+  lsp/                 Language server
+  conv/                Checked conversions and number formatting
+  fmath/               Floating-point math shared by the Go and JS targets
+  diagnostics/         Error and warning codes, positions, and formatting
+  term/                Terminal detection and color support
+  driver/              Shared compiler and execution entry points
+stdlib/                Go-native standard library, graphics, and widgets
+examples/              CLI programs, web templates, multi-page site, and games
+editors/               VS Code, Vim and Neovim, and Emacs integrations
+tests/                 End-to-end and documentation tests with testdata fixtures
+bench/                 rsbench runner, TypeScript suite, profiling, and web benchmark
+docs/                  Language specification, guide, and roadmap
+localization/          Bengali and Hebrew README and guide translations
+assets/                RuneScript SVGs and generated PNGs
+scripts/               Logo rendering and translation status
+install.sh, install.ps1  Per-user installers
 ```
 
 ## Translations

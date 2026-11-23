@@ -1,5 +1,52 @@
 # 11. Compiling to JavaScript
 
+## Build a multi-page site
+
+`runescript build --target web` assembles a static site with one RuneScript
+entry point per HTML page. Templates still use the RuneScript
+`template { ... }` syntax. Each page starts its own program. Pages with
+identical runtime requirements share a content-addressed JavaScript module.
+
+Put the HTML pages and static assets under `public/`. Add one
+`<!-- runescript -->` marker in the head of each page. Map each HTML path to
+its RuneScript entry in `runescript.web.json` at the project root:
+
+```json
+{
+  "pages": {
+    "index.html": "home.rsc",
+    "about/index.html": "about.rsc"
+  }
+}
+```
+
+Build and serve the two-page example using its [web manifest](../../examples/multi-page/runescript.web.json):
+
+```sh
+runescript build --target web --source-map --extract-css -o site-dist examples/multi-page
+python -m http.server --bind 127.0.0.1 --directory site-dist 8000
+```
+
+Open `http://localhost:8000` and follow the About link. All RuneScript
+`use` paths resolve from the project root. A browser extern starting with
+`./`, such as `extern "./helper.js" ...`, refers to a JavaScript module
+under `public/`. Assets linked by HTML retain their original locations.
+The output must be a new directory and defaults to `dist/` in the project.
+
+`--extract-css` moves simple static `style="..."` attributes from
+RuneScript templates into linked CSS. Equal declarations share a rule,
+and identical stylesheets share a file across pages. The generated rule
+matches a compiler-generated data attribute. Its declarations follow
+stylesheet precedence. Leave the option off if a page relies on inline
+precedence or JavaScript reads the element's `style` attribute.
+[CSS cascade rules](https://www.w3.org/TR/css-cascade-5/#cascade-sort)
+
+Bindings, CSS functions such as `url(...)` and `var(...)`, and complex
+declarations stay inline. The single-file `build --target js` and
+`runescript dev <file>` workflows are also available.
+
+## Build a single JavaScript module
+
 `runescript build` compiles a program to a JavaScript module that runs in
 a browser or in Node.js. The program keeps RuneScript's rules: anything
 the type checker rejects is still rejected, and anything that would be a
@@ -13,7 +60,7 @@ runescript build -o web/app.js examples/hello.rsc # choose the output file
 node examples/fizzbuzz.js a b                     # runs it with arguments; main's result is the exit code
 ```
 
-`--target js` is the default and currently the only target. A program of
+`--target js` is the default. A program of
 several files (see [Packages and files](12-packages-and-files.md)) becomes
 one module, and runtime errors name the file they happened in.
 

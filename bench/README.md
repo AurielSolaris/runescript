@@ -21,7 +21,7 @@ difference comes from:
 
 | Implementation | Pipeline | Tells you about |
 |---|---|---|
-| `rs-vm` | RuneScript → the Go interpreter (`runescript run`) | the interpreter |
+| `rs-vm` | RuneScript → the Go closure engine (`runescript run`) | CLI execution |
 | `rs-js` | RuneScript → JavaScript (`runescript build`) → Node.js | the code generator and its runtime helpers |
 | `ts` | TypeScript 1.0 RC → JavaScript (`tsc`) → Node.js | the baseline |
 | `ts-<variant>` | another TypeScript version of the same program, e.g. `ts-checked` | an equivalent-semantics comparison |
@@ -60,23 +60,41 @@ All commands run from the repository root:
 go run ./bench/rsbench list                     # what exists
 go run ./bench/rsbench verify                   # correctness: every program, every implementation
 go run ./bench/rsbench run -size small          # runtime (default: 2 warm-up + 10 measured runs)
-go run ./bench/rsbench run -size medium a07_matmul a11_three_body -runs 20
+go run ./bench/rsbench run -size medium -runs 20 a07_matmul a11_three_body
 go run ./bench/rsbench run -impl rs-js,ts       # only some implementations
 go run ./bench/rsbench size                     # generated JS: raw, minified, gzip, brotli
 go run ./bench/rsbench compile [-large]         # runescript check/build vs tsc on generated projects
 go run ./bench/rsbench diag                     # the same mistakes in both languages
+go run ./bench/rsbench web                      # payload and DOM mounts vs hand-written JS
 go run ./bench/rsbench bless [benchmark...]     # record expected/test.out from the interpreter
 ```
 
 Benchmarks are named by directory (`a03_sieve`), ID (`A03`), or name
 (`sieve`). With no names, every benchmark in the command's category is
-used. Each command writes a CSV and a Markdown summary to
-`bench/results/` (git-ignored) and prints the summary.
+used. The `run`, `size`, `compile`, and `diag` commands write CSV and
+Markdown reports to `bench/results/` (git-ignored).
 
 `go test ./...` also checks the RuneScript side of the suite
 (`tests/bench_test.go`): every benchmark is well formed, every program
 prints its expected output on both back ends at the `test` size, and
 every diagnostics case is rejected on the right line.
+
+## Web benchmark
+
+`go run ./bench/rsbench web` builds [the two-page example](../examples/multi-page/)
+and compares standalone RuneScript bundles, the web target with and without CSS
+extraction, and equivalent hand-written JavaScript with a shared stylesheet.
+It needs Go and Node.js on PATH.
+
+- Payload measurements report raw and separately gzipped JavaScript and
+  CSS. First-page size includes its runtime. Two-page size counts shared
+  files once, assuming a warm cache on navigation. HTML is excluded.
+- The runner checks the DOM structure and text of both pages in all four
+  builds. Timed samples repeat the Home page mount in a fake DOM under
+  Node.js. They exclude imports, network, CSS layout, and paint.
+- The defaults are nine samples of 100,000 mounts per implementation.
+  Use `-runs` and `-iterations` to change the sample sizes. The benchmark
+  prints payload and timing results to stdout.
 
 ## Layout
 
@@ -93,6 +111,7 @@ bench/
 │       └── test.ts.out   optional: an intended TypeScript divergence
 ├── diagnostics/<id>_<name>/   bad.rsc + bad.ts with the same mistake, bench.json
 ├── tools/sizes.mjs       raw / esbuild-minified / gzip / brotli byte counts
+├── tools/web.mjs         multi-page payload and fake-DOM timings vs hand-written JS
 ├── package.json          the pinned TypeScript-side toolchain
 └── results/              CSV and Markdown output (git-ignored)
 ```

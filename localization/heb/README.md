@@ -27,9 +27,9 @@ RuneScript שומרת על הזהות של ActionScript (`package`, `trace`, `in
 שום דבר אינו `any` באופן מובלע, ומספרים שלמים עם סימן ובלי סימן לעולם אינם
 מתערבבים בשקט.
 
-השפה רצה כתוכנית עצמאית: בלי דפדפן, בלי HTML ובלי Flash Player. היא יכולה גם
-להתקמפל למודול JavaScript לשימוש באינטרנט, עם אותה הקפדה על טיפוסים ואותן
-שגיאות זמן ריצה. היא **אינה** תואמת ברמת קוד המקור ל-ActionScript 3.
+RuneScript רצה מכלי שורת פקודה עצמאי, מפיקה מודולי JavaScript ובונה אתרים
+סטטיים מרובי דפים. הגרפיקה של raylib רצה בשולחן העבודה ובדפדפן באמצעות
+WebAssembly.
 
 </div>
 
@@ -156,6 +156,8 @@ go build -o runescript ./cmd/runescript
 ./runescript check examples/signedness_error.rsc   # shows a compile-time error
 ./runescript build examples/fizzbuzz.rsc            # writes examples/fizzbuzz.js
 node examples/fizzbuzz.js                         # runs it (Node.js 24+)
+./runescript build --target web --extract-css -o site-dist examples/multi-page
+./runescript build --target wasm -o game-web examples/native/keep-up.rsc
 ./runescript dev examples/fizzbuzz.rsc              # serves it, reloading on every save
 ./runescript run --watch examples/hello.rsc         # runs it again on every save
 ./runescript run examples/brainfuck.rsc examples/bf/hello.bf   # arguments follow the file
@@ -198,50 +200,10 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 
 ## מדדי ביצועים
 
-[`bench/`](../../bench/README.md) משווה את RuneScript ל-**TypeScript 1.0 RC**
-(`typescript@0.9.7` מ-npm, שמותקן מקומית בהרצת `npm install` בתיקייה `bench/`).
-כל תוכנית רצה בשלוש דרכים: במפרש (RS-VM), מהודרת ל-JavaScript (RS-JS), וכאותו
-אלגוריתם ב-TypeScript (TS). כולן רצות ב-Node.js, מלבד RS-VM. כל מדד הוא תיקייה
-עצמאית. מריצים קטגוריה בעזרת `go run ./bench/rsbench run`, `size`, `compile` או
-`diag`, ובודקים נכונות בעזרת `go run ./bench/rsbench verify`.
-
-תוצאות ראשונות, 2026-10-20 (v0.6.0-dev, Windows 10 x64, Node 24.16, קלטים
-קטנים, חציון של 5 הרצות). אלה מספרים מוקדמים. הקלטים הקטנים שומרים על הרצות
-קצרות במפרש, ולכן כמה מזמני TypeScript גבוהים רק בכמה אלפיות שנייה מזמן
-העלייה של Node.
-
-| | RS-VM | RS-JS | TS |
-|---|---:|---:|---:|
-| סימולציית שלושה גופים, 100 אלף צעדים (ms נטו) | 1276 | 65 | 8 |
-| מיון מיזוג, 50 אלף מספרים שלמים (ms נטו) | 1040 | 66 | 23 |
-| כפל מטריצות, ‎64×64 float64 (ms נטו) | 172 | 28 | 8 |
-| פיבונאצ'י רקורסיבי, n = 24 (ms נטו) | 115 | 10 | 5 |
-| זריקה ותפיסה של 20 אלף שגיאות (ms נטו) | 97 | 39 | 182 |
-| תוכנית ריקה, מוקטנת + gzip (בתים) | – | 4,823 | 20 |
-| הידור קובץ עם 2,000 פונקציות (ms) | – | 171 | 1,464 |
-
-- **נכונות.** כל מדד מפיק את אותו פלט בכל שלושת המימושים. שלוש תוכניות התאמה
-  שונות מ-TypeScript בכוונה: גלישה, הדפסת float32, ויחידות מחרוזת (בתים מול
-  UTF-16). כל הבדל מתועד ומוסבר בהערות של התוכנית.
-- **מהירות.** ה-JavaScript ש-RuneScript מייצרת איטי יותר מ-TypeScript רגילה,
-  פי 1.2 עד פי 25 לאורך החבילה. רוב ההפרש הוא המחיר של אריתמטיקת שלמים
-  בדוקה. גרסת TypeScript עם אותן בדיקות int32 (`ts-checked`) סוגרת את רוב
-  הפער במדד החיבור. RuneScript הייתה מהירה יותר רק במקום שבו TypeScript
-  צריכה לבדוק ידנית: זריקה ותפיסה של שגיאות (פי 4.6). המפרש איטי מ-RS-JS
-  פי 2.5 עד פי 33, מלבד ב-JSON, שבו הוא מהיר יותר: ה-`std:json` שלו הוא קוד Go
-  מקורי.
-- **גודל.** כל מודול RuneScript נושא כ-4.8 KB (מוקטן + gzip) של סביבת ריצה.
-  שימוש ב-`std:math` מוסיף כ-6 KB נוספים, אפילו רק בשביל `math.sqrt`. לכן
-  סביבת הריצה היא היעד העיקרי להקטנת הגודל.
-- **מהדר.** `runescript build` היה מהיר פי 9 עד פי 51 מ-`tsc` של TypeScript 1.0
-  בפרויקטים שנוצרו. `tsc` מבזבז כמעט שנייה על עלייה ב-Node מודרני.
-- **אבחון.** בשש טעויות זהות בשתי השפות, שני המהדרים מצביעים על השורה הנכונה
-  בשגיאה הראשונה. ל-TypeScript אין מקבילה לבדיקה של RuneScript שמונעת השמה
-  של ערך signed למשתנה unsigned.
-
-השיטה, הטבלאות המלאות והוראות להוספת מדד נמצאות ב-
-[`bench/README.md`](../../bench/README.md). תוצאות המדדים מתפרסמות רק כאן, לא
-באתר.
+ב-[`bench/`](../../bench/README.md) משווים את מנוע ה-Go של RuneScript ואת ה-JavaScript
+שהוא מייצר ל-TypeScript 1.0 RC. לבדיקת נכונות מריצים `go run ./bench/rsbench verify`.
+`go run ./bench/rsbench web` משווה את גודל הקבצים ואת זמן יצירת ה-DOM של אתר בן
+שני עמודים ל-JavaScript שנכתב ידנית. התוצאות העדכניות מופיעות [ב-README הראשי](../../README.md#benchmarks).
 
 ## דוגמאות
 
@@ -273,35 +235,40 @@ go test ./tests -run '^$' -fuzz=FuzzRun        # fuzz the interpreter
 </div>
 
 ```text
-cmd/runescript/        CLI (run, check, build, dev, version)
-internal/lexer/        tokens and source positions
-internal/parser/       recursive-descent parser → AST
-internal/ast/          syntax tree
-internal/types/        semantic types
-internal/srcenc/       reads source files (UTF-8; UTF-16 and UTF-32 are converted)
-internal/loader/       loads a program's files and resolves uses
-internal/checker/      name resolution, type checking, and warnings
-internal/runtime/      tree-walking interpreter
-internal/conv/         number and string conversions shared by both targets
-internal/ir/           typed intermediate representation and its verifier
-internal/jsgen/        JavaScript code generator and its inlined runtime
-internal/jshost/       host-neutral JavaScript modules (rune:fs)
-internal/dom/          HTML4, HTML5, and SVG elements and attributes (for templates)
-internal/diagnostics/  error codes and formatting
-internal/term/         terminal detection for colored output
-internal/driver/       wires the stages together
-internal/watch/        file watcher for run --watch and dev
-internal/devserver/    the runescript dev server and its browser client
-internal/lsp/          the language server (runescript lsp)
-stdlib/                standard library packages (std:string, std:math, std:io, std:process,
-                       std:fs, std:path, std:json, std:csv, std:matrix, std:semver), implemented
-                       in Go; their JavaScript twins are in internal/jsgen/runtime.js
-examples/              example programs
-editors/               VS Code extension, Vim plugin, and Emacs mode
-tests/                 end-to-end, golden, and documentation tests
-bench/                 benchmark and conformance suite vs TypeScript 1.0 RC (go run ./bench/rsbench)
-assets/                logo: SVG source and PNGs generated from it
-scripts/               render-logo.sh: SVG → PNG via headless Edge/Chrome
+cmd/runescript/        CLI: run, check, build, dev, lsp, version
+internal/
+  srcenc/              Source encoding detection and UTF-8 conversion
+  lexer/               Tokens and source positions
+  parser/              RuneScript and template parser
+  ast/                 Syntax tree
+  loader/              Package and file imports
+  checker/             Name resolution, static types, module metadata, warnings
+  types/               Semantic types
+  ir/                  Typed intermediate representation, lowering, verification
+  runtime/             Go closure engine and reference tree walker
+  jsgen/               JavaScript emission, runtime modules, source maps, CSS
+  jshost/              Host-neutral JavaScript adapters
+  webbuild/            Multi-page HTML and asset assembly
+  wasmbuild/           Go and raylib WebAssembly bundle assembly
+  dom/                 HTML and SVG metadata for template checks
+  devserver/           Local HTTP server and browser live-reload client
+  watch/               File polling for dev and run --watch
+  lsp/                 Language server
+  conv/                Checked conversions and number formatting
+  fmath/               Floating-point math shared by the Go and JS targets
+  diagnostics/         Error and warning codes, positions, and formatting
+  term/                Terminal detection and color support
+  driver/              Shared compiler and execution entry points
+stdlib/                Go-native standard library, graphics, and widgets
+examples/              CLI programs, web templates, multi-page site, and games
+editors/               VS Code, Vim and Neovim, and Emacs integrations
+tests/                 End-to-end and documentation tests with testdata fixtures
+bench/                 rsbench runner, TypeScript suite, profiling, and web benchmark
+docs/                  Language specification, guide, and roadmap
+localization/          Bengali and Hebrew README and guide translations
+assets/                RuneScript SVGs and generated PNGs
+scripts/               Logo rendering and translation status
+install.sh, install.ps1  Per-user installers
 ```
 
 <div dir="rtl">

@@ -28,9 +28,10 @@ commands:
   size      generated JavaScript size: raw, minified, gzip, brotli
             (category "size")
   compile   compiler benchmarks on generated projects: runescript check and
-            build vs tsc --noEmit and tsc
+            build vs tsc
   diag      diagnostics: paired invalid programs, first-error location,
             error count, and both compilers' messages side by side
+  web       two-page payload sizes and DOM mount timings vs hand-written JavaScript
 
 A benchmark is selected by its directory name, ID (e.g. A03), or name.
 With none given, every benchmark in the command's category is used.
@@ -54,6 +55,7 @@ func cli(args []string, stdout, stderr io.Writer) int {
 		"size":    cmdSize,
 		"compile": cmdCompile,
 		"diag":    cmdDiag,
+		"web":     cmdWeb,
 	}
 	run, ok := cmds[args[0]]
 	if !ok {

@@ -1,0 +1,6 @@
+{
+  "pages": {
+    "index.html": "home.rsc",
+    "about/index.html": "about.rsc"
+  }
+}

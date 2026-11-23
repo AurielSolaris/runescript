@@ -241,6 +241,13 @@ WebAssembly backend.
 - [x] Headless binding tests and two example games in `examples/native/`
 - [x] Browser build using raylib's WebAssembly backend with `build --target wasm`
 
+### Web compilation
+
+- [x] `build --target web` with separate HTML and JavaScript entries for static multi-page sites
+- [x] Reuse identical runtime modules and extract simple static template CSS with `--extract-css`
+- [ ] Share RuneScript application code across page entry points
+- [ ] Multi-page project support in `runescript dev`
+
 Depends on: `use` (v0.3), floats (v0.5), and structs for colours and vectors (v0.6).
 
 ## v0.8: Classes
