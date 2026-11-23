@@ -1,0 +1,9 @@
+@use "sass:map";
+
+$colors: (ink: #213547, surface: #edf4ff);
+
+@mixin panel($width: 36rem) {
+  max-width: $width;
+  color: map.get($colors, ink);
+  background: map.get($colors, surface);
+}

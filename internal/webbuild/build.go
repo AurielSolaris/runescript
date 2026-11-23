@@ -28,8 +28,9 @@ const (
 )
 
 type manifest struct {
-	Pages map[string]string `json:"pages"`
-	Docs  *docsConfig       `json:"docs"`
+	Pages  map[string]string `json:"pages"`
+	Docs   *docsConfig       `json:"docs"`
+	Styles []string          `json:"styles"`
 }
 
 type Options struct {
@@ -95,6 +96,10 @@ func Build(root, out string, opts Options) ([]*diagnostics.Diagnostic, error) {
 	}
 	seenPages := map[string]bool{}
 	assets := map[string]bool{}
+	styles, err := buildStyles(root, stage, config.Styles, opts, assets)
+	if err != nil {
+		return nil, err
+	}
 	var pages []string
 	for page := range config.Pages {
 		if key := strings.ToLower(page); seenPages[key] {
@@ -106,12 +111,12 @@ func Build(root, out string, opts Options) ([]*diagnostics.Diagnostic, error) {
 	}
 	slices.Sort(pages)
 	for _, page := range pages {
-		if ds, err := buildPage(root, stage, out, page, config.Pages[page], opts, assets); err != nil || len(ds) > 0 {
+		if ds, err := buildPage(root, stage, out, page, config.Pages[page], opts, assets, styles); err != nil || len(ds) > 0 {
 			return ds, err
 		}
 	}
 	if config.Docs != nil {
-		if err := buildDocs(root, stage, *config.Docs); err != nil {
+		if err := buildDocs(root, stage, *config.Docs, styles); err != nil {
 			return nil, err
 		}
 	}
@@ -145,7 +150,7 @@ func readManifest(name string) (manifest, error) {
 	return m, nil
 }
 
-func buildPage(root, stage, out, page, entry string, opts Options, assets map[string]bool) ([]*diagnostics.Diagnostic, error) {
+func buildPage(root, stage, out, page, entry string, opts Options, assets map[string]bool, styles []string) ([]*diagnostics.Diagnostic, error) {
 	html, err := os.ReadFile(filepath.Join(stage, filepath.FromSlash(page)))
 	if err != nil {
 		return nil, fmt.Errorf("page %s: %w", page, err)
@@ -196,6 +201,7 @@ func buildPage(root, stage, out, page, entry string, opts Options, assets map[st
 		}
 	}
 	var tags strings.Builder
+	writeStyleLinks(&tags, page, styles)
 	if len(output.CSS) > 0 {
 		sum := sha256.Sum256(output.CSS)
 		css := path.Join(generated, fmt.Sprintf("styles-%x.css", sum[:12]))

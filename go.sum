@@ -6,6 +6,8 @@ github.com/gen2brain/raylib-go/raylib v0.63.0 h1:YcxN7dql2sySmm/dwzEXh/heP5QMeja
 github.com/gen2brain/raylib-go/raylib v0.63.0/go.mod h1:hNXVJGgOMB/ReUeFTdVPSqdOBXIQFT4cvKCaa2eTEDo=
 github.com/jupiterrider/ffi v0.8.0 h1:IH6lto8OZaRIulQYObtZibII4tq71hXT6Z+KLBcxCcQ=
 github.com/jupiterrider/ffi v0.8.0/go.mod h1:9dauhpOfNqrqk28fxuu0kkdeFtT9Qr4vbfigiuIXN7c=
+github.com/shyim/go-sass v0.0.0-20260725131521-76ed371aa677 h1:ukKVqyr2kLty2zxIRYc8bCKn/E7LLyznw1oxtdhfnic=
+github.com/shyim/go-sass v0.0.0-20260725131521-76ed371aa677/go.mod h1:BHtGm9KCTg8FqXpEzfGqsiv32Ii6Qxh2q0TowmQxVsU=
 github.com/yuin/goldmark v1.8.7 h1:XT/tNqCIbabh0ln675w4x3dv04kQBKi8NwYqi9IJaxI=
 github.com/yuin/goldmark v1.8.7/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 go.yaml.in/yaml/v3 v3.0.6 h1:zcDfvjXEqTQmpjniUBLc91xYJMB2c4QOFxEF/LCEckM=

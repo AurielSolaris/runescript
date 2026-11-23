@@ -69,6 +69,9 @@ extracted CSS. [Web build guide](../docs/guide/11-javascript.md#build-a-multi-pa
 [`static-docs/`](static-docs/) builds an English docs index and chapter from
 Markdown, with a shared HTML layout and stylesheet.
 
+[`scss-web/`](scss-web/) demonstrates a shared SCSS entry, a partial with
+variables and a mixin, and nested selectors.
+
 ## Native games
 
 The graphics-enabled CLI runs these examples in a desktop window.

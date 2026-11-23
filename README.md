@@ -97,8 +97,9 @@ protected int main() {
   ([guide](docs/guide/22-csv-matrix-semver.md))
 - `build --target js` emits a standalone ES module with optional source
   maps. `build --target web` emits static HTML pages with separate entry
-  modules, shared runtime assets, and optional CSS extraction.
-  [JavaScript and web builds](docs/guide/11-javascript.md)
+  modules, shared runtime assets, optional CSS extraction, and in-process
+  SCSS compilation in Go.
+  [JavaScript and web builds](docs/guide/11-javascript.md) · [SCSS example](examples/scss-web/)
 - Web pages with `rune:dom`: components with HTML and SVG templates whose
   every element and attribute is checked at compile time, escaped `{{ }}`
   text, `$if`/`$elseif`/`$else`, `$foreach`, events, and runes (signals) that update
@@ -257,6 +258,20 @@ Measured on Windows x64 with Go 1.25.11 and Node.js 24.16.0. Nine timed
 builds per tool include process startup and writes to fresh output
 directories. Run `go run ./bench/rsbench web-docs` to reproduce this
 [two-page comparison](bench/README.md#static-markdown-benchmark).
+
+The same two-page benchmark can compile SCSS instead of copying CSS.
+RuneScript compiles the stylesheet in Go. Astro uses its Sass pipeline.
+
+| Builder with SCSS | Median build (ms) | HTML + CSS (bytes) | Gzip (bytes) |
+| --- | ---: | ---: | ---: |
+| RuneScript | 41.5 | 2,496 | 1,327 |
+| Astro 7.3.8 | 3,589.0 | 2,264 | 1,260 |
+
+Run `go run ./bench/rsbench web-docs -scss` to reproduce the nine-sample
+comparison. It keeps syntax highlighting and browser JavaScript disabled.
+The [enhanced docs example](examples/static-docs/#optional-syntax-highlighting-and-copy-buttons)
+uses the same native styles and adds build-time highlighting and a
+chapter-only Alpine module bundled with Bun.
 
 Run `go run ./bench/rsbench web` to build the two-page example and compare
 its payload and mount time with hand-written JavaScript. The two-page

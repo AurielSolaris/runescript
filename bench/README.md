@@ -125,6 +125,12 @@ executable and installing packages are outside the timed samples.
 Sizes sum both HTML files and the shared CSS once, with gzip applied
 to each file individually at level 9.
 
+Add `-scss` to compile the same SCSS partials in both projects. This mode
+uses the native Go Sass compiler in RuneScript and Astro's Vite Sass
+pipeline. The Astro project selected by `-astro` needs the `sass` package
+installed for this mode. The fixture keeps highlighting and browser
+scripts disabled to measure the static HTML and stylesheet build.
+
 ## Layout
 
 ```text

@@ -1,0 +1,20 @@
+@use "base.css";
+
+[x-cloak] {
+  display: none !important;
+}
+
+.code-example {
+  margin-block: 1rem;
+
+  pre {
+    margin-block-start: 0.25rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .shiki, .shiki span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}

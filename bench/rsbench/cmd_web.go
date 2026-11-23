@@ -35,6 +35,7 @@ func cmdWeb(fs *flag.FlagSet, args []string, w io.Writer) error {
 func cmdWebDocs(fs *flag.FlagSet, args []string, w io.Writer) error {
 	runs := fs.Int("runs", 9, "number of timed samples per implementation")
 	astro := fs.String("astro", "../runescript.site", "project directory with Astro installed")
+	scss := fs.Bool("scss", false, "compile the same SCSS in both builds")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -52,7 +53,7 @@ func cmdWebDocs(fs *flag.FlagSet, args []string, w io.Writer) error {
 	defer tc.Close()
 	fmt.Fprintln(w, tc.RSVersion)
 	cmd := exec.Command(tc.Node, filepath.Join(tc.BenchRoot, "tools", "static-docs.mjs"),
-		tc.RuneScript, tc.Work, project, strconv.Itoa(*runs))
+		tc.RuneScript, tc.Work, project, strconv.Itoa(*runs), strconv.FormatBool(*scss))
 	cmd.Dir = tc.Root
 	out, err := cmd.CombinedOutput()
 	fmt.Fprint(w, string(out))

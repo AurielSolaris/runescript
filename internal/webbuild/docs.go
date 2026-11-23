@@ -45,11 +45,12 @@ type docsPage struct {
 	Chapters []chapterLink
 	Headings []headingLink
 	Content  template.HTML
+	Styles   template.HTML
 }
 
 var chapterSlug = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
-func buildDocs(root, stage string, cfg docsConfig) error {
+func buildDocs(root, stage string, cfg docsConfig, styles []string) error {
 	if !portablePath.MatchString(cfg.Content) || !fs.ValidPath(cfg.Content) ||
 		cfg.Content == "." || !validPath(cfg.Layout, ".html") {
 		return fmt.Errorf("docs content and layout must be project-relative paths")
@@ -65,6 +66,12 @@ func buildDocs(root, stage string, cfg docsConfig) error {
 	layoutText, err := project.ReadFile(cfg.Layout)
 	if err != nil {
 		return err
+	}
+	if len(styles) > 0 {
+		if bytes.Count(layoutText, []byte(marker)) != 1 {
+			return fmt.Errorf("%s needs exactly one %s in its head for shared styles", cfg.Layout, marker)
+		}
+		layoutText = bytes.Replace(layoutText, []byte(marker), []byte("{{.Styles}}"), 1)
 	}
 	layout, err := template.New(cfg.Layout).Parse(string(layoutText))
 	if err != nil {
@@ -145,11 +152,16 @@ func buildDocs(root, stage string, cfg docsConfig) error {
 	var output bytes.Buffer
 	for _, page := range pages {
 		page.Chapters = index.Chapters
+		name := strings.TrimPrefix(page.URL, "/") + ".html"
+		var tags strings.Builder
+		writeStyleLinks(&tags, name, styles)
+		// The link URLs are generated from portable paths and content hashes.
+		page.Styles = template.HTML(tags.String())
 		output.Reset()
 		if err := layout.Execute(&output, page); err != nil {
 			return fmt.Errorf("render %s: %w", page.URL, err)
 		}
-		if err := writeOutput(stage, strings.TrimPrefix(page.URL, "/")+".html", output.Bytes()); err != nil {
+		if err := writeOutput(stage, name, output.Bytes()); err != nil {
 			return err
 		}
 	}

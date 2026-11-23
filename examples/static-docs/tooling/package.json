@@ -1,0 +1,14 @@
+{
+  "name": "runescript-static-docs-tooling",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "build": "bun build-docs.mjs"
+  },
+  "devDependencies": {
+    "alpinejs": "3.17.4",
+    "parse5": "8.0.0",
+    "shiki": "4.5.0"
+  }
+}

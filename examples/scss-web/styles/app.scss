@@ -1,0 +1,11 @@
+@use "theme";
+
+.card {
+  @include theme.panel;
+  margin: 3rem auto;
+  padding: 2rem;
+
+  h1 {
+    margin-block-start: 0;
+  }
+}
