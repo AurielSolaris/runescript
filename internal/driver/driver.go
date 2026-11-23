@@ -151,7 +151,7 @@ func RunInput(in Input, out io.Writer) (int, []*diagnostics.Diagnostic, error) {
 	}
 	// The interpreter runs the same verified IR the JavaScript back end
 	// compiles.
-	p := ir.Lower(info)
+	p := ir.LowerWithoutStatementSpans(info)
 	if err := ir.Verify(p); err != nil {
 		return 0, nil, err
 	}
@@ -199,19 +199,12 @@ func needsJS(info *checker.Info) []*diagnostics.Diagnostic {
 
 // BuildJSInput checks a program and compiles it to one JavaScript module.
 func BuildJSInput(in Input, opts jsgen.Options) ([]byte, []*diagnostics.Diagnostic, error) {
-	info, diags, err := CheckInput(in)
-	if diags != nil || err != nil {
-		return nil, diags, err
-	}
-	if ds := needsNative(info); ds != nil {
-		return nil, ds, nil
-	}
-	js, diags, err := jsgen.Generate(ir.Lower(info), opts)
-	return js, sorted(diags), err
+	out, diags, err := BuildJSMapInput(in, opts)
+	return out.JS, diags, err
 }
 
-// BuildJSMapInput is BuildJSInput, also returning the source map when
-// opts.SourceMap is set.
+// BuildJSMapInput checks a program and compiles it to JavaScript, optionally
+// returning its source map.
 func BuildJSMapInput(in Input, opts jsgen.Options) (jsgen.Output, []*diagnostics.Diagnostic, error) {
 	info, diags, err := CheckInput(in)
 	if diags != nil || err != nil {
@@ -220,7 +213,11 @@ func BuildJSMapInput(in Input, opts jsgen.Options) (jsgen.Output, []*diagnostics
 	if ds := needsNative(info); ds != nil {
 		return jsgen.Output{}, ds, nil
 	}
-	out, diags, err := jsgen.GenerateMap(ir.Lower(info), opts)
+	lower := ir.LowerWithoutStatementSpans
+	if opts.SourceMap {
+		lower = ir.Lower
+	}
+	out, diags, err := jsgen.GenerateMap(lower(info), opts)
 	return out, sorted(diags), err
 }
 
@@ -244,7 +241,7 @@ func CheckWASMInput(in Input) (*loader.Program, []*diagnostics.Diagnostic, error
 	if ds := needsJS(info); ds != nil {
 		return nil, ds, nil
 	}
-	if err := ir.Verify(ir.Lower(info)); err != nil {
+	if err := ir.Verify(ir.LowerWithoutStatementSpans(info)); err != nil {
 		return nil, nil, err
 	}
 	return info.Program, nil, nil

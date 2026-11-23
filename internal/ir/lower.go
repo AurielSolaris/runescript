@@ -15,7 +15,20 @@ import (
 // panics if info is incomplete, which would be a checker bug, not a user
 // error.
 func Lower(info *checker.Info) *Program {
-	p := &Program{EntrySite: info.Entry.Name.Span, Spans: map[Stmt]Span{}}
+	return lowerProgram(info, true)
+}
+
+// LowerWithoutStatementSpans skips the statement positions used by source
+// maps. Positions used for runtime diagnostics are still recorded.
+func LowerWithoutStatementSpans(info *checker.Info) *Program {
+	return lowerProgram(info, false)
+}
+
+func lowerProgram(info *checker.Info, statementSpans bool) *Program {
+	p := &Program{EntrySite: info.Entry.Name.Span}
+	if statementSpans {
+		p.Spans = make(map[Stmt]Span)
+	}
 	l := &lowerer{info: info, prog: p, funcs: map[*ast.FuncDecl]*Func{}, syms: map[*checker.FuncSym]*Func{},
 		externs: map[*checker.ExternSym]*Extern{}, aggregateOf: map[*ast.Ident]*checker.MemberSet{},
 		methodOf: map[*ast.FuncDecl]*checker.MemberSet{}, ctors: map[*checker.MemberSet]*Func{}}
@@ -75,6 +88,12 @@ type lowerer struct {
 
 func (l *lowerer) ice(format string, args ...any) {
 	panic("ir: internal compiler error: " + fmt.Sprintf(format, args...))
+}
+
+func (l *lowerer) recordSpan(s Stmt, span Span) {
+	if l.prog.Spans != nil {
+		l.prog.Spans[s] = span
+	}
 }
 
 func (l *lowerer) fn(sym *checker.FuncSym) *Func {
@@ -164,7 +183,7 @@ func (l *lowerer) buildCtor(cs *checker.MemberSet, f *Func) {
 		if cs.CtorPrefix > 0 && values[i] != nil {
 			v := l.declare("init$"+fd.Name.Name, cs.Type.Fields[i].Type, false)
 			d := &Decl{Var: v, Init: values[i]}
-			l.prog.Spans[d] = fd.Span
+			l.recordSpan(d, fd.Span)
 			body.Stmts = append(body.Stmts, d)
 			values[i] = &Load{Var: v}
 		}
@@ -177,7 +196,7 @@ func (l *lowerer) buildCtor(cs *checker.MemberSet, f *Func) {
 			i := types.FieldIndex(cs.Type, name)
 			v := l.declare("set$"+name, cs.Type.Fields[i].Type, false)
 			d := &Decl{Var: v, Init: l.expr(s.Value)}
-			l.prog.Spans[d] = s.Span
+			l.recordSpan(d, s.Span)
 			body.Stmts = append(body.Stmts, d)
 			values[i] = &Load{Var: v}
 		}
@@ -193,7 +212,7 @@ func (l *lowerer) buildCtor(cs *checker.MemberSet, f *Func) {
 		init = &StructLit{T: cs.Type, Inits: fields}
 	}
 	create := &Decl{Var: this, Init: init}
-	l.prog.Spans[create] = cs.Name.Span
+	l.recordSpan(create, cs.Name.Span)
 	body.Stmts = append(body.Stmts, create)
 	if def != nil {
 		l.ctorThis = this
@@ -325,8 +344,10 @@ func (l *lowerer) block(b *ast.Block) *Block {
 	out := &Block{}
 	for _, s := range b.Stmts {
 		if st := l.stmt(s); st != nil {
-			if _, ok := l.prog.Spans[st]; !ok {
-				l.prog.Spans[st] = s.NodeSpan()
+			if l.prog.Spans != nil {
+				if _, ok := l.prog.Spans[st]; !ok {
+					l.prog.Spans[st] = s.NodeSpan()
+				}
 			}
 			out.Stmts = append(out.Stmts, st)
 		}
@@ -908,7 +929,7 @@ func (l *lowerer) forEach(s *ast.ForEachStmt) Stmt {
 	}
 	init := &Decl{Var: arr, Init: x}
 	for _, st := range []Stmt{get, loop, init} {
-		l.prog.Spans[st] = s.Span
+		l.recordSpan(st, s.Span)
 	}
 	return &Block{Stmts: []Stmt{init, loop}}
 }

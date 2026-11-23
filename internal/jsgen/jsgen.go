@@ -99,7 +99,9 @@ func GenerateMap(p *ir.Program, opts Options) (out Output, diags []*diagnostics.
 	for _, f := range p.Funcs {
 		pkgs[f.Pkg] = true
 	}
-	g.spans = p.Spans
+	if opts.SourceMap {
+		g.sourceMap, g.spans = true, p.Spans
+	}
 	if opts.ExtractCSS {
 		g.styles = map[string]string{}
 	}
@@ -119,11 +121,13 @@ func GenerateMap(p *ir.Program, opts Options) (out Output, diags []*diagnostics.
 		out.RuntimeFile = fmt.Sprintf("runtime-%x.js", hash[:12])
 		out.Runtime = []byte(runtime)
 	}
-	js, maps := unmark(g.module(p, opts, entrySite, runtime, out.RuntimeFile), g.marks)
-	out.JS, out.CSS = []byte(js), []byte(g.css.String())
+	js := g.module(p, opts, entrySite, runtime, out.RuntimeFile)
+	out.CSS = []byte(g.css.String())
 	if !opts.SourceMap {
+		out.JS = []byte(js)
 		return out, nil, nil
 	}
+	js, maps := unmark(js, g.marks)
 	m := buildMap(maps, opts.File, opts.SourcePath)
 	url := opts.MapURL
 	if url == "" {
@@ -225,9 +229,10 @@ type gen struct {
 	// Source maps: spans locates IR statements in the source, marks are
 	// the positions markers refer to, and pending is the marker that the
 	// next line written starts with (see sourcemap.go).
-	spans   map[ir.Stmt]diagnostics.Span
-	marks   []diagnostics.Pos
-	pending string
+	sourceMap bool
+	spans     map[ir.Stmt]diagnostics.Span
+	marks     []diagnostics.Pos
+	pending   string
 }
 
 type jsImport struct{ module, ns string }
@@ -367,7 +372,9 @@ func (g *gen) module(p *ir.Program, opts Options, entrySite int, runtime, runtim
 	fmt.Fprintf(&m, "    entrySite: %d,\n", entrySite)
 	m.WriteString("  };\n")
 	m.WriteString("})($rt);\n\n")
-	m.WriteString(unmapped) // the footer is not RuneScript code
+	if g.sourceMap {
+		m.WriteString(unmapped) // the footer is not RuneScript code
+	}
 	m.WriteString(moduleAPI)
 	if opts.BrowserEntry {
 		m.WriteString("\nif (typeof document !== \"undefined\") run();\n")
@@ -572,10 +579,12 @@ func (g *gen) block(b *ir.Block) {
 }
 
 func (g *gen) stmt(s ir.Stmt) {
-	if span, ok := g.spans[s]; ok {
-		g.pending = g.marker(span)
+	if g.sourceMap {
+		if span, ok := g.spans[s]; ok {
+			g.pending = g.marker(span)
+		}
+		defer func() { g.pending = "" }()
 	}
-	defer func() { g.pending = "" }()
 	switch s := s.(type) {
 	case *ir.FuncStmt:
 		g.funcDecl(s.Func)

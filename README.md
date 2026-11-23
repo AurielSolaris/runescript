@@ -222,6 +222,28 @@ the startup cost for each runner.
 | Empty program, minified + gzip (bytes) | – | 4,862 | 20 |
 | Compile a 2,000-function file (ms) | – | 948.1 | 1,894.9 |
 
+### Compiler stages
+
+The in-process benchmarks below measure JavaScript generation with source
+maps off. Times include IR verification and exclude process startup and
+output writes. Values are medians of five runs on Windows x64 with Go
+1.25.11 and an Intel Core Ultra 7 155H.
+
+| Workload | Before (ms) | After (ms) |
+| --- | ---: | ---: |
+| 2,000 functions, mostly unused | 56.7 | 45.0 |
+| 2,000 functions, all used | 67.2 | 45.5 |
+| 101 files | 5.0 | 4.2 |
+
+On the mostly unused workload, IR lowering also fell from 20.8 ms to
+15.0 ms. Source maps remain opt-in with `--source-map`.
+
+```sh
+go test ./tests -run '^$' -bench 'BenchmarkCompilerStages' -benchmem -count=5
+```
+
+### Multi-page websites
+
 Run `go run ./bench/rsbench web` to build the two-page example and compare
 its payload and mount time with hand-written JavaScript. The two-page
 payload counts identical runtime and CSS assets once. Mount timings use

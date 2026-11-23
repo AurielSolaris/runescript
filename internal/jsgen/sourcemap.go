@@ -30,7 +30,7 @@ const unmapped = string(markOpen) + "-" + string(markClose)
 
 // marker returns the marker for the start of span.
 func (g *gen) marker(span diagnostics.Span) string {
-	if span.Start.File == nil {
+	if !g.sourceMap || span.Start.File == nil {
 		return ""
 	}
 	g.marks = append(g.marks, span.Start)

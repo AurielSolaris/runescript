@@ -38,9 +38,8 @@ type Program struct {
 	// Externs are the extern functions called anywhere in the program, in
 	// order of first call.
 	Externs []*Extern
-	// Spans locates the source statement each statement of a block was
-	// lowered from (for source maps). Statements made up by lowering may
-	// be missing.
+	// Spans locates statements for source maps. It is nil when statement
+	// spans were omitted, and synthesized statements may be missing.
 	Spans map[Stmt]Span
 }
 

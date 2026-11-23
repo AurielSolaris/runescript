@@ -10,6 +10,17 @@ go tool pprof -top interpreter.cpu
 go test ./tests -run '^$' -bench 'BenchmarkCompiledSuite' -benchmem
 ```
 
+To measure compiler stages in-process on single-file and multi-file inputs:
+
+```sh
+go test ./tests -run '^$' -bench 'BenchmarkCompilerStages' -benchmem -count=5
+```
+
+`LoadParse` includes filesystem access and import resolution. `EmitJS`
+includes IR verification. The source-map variants measure optional statement
+span collection and map emission. The `rsbench compile` command below measures
+clean builds including process startup and output writes.
+
 This suite compares RuneScript with **TypeScript 1.0 RC**, its contemporary
 baseline. Correctness, runtime speed, generated-code size, compiler speed,
 and diagnostics are measured separately. Every benchmark is a small,

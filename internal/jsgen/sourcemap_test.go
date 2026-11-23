@@ -23,7 +23,11 @@ func generateMap(t *testing.T, src string, opts Options) Output {
 	if diags != nil {
 		t.Fatal(diags)
 	}
-	out, diags, err := GenerateMap(ir.Lower(info), opts)
+	lower := ir.LowerWithoutStatementSpans
+	if opts.SourceMap {
+		lower = ir.Lower
+	}
+	out, diags, err := GenerateMap(lower(info), opts)
 	if err != nil || diags != nil {
 		t.Fatal(err, diags)
 	}
@@ -111,6 +115,10 @@ protected int main() {
 	}
 	if !strings.HasSuffix(js, "\n//# sourceMappingURL=t.js.map\n") {
 		t.Errorf("no sourceMappingURL comment at the end:\n%s", js[len(js)-200:])
+	}
+	plain := generateMap(t, src, Options{Version: "test"})
+	if strings.TrimSuffix(js, "//# sourceMappingURL=t.js.map\n") != string(plain.JS) {
+		t.Error("the source map changed the generated code for functions, loops, or lambdas")
 	}
 	var m sourceMapJSON
 	if err := json.Unmarshal(out.Map, &m); err != nil {
