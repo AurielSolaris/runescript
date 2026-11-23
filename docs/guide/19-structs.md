@@ -190,9 +190,38 @@ protected int main() {
 }
 ```
 
-## Not yet available
+## Methods and constructors
 
-Methods, constructors, private fields, and passing structs to JavaScript
-`extern` functions.
+Methods can read `this` and call other methods. To change a struct's
+value fields, modify a local copy or use a constructor to make a new value.
+
+```text
+package app;
+
+public struct Point {
+    int x;
+    int y;
+
+    public Point(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    public int sum() {
+        return this.x + this.y;
+    }
+}
+
+protected int main() {
+    Point p = new Point(3, 4);
+    trace(p.sum());
+    return 0;
+}
+```
+
+Named-field literals such as `Point{x: 3, y: 4}` initialize fields directly.
+Constructors and methods use the same access modifiers as functions.
+A struct can have one constructor. If a field has no zero value, assign
+it at the start of the constructor before using `this`.
 
 Next: [Files, input, and output](20-files-and-input.md)

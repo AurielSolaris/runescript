@@ -1,5 +1,15 @@
 # RuneScript benchmark and conformance suite
 
+To profile execution separately from parsing and process startup, run the
+Go benchmarks. They exercise the tree-walking reference and the compiled
+engine used by the CLI.
+
+```sh
+go test ./tests -run '^$' -bench 'BenchmarkInterpreterSuite' -cpuprofile interpreter.cpu
+go tool pprof -top interpreter.cpu
+go test ./tests -run '^$' -bench 'BenchmarkCompiledSuite' -benchmem
+```
+
 This suite compares RuneScript with **TypeScript 1.0 RC**, its contemporary
 baseline. Correctness, runtime speed, generated-code size, compiler speed,
 and diagnostics are measured separately. Every benchmark is a small,

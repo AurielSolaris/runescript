@@ -132,6 +132,63 @@ type textDocumentPositionParams struct {
 	Position     Position               `json:"position"`
 }
 
+type referenceParams struct {
+	textDocumentPositionParams
+	Context struct {
+		IncludeDeclaration bool `json:"includeDeclaration"`
+	} `json:"context"`
+}
+
+type renameParams struct {
+	textDocumentPositionParams
+	NewName string `json:"newName"`
+}
+
+type textEdit struct {
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
+}
+
+type workspaceEdit struct {
+	Changes map[string][]textEdit `json:"changes"`
+}
+
+type signatureHelp struct {
+	Signatures      []signatureInformation `json:"signatures"`
+	ActiveParameter int                    `json:"activeParameter"`
+}
+
+type signatureInformation struct {
+	Label      string                 `json:"label"`
+	Parameters []parameterInformation `json:"parameters"`
+}
+
+type parameterInformation struct {
+	Label string `json:"label"`
+}
+
+type formattingParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+	Options      struct {
+		TabSize      int  `json:"tabSize"`
+		InsertSpaces bool `json:"insertSpaces"`
+	} `json:"options"`
+}
+
+type codeActionParams struct {
+	TextDocument textDocumentIdentifier `json:"textDocument"`
+	Range        Range                  `json:"range"`
+	Context      struct {
+		Only []string `json:"only"`
+	} `json:"context"`
+}
+
+type codeAction struct {
+	Title string        `json:"title"`
+	Kind  string        `json:"kind"`
+	Edit  workspaceEdit `json:"edit"`
+}
+
 type didOpenParams struct {
 	TextDocument textDocumentItem `json:"textDocument"`
 }

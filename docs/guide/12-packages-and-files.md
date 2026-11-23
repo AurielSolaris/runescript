@@ -54,6 +54,8 @@ package geom;
 
 use "./util/text.txt";
 
+public semver version = 1.0.0;
+
 public int perimeter(int w, int h) {
     trace(text.shout("perimeter"));
     return scale(2 * (w + h));
@@ -80,6 +82,31 @@ HI
 ```
 
 ## Packages
+
+### Module metadata
+
+Every `.rsm` file declares a version after its `use` lines and before
+functions and types. Existing modules need a version declaration before
+they can be checked or run. Optional author and license declarations go
+in the same block.
+
+```text
+public semver version = 1.2.3-rc.1+build.5;
+public string author = "Geometry contributors";
+public string license = "MIT";
+```
+
+`public string version = "1.2.3-rc.1+build.5";` declares the same version.
+The builder `semver(1, 2, 3, "rc", 1, ["build", "5"])` also produces it.
+Use integer literals for the three core numbers, string or integer
+literals for individual prerelease identifiers, and an optional final array
+of string literals for build metadata. Each string names one identifier.
+All forms are checked against SemVer 2.0.0.
+
+Read the common version as `geom.version`. If the files have different
+versions, select one by basename, such as `geom.version['perimeter']`.
+The result is a read-only `string`. Use `std:semver` for precedence and range
+comparisons.
 
 A package is every file that declares the same `package` name.
 

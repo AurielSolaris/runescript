@@ -1,4 +1,4 @@
-package shapes;
+package shapes; public semver version = 1.0.0;
 
 // Another file of package shapes: it may use Circle's protected members.
 public Circle doubled(Circle c) {

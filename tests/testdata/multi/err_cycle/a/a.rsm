@@ -1,5 +1,5 @@
 package a;
-use "b";
+use "b"; public semver version = 1.0.0;
 
 public int f(int n) {
     return b.g(n);

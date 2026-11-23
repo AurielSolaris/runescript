@@ -104,6 +104,12 @@ func children(n node) []node {
 		for _, f := range n.Fields {
 			add(f)
 		}
+		for _, d := range n.Ctors {
+			add(d)
+		}
+		for _, d := range n.Methods {
+			add(d)
+		}
 	case *ast.FieldDecl:
 		add(n.Type, n.Name)
 	case *ast.ClassDecl:

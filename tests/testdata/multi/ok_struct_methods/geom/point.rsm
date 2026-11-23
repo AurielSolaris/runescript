@@ -1,0 +1,36 @@
+package geom;
+public semver version = 1.0.0;
+
+public struct Point {
+    int x;
+    int y;
+
+    public Point(int x) {
+        this.x = x;
+        try {
+            return;
+        } finally {
+            this.y = this.x + 1;
+        }
+    }
+
+    private int getY() {
+        return this.y;
+    }
+
+    public int sum() {
+        return this.x + this.getY();
+    }
+}
+
+public struct Callback {
+    int(int) fn;
+
+    public Callback(int(int) fn) {
+        this.fn = fn;
+    }
+
+    public int apply(int n) {
+        return this.fn(n);
+    }
+}

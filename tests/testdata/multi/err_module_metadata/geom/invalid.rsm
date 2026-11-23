@@ -1,0 +1,2 @@
+package geom;
+public semver version = 1.2.3-rc.01; // expect: ASX-USE-010 geom/invalid.rsm:2:1

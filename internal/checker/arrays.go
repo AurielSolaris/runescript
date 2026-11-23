@@ -66,6 +66,9 @@ func (c *checker) arrayLit(e *ast.ArrayLit, expected *types.Type) *types.Type {
 
 // index checks a[i] and returns the element type.
 func (c *checker) index(e *ast.IndexExpr) *types.Type {
+	if pkg := c.versionPackage(e.X); pkg != nil {
+		return c.moduleVersion(pkg, e, e.Index)
+	}
 	t := c.defaulted(e.X).typ
 	c.indexValue(e.Index)
 	switch t.Kind {

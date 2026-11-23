@@ -213,9 +213,38 @@ protected int main() {
 
 <div dir="rtl">
 
-## עדיין לא זמין
+## מתודות ובנאים
 
-מתודות, בנאים, שדות פרטיים, והעברת מבנים לפונקציות `extern` של JavaScript.
+מתודות יכולות לקרוא את `this` ולקרוא למתודות אחרות. כדי לשנות שדה של מבנה,
+משנים עותק מקומי או משתמשים בבנאי ליצירת ערך חדש.
+
+```text
+package app;
+
+public struct Point {
+    int x;
+    int y;
+
+    public Point(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    public int sum() {
+        return this.x + this.y;
+    }
+}
+
+protected int main() {
+    Point p = new Point(3, 4);
+    trace(p.sum());
+    return 0;
+}
+```
+
+ליטרל עם שמות שדות כמו `Point{x: 3, y: 4}` מאתחל את השדות ישירות.
+מתודות ובנאים משתמשים באותם מצייני גישה כמו פונקציות. למבנה יכול להיות בנאי
+אחד. אם אין לשדה ערך אפס, מקצים לו ערך בתחילת הבנאי לפני השימוש ב-`this`.
 
 הבא: [קבצים, קלט ופלט](20-files-and-input.md)
 

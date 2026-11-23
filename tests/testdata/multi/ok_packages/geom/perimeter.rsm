@@ -1,6 +1,6 @@
 package geom;
 
-use "./util/text.txt";
+use "./util/text.txt"; public semver version = 1.0.0;
 
 public int perimeter(int w, int h) {
     trace(text.shout("perimeter"));

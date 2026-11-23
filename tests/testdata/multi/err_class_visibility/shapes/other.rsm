@@ -1,4 +1,4 @@
-package shapes;
+package shapes; public semver version = 1.0.0;
 
 // Circle's private field belongs to circle.rsm, not to this file.
 public int peek(Circle c) {

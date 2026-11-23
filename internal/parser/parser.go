@@ -123,7 +123,13 @@ func (p *parser) file() *ast.File {
 	for p.isKeyword("use") {
 		f.Uses = append(f.Uses, p.useDecl())
 	}
+	for p.isModuleMetadata() {
+		f.Metadata = append(f.Metadata, p.moduleMetadata())
+	}
 	for !p.is(lexer.EOF, "") {
+		if p.isModuleMetadata() {
+			p.fail(diagnostics.UseModuleMetadata, p.tok().Span, "module metadata must precede other declarations")
+		}
 		if p.isKeyword("use") {
 			p.fail(diagnostics.ParseUnexpected, p.tok().Span, "use declarations must come before any function")
 		}
@@ -142,6 +148,39 @@ func (p *parser) file() *ast.File {
 		f.Funcs = append(f.Funcs, p.funcDecl())
 	}
 	return f
+}
+
+func (p *parser) isModuleMetadata() bool {
+	t := p.peekTok(1)
+	name := p.peekTok(2)
+	return p.isKeyword("public") && (t.Text == "string" || t.Text == "semver") &&
+		name.Kind == lexer.Ident && (name.Text == "version" || name.Text == "author" || name.Text == "license") &&
+		p.peekTok(3).Kind != lexer.LParen
+}
+
+func (p *parser) moduleMetadata() *ast.ModuleMetadata {
+	start := p.next().Span
+	m := &ast.ModuleMetadata{Type: p.next().Text, Name: p.next().Text}
+	if m.Type == "semver" && m.Name != "version" {
+		p.fail(diagnostics.UseModuleMetadata, start, "semver is only available for the module version")
+	}
+	p.expect(lexer.Assign, "'=' after the metadata name")
+	switch {
+	case m.Type == "string":
+		m.Value = p.expect(lexer.String, "a string literal").Text
+	case p.is(lexer.Version, ""):
+		m.Value = p.next().Text
+	case p.is(lexer.Ident, "semver"):
+		p.next()
+		m.Args = p.callArgs(nil).Args
+		if m.Args == nil {
+			m.Args = []ast.Expr{}
+		}
+	default:
+		p.unexpected("a version literal or semver(...)")
+	}
+	m.Span = span(start, p.expect(lexer.Semicolon, "';' after the metadata").Span)
+	return m
 }
 
 // isStructDecl reports whether a struct declaration starts here:
@@ -172,6 +211,18 @@ func (p *parser) structDecl() *ast.StructDecl {
 	for !p.is(lexer.RBrace, "") {
 		if p.is(lexer.EOF, "") {
 			p.unexpected("'}' to end the struct")
+		}
+		if vis, ok := visibilities[p.tok().Text]; ok && p.tok().Kind == lexer.Keyword {
+			start := p.next().Span
+			if p.is(lexer.Ident, d.Name.Name) && p.peekTok(1).Kind == lexer.LParen {
+				name := p.ident("constructor name")
+				fn := &ast.FuncDecl{Visibility: vis, Name: name, Result: &ast.TypeRef{Name: "void", Span: name.Span}}
+				d.Ctors = append(d.Ctors, p.funcRest(fn, start, false))
+			} else {
+				fn := &ast.FuncDecl{Visibility: vis, Result: p.typeRef("method result type"), Name: p.ident("method name")}
+				d.Methods = append(d.Methods, p.funcRest(fn, start, false))
+			}
+			continue
 		}
 		fd := &ast.FieldDecl{Type: p.typeRef("field type")}
 		fd.Name = p.ident("field name")
@@ -965,7 +1016,13 @@ func (p *parser) postfix(x ast.Expr) ast.Expr {
 	for p.is(lexer.LParen, "") || p.is(lexer.Dot, "") || p.is(lexer.LBracket, "") {
 		if p.is(lexer.LBracket, "") {
 			p.next()
-			i := p.expr()
+			var i ast.Expr
+			if p.is(lexer.ModuleKey, "") {
+				t := p.next()
+				i = &ast.StringLit{Value: t.Text, Span: t.Span}
+			} else {
+				i = p.expr()
+			}
 			end := p.expect(lexer.RBracket, "']' after the index")
 			x = &ast.IndexExpr{X: x, Index: i, Span: span(x.NodeSpan(), end.Span)}
 			continue

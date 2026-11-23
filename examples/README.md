@@ -60,6 +60,16 @@ go run ./cmd/runescript dev examples/web/counter/app.rsc
 Node.js, clicks what its `// click:` comments name, and compares the HTML
 with `tests/testdata/web/<name>.out`.
 
+## Native games
+
+The graphics-enabled CLI runs these examples in a desktop window.
+[Build instructions](../docs/guide/25-native-graphics.md)
+
+| Example | Controls |
+| --- | --- |
+| [Click the circle](native/click-circle.rsc) | Click the circle to score. The Reset score button restarts the counter. |
+| [Keep up](native/keep-up.rsc) | Move the paddle with Left and Right to keep the ball in play. |
+
 ## Tests
 
 Every example is tested by `tests/golden_test.go`. Programs are run and

@@ -1,4 +1,4 @@
-package lib;
+package lib; public semver version = 1.0.0;
 
 public int open() {
     return shared() + secret();

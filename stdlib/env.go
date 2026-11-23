@@ -28,7 +28,8 @@ type Env struct {
 	Getwd  func() (string, error)
 	// Windows selects Windows path rules for std:path's platform-dependent
 	// functions; it defaults to runtime.GOOS == "windows" (see NewEnv).
-	Windows bool
+	Windows  bool
+	graphics *graphicsSession
 }
 
 // NewEnv is an Env with the process's own streams, arguments, and

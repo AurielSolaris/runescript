@@ -82,7 +82,7 @@ func TestExternIsFilePrivate(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("lib.rsm", "package p;\nextern \"./m.mjs\" int f();\nprotected int g() { return f(); }\n")
+	write("lib.rsm", "package p; public semver version = 1.0.0;\nextern \"./m.mjs\" int f();\nprotected int g() { return f(); }\n")
 	prog, diags := loader.LoadSource(diagnostics.NewSource("main.rsc", []byte("package p;\nuse \"./lib.rsm\";\nprotected int main() { return g() + f(); }\n")), dir)
 	if len(diags) != 0 {
 		t.Fatal(diags)

@@ -72,6 +72,8 @@ package geom;
 
 use "./util/text.txt";
 
+public semver version = 1.0.0;
+
 public int perimeter(int w, int h) {
     trace(text.shout("perimeter"));
     return scale(2 * (w + h));
@@ -104,6 +106,27 @@ HI
 <div dir="rtl">
 
 ## חבילות
+
+### מטא־נתונים של מודול
+
+כל קובץ `.rsm` חייב להצהיר על גרסה אחרי שורות ה-`use` ולפני הפונקציות והטיפוסים.
+אפשר להצהיר באותו מקום גם על מחבר ורישיון.
+
+```text
+public semver version = 1.2.3-rc.1+build.5;
+public string author = "Geometry contributors";
+public string license = "MIT";
+```
+
+אפשר להצהיר על אותה גרסה גם עם `public string version = "1.2.3-rc.1+build.5";`
+או עם הבונה `semver(1, 2, 3, "rc", 1, ["build", "5"])`.
+שלושת הארגומנטים הראשונים הם ליטרלים של מספרים שלמים. כל מזהה של גרסת קדם
+יכול להיות ליטרל של מחרוזת או של מספר שלם. המערך האחרון הוא אופציונלי ומכיל
+ליטרל מחרוזת לכל מזהה בנייה. כל הצורות נבדקות לפי SemVer 2.0.0.
+
+את הגרסה המשותפת קוראים עם `geom.version`. אם לקבצים יש גרסאות שונות,
+בוחרים קובץ בשמו ללא הסיומת, למשל `geom.version['perimeter']`.
+התוצאה היא `string` לקריאה בלבד. להשוואת גרסאות משתמשים ב-`std:semver`.
 
 חבילה היא כל הקבצים שמצהירים על אותו שם `package`.
 

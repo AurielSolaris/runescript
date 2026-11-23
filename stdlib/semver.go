@@ -40,7 +40,7 @@ func init() {
 	}
 	p := &Package{Path: "semver", Qualifier: "semver"}
 	p.add(
-		fn("valid", B, func(a []any) any { _, ok := svParse(str(a[0])); return ok }, S),
+		fn("valid", B, func(a []any) any { return ValidSemver(str(a[0])) }, S),
 		fn("validRange", B, func(a []any) any { _, err := svParseRange(str(a[0])); return err == "" }, S),
 		fn("compare", I, func(a []any) any { return int64(svCompare(svMust(str(a[0])), svMust(str(a[1])))) }, S, S),
 		cmp("eq", func(c int) bool { return c == 0 }),
@@ -64,6 +64,12 @@ func init() {
 		fn("build", S, func(a []any) any { return strings.Join(svMust(str(a[0])).build, ".") }, S),
 	)
 	register(p)
+}
+
+// ValidSemver reports whether s is a strict SemVer 2.0.0 version.
+func ValidSemver(s string) bool {
+	_, ok := svParse(s)
+	return ok
 }
 
 // semVersion is a parsed version. The numbers are kept as digit strings,

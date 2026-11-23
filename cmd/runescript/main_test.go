@@ -43,7 +43,10 @@ func TestCLI(t *testing.T) {
 		{"no args", nil, exitUsage, "", "usage:"},
 		{"unknown command", []string{"frobnicate", ok}, exitUsage, "", "usage:"},
 		{"build bad", []string{"build", bad}, exitCompileError, "", "error ASX-TYPE-004"},
-		{"build unknown target", []string{"build", "--target", "wasm", ok}, exitUsage, "", "unknown target"},
+		{"build unknown target", []string{"build", "--target", "unknown", ok}, exitUsage, "", "unknown target"},
+		{"wasm source map", []string{"build", "--target", "wasm", "--source-map", ok}, exitUsage, "", "--source-map requires --target js"},
+		{"wasm invalid program", []string{"build", "--target", "wasm", bad}, exitCompileError, "", "ASX-TYPE-004"},
+		{"js asset", []string{"build", "--asset", "example.png", ok}, exitUsage, "", "--asset requires --target wasm"},
 		{"build no file", []string{"build"}, exitUsage, "", "usage:"},
 		{"version", []string{"version"}, 0, "runescript " + Version, ""},
 		{"warning runs", []string{"run", warn}, 0, "ran\n", "prog.rsc:3:9: warning ASX-WARN-001: variable 'unused' is never used"},
@@ -162,7 +165,7 @@ func TestBuildSourceMap(t *testing.T) {
 	dir := t.TempDir()
 	for name, src := range map[string]string{
 		"app/main.rsc":     "package app;\nuse \"./app/lib/geom.rsm\";\nprotected int main() {\n    trace(geom.area(2));\n    return 0;\n}\n",
-		"app/lib/geom.rsm": "package geom;\npublic int area(int s) {\n    return s * s;\n}\n",
+		"app/lib/geom.rsm": "package geom; public semver version = 1.0.0;\npublic int area(int s) {\n    return s * s;\n}\n",
 	} {
 		path := filepath.Join(dir, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

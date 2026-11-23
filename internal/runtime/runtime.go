@@ -187,17 +187,18 @@ const (
 	ctlReturn
 )
 
-// frame is one function call. Each variable declaration is its own
-// *ir.Var, so one map holds every variable of the call.
+// frame is one function call. The lowerer assigns every local a slot.
 type frame struct {
-	vars map[*ir.Var]Value
+	vars []Value
 	ret  Value
 }
 
 type interp struct {
-	out   io.Writer
-	env   *stdlib.Env
-	depth int
+	out    io.Writer
+	env    *stdlib.Env
+	depth  int
+	code   map[*ir.Func]statement
+	frames []*frame
 	// raising is the error being thrown, from the throw (or failed
 	// operation) until a catch clause catches it, and fatal is set once an
 	// error that cannot be caught is raised. Try statements look at them
@@ -223,12 +224,23 @@ func Run(p *ir.Program, out io.Writer) (code int, err error) {
 // RunEnv is Run with the program's environment: trace and io.print write
 // to env.Stdout, io.error and io.warn to env.Stderr, and so on.
 func RunEnv(p *ir.Program, env *stdlib.Env) (code int, err error) {
+	return runEnv(p, env, nil)
+}
+
+// RunCompiledEnv executes verified IR with Go closures for control flow and
+// common expressions. RunEnv is the tree-walking reference.
+func RunCompiledEnv(p *ir.Program, env *stdlib.Env) (int, error) {
+	return runEnv(p, env, make(map[*ir.Func]statement))
+}
+
+func runEnv(p *ir.Program, env *stdlib.Env, codeCache map[*ir.Func]statement) (code int, err error) {
 	out := env.Stdout
 	if len(p.Externs) > 0 {
 		// The driver reports this as ASX-TARGET-002 before calling Run.
 		return 0, fmt.Errorf("the program calls extern function '%s'; only the JavaScript target can run it", p.Externs[0].Name)
 	}
-	in := &interp{out: out, env: env}
+	in := &interp{out: out, env: env, code: codeCache}
+	defer env.CloseGraphics()
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -284,14 +296,43 @@ func (in *interp) call(f *ir.Func, args []Value, site diagnostics.Span) Value {
 	if in.depth >= MaxCallDepth {
 		in.fail(diagnostics.RunCallDepth, site, "maximum call depth (%d) exceeded", MaxCallDepth)
 	}
-	in.depth++
-	defer func() { in.depth-- }()
-	fr := &frame{vars: make(map[*ir.Var]Value, len(f.Params))}
-	for i, p := range f.Params {
-		fr.vars[p] = args[i]
+	if in.depth == len(in.frames) {
+		in.frames = append(in.frames, &frame{})
 	}
-	in.block(fr, f.Body)
-	return fr.ret
+	fr := in.frames[in.depth]
+	in.depth++
+	if cap(fr.vars) < f.FrameSlots {
+		fr.vars = make([]Value, f.FrameSlots)
+	} else {
+		fr.vars = fr.vars[:f.FrameSlots]
+	}
+	for i, p := range f.Params {
+		fr.vars[p.Slot] = args[i]
+	}
+	if in.code == nil {
+		in.block(fr, f.Body)
+	} else {
+		body := in.code[f]
+		if body == nil {
+			body = compileBlock(f.Body)
+			in.code[f] = body
+		}
+		body(in, fr)
+	}
+	// A throw skips this decrement. The catch or finally that handles it
+	// restores the depth at entry to the try statement.
+	result := fr.ret
+	in.releaseCalls(in.depth - 1)
+	return result
+}
+
+func (in *interp) releaseCalls(depth int) {
+	for in.depth > depth {
+		in.depth--
+		f := in.frames[in.depth]
+		clear(f.vars)
+		f.ret = Value{}
+	}
 }
 
 // ---- statements ----
@@ -310,9 +351,9 @@ func (in *interp) stmt(f *frame, s ir.Stmt) control {
 	case *ir.FuncStmt:
 		// Nested functions are referred to directly by the IR.
 	case *ir.Decl:
-		f.vars[s.Var] = in.expr(f, s.Init)
+		f.vars[s.Var.Slot] = in.expr(f, s.Init)
 	case *ir.Assign:
-		f.vars[s.Var] = in.expr(f, s.Value)
+		f.vars[s.Var.Slot] = in.expr(f, s.Value)
 	case *ir.Eval:
 		in.expr(f, s.X)
 	case *ir.IndexSet:
@@ -323,6 +364,10 @@ func (in *interp) stmt(f *frame, s ir.Stmt) control {
 		if s.Value != nil {
 			f.ret = in.expr(f, s.Value)
 		}
+		return ctlReturn
+	case *ir.ConstructorBody:
+		in.block(f, s.Body)
+	case *ir.ConstructorReturn:
 		return ctlReturn
 	case *ir.If:
 		if in.expr(f, s.Cond).Bool {
@@ -399,7 +444,8 @@ func (in *interp) tryStmt(f *frame, s *ir.Try) (c control) {
 			// block throws one of its own, which replaces it, or returns,
 			// breaks, or continues, which discards it.
 			raising := in.raising
-			in.depth, in.olds = depth, in.olds[:olds]
+			in.releaseCalls(depth)
+			in.olds = in.olds[:olds]
 			in.raising = nil
 			if fc := in.block(f, s.Finally); fc != ctlNone {
 				if raising != nil {
@@ -439,8 +485,9 @@ func (in *interp) tryCatch(f *frame, s *ir.Try) control {
 	if err == nil {
 		return c
 	}
-	in.depth, in.olds = depth, in.olds[:olds]
-	f.vars[clause.Var] = Value{Kind: types.Error, Err: err}
+	in.releaseCalls(depth)
+	in.olds = in.olds[:olds]
+	f.vars[clause.Var.Slot] = Value{Kind: types.Error, Err: err}
 	return in.block(f, clause.Body)
 }
 
@@ -459,8 +506,8 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 	case *ir.CharConst:
 		return Value{Kind: types.Char, Int: int64(e.Value)}
 	case *ir.Load:
-		v, ok := f.vars[e.Var]
-		if !ok {
+		v := f.vars[e.Var.Slot]
+		if v.Kind == types.Invalid {
 			ice("variable %s read before its declaration", e.Var.Name)
 		}
 		return v
@@ -489,9 +536,9 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 		// & | ^ give an in-range result of the same type.
 		var r int64
 		switch e.Op {
-		case "&":
+		case ir.OpAndBits:
 			r = x.Int & y.Int
-		case "|":
+		case ir.OpOrBits:
 			r = x.Int | y.Int
 		default:
 			r = x.Int ^ y.Int
@@ -517,7 +564,7 @@ func (in *interp) expr(f *frame, e ir.Expr) Value {
 		return boolean(compare(e.Op, in.expr(f, e.X), in.expr(f, e.Y)))
 	case *ir.Logic:
 		x := in.expr(f, e.X)
-		if x.Bool == (e.Op == "||") { // short-circuit
+		if x.Bool == (e.Op == ir.OpOr) { // short-circuit
 			return x
 		}
 		return in.expr(f, e.Y)
@@ -623,13 +670,13 @@ func (in *interp) exprs(f *frame, list []ir.Expr) []Value {
 func boolean(b bool) Value { return Value{Kind: types.Bool, Bool: b} }
 
 // compare applies a comparison to two values of the same type.
-func compare(op string, x, y Value) bool {
+func compare(op ir.Operator, x, y Value) bool {
 	var c int // -1, 0, or 1
 	switch x.Kind {
 	case types.Float:
 		switch {
 		case math.IsNaN(x.F) || math.IsNaN(y.F):
-			return op == "!=" // NaN is unordered, and equal to nothing
+			return op == ir.OpNotEqual // NaN is unordered, and equal to nothing
 		case x.F < y.F:
 			c = -1
 		case x.F > y.F:
@@ -640,7 +687,7 @@ func compare(op string, x, y Value) bool {
 	case types.Struct:
 		// == and != only: equal when every field is.
 		for i := range x.St.Fields {
-			if !compare("==", x.St.Fields[i], y.St.Fields[i]) {
+			if !compare(ir.OpEqual, x.St.Fields[i], y.St.Fields[i]) {
 				c = 1
 				break
 			}
@@ -670,15 +717,15 @@ func compare(op string, x, y Value) bool {
 		}
 	}
 	switch op {
-	case "==":
+	case ir.OpEqual:
 		return c == 0
-	case "!=":
+	case ir.OpNotEqual:
 		return c != 0
-	case "<":
+	case ir.OpLess:
 		return c < 0
-	case "<=":
+	case ir.OpLessEqual:
 		return c <= 0
-	case ">":
+	case ir.OpGreater:
 		return c > 0
 	}
 	return c >= 0
@@ -688,25 +735,25 @@ func compare(op string, x, y Value) bool {
 // range, so for types up to 32 bits int64 arithmetic is exact, and 64-bit
 // types are computed exactly with big.Int. A result outside the range is a
 // runtime error: integers never wrap (OQ-NUM-01).
-func (in *interp) arith(op string, t *types.Type, x, y Value, span diagnostics.Span) Value {
-	if types.IntBits(t) == 64 || (op == "*" && t.Kind == types.Unsigned) {
+func (in *interp) arith(op ir.Operator, t *types.Type, x, y Value, span diagnostics.Span) Value {
+	if types.IntBits(t) == 64 || (op == ir.OpMul && t.Kind == types.Unsigned) {
 		// Exact with big.Int: 64-bit operands, and products of two 32-bit
 		// unsigned values, which can exceed int64.
 		return in.wideArith(op, t, x, y, span)
 	}
 	var r int64
 	switch op {
-	case "+":
+	case ir.OpAdd:
 		r = x.Int + y.Int
-	case "-":
+	case ir.OpSub:
 		r = x.Int - y.Int
-	case "*":
+	case ir.OpMul:
 		r = x.Int * y.Int
-	case "/", "%":
+	case ir.OpDiv, ir.OpMod:
 		if y.Int == 0 {
 			in.fail(diagnostics.RunDivideByZero, span, "integer division by zero")
 		}
-		if op == "/" {
+		if op == ir.OpDiv {
 			r = x.Int / y.Int
 		} else {
 			r = x.Int % y.Int
@@ -726,13 +773,13 @@ func (in *interp) arith(op string, t *types.Type, x, y Value, span diagnostics.S
 func (in *interp) genericArith(e *ir.Arith, x, y Value) Value {
 	a, b := x.Int, y.Int
 	const small = 1 << 31
-	if a > -small && a < small && b > -small && b < small && e.Op != "/" && e.Op != "%" {
+	if a > -small && a < small && b > -small && b < small && e.Op != ir.OpDiv && e.Op != ir.OpMod {
 		// Both operands below 2^31 in magnitude: exact in int64.
 		var r int64
 		switch e.Op {
-		case "+":
+		case ir.OpAdd:
 			r = a + b
-		case "-":
+		case ir.OpSub:
 			r = a - b
 		default:
 			r = a * b
@@ -744,17 +791,17 @@ func (in *interp) genericArith(e *ir.Arith, x, y Value) Value {
 	}
 	ba, bb, r := big.NewInt(a), big.NewInt(b), new(big.Int)
 	switch e.Op {
-	case "+":
+	case ir.OpAdd:
 		r.Add(ba, bb)
-	case "-":
+	case ir.OpSub:
 		r.Sub(ba, bb)
-	case "*":
+	case ir.OpMul:
 		r.Mul(ba, bb)
 	default:
 		if b == 0 {
 			in.fail(diagnostics.RunDivideByZero, e.Site, "integer division by zero")
 		}
-		if e.Op == "/" {
+		if e.Op == ir.OpDiv {
 			r.Quo(ba, bb) // truncates toward zero
 		} else {
 			r.Rem(ba, bb) // takes the dividend's sign
@@ -770,20 +817,20 @@ func (in *interp) genericArith(e *ir.Arith, x, y Value) Value {
 }
 
 // wideArith is arith computed exactly with big.Int, for any integer type.
-func (in *interp) wideArith(op string, t *types.Type, x, y Value, span diagnostics.Span) Value {
+func (in *interp) wideArith(op ir.Operator, t *types.Type, x, y Value, span diagnostics.Span) Value {
 	a, b, r := x.big(), y.big(), new(big.Int)
 	switch op {
-	case "+":
+	case ir.OpAdd:
 		r.Add(a, b)
-	case "-":
+	case ir.OpSub:
 		r.Sub(a, b)
-	case "*":
+	case ir.OpMul:
 		r.Mul(a, b)
-	case "/", "%":
+	case ir.OpDiv, ir.OpMod:
 		if b.Sign() == 0 {
 			in.fail(diagnostics.RunDivideByZero, span, "integer division by zero")
 		}
-		if op == "/" {
+		if op == ir.OpDiv {
 			r.Quo(a, b) // truncates toward zero
 		} else {
 			r.Rem(a, b) // takes the dividend's sign
@@ -804,7 +851,7 @@ func (in *interp) shift(e *ir.Shift, x, n Value) Value {
 		in.fail(diagnostics.RunShift, e.Site, "shift count %s is out of range for '%s' (0 to %d)", count, typeName(t), bits-1)
 	}
 	c := uint(count.Uint64())
-	if e.Op == ">>" {
+	if e.Op == ir.OpShiftRight {
 		if t.Kind == types.Unsigned {
 			x.Int = int64(uint64(x.Int) >> c)
 		} else {
@@ -835,16 +882,16 @@ func typeName(t *types.Type) *types.Type {
 // floatArith performs + - * / on floats of type t, with IEEE 754
 // semantics as in ActionScript 3: overflow gives Infinity, and 0/0 gives
 // NaN. float32 results are rounded to float32.
-func floatArith(op string, x, y Value, t *types.Type) Value {
+func floatArith(op ir.Operator, x, y Value, t *types.Type) Value {
 	var r float64
 	switch op {
-	case "+":
+	case ir.OpAdd:
 		r = x.F + y.F
-	case "-":
+	case ir.OpSub:
 		r = x.F - y.F
-	case "*":
+	case ir.OpMul:
 		r = x.F * y.F
-	case "/":
+	case ir.OpDiv:
 		r = x.F / y.F
 	}
 	if t.Bits == 32 {
@@ -961,6 +1008,18 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 		switch a.Kind {
 		case types.Opaque:
 			goArgs[i] = a.Opq
+		case types.Struct:
+			fields := make([]any, len(a.St.Fields))
+			for j, field := range a.St.Fields {
+				if field.Kind == types.Float {
+					fields[j] = field.F
+				} else if types.IsInteger(a.St.T.Fields[j].Type) {
+					fields[j] = field.Int
+				} else {
+					ice("unsupported native struct field type %s", a.St.T.Fields[j].Type)
+				}
+			}
+			goArgs[i] = fields
 		case types.Array:
 			goArgs[i] = goArray(a.Arr, f.Params[i])
 		case types.String:
@@ -1008,6 +1067,20 @@ func (in *interp) native(e *ir.CallNative, args []Value) Value {
 		return Value{Kind: types.Float, F: out.(float64), Bits: f.Result.Bits}
 	case types.Opaque:
 		return Value{Kind: types.Opaque, Opq: out}
+	case types.Struct:
+		fields := make([]Value, len(f.Result.Fields))
+		for i, v := range out.([]any) {
+			t := f.Result.Fields[i].Type
+			switch {
+			case t.Kind == types.Float:
+				fields[i] = Value{Kind: types.Float, F: v.(float64), Bits: t.Bits}
+			case types.IsInteger(t):
+				fields[i] = Value{Kind: t.Kind, Int: v.(int64), Bits: t.Bits}
+			default:
+				ice("unsupported native struct field type %s", t)
+			}
+		}
+		return Value{Kind: types.Struct, St: &StructValue{T: f.Result, Fields: fields}}
 	case types.Array:
 		return Value{Kind: types.Array, Arr: fromGoArray(out, f.Result)}
 	}
@@ -1204,7 +1277,7 @@ func (in *interp) arrayCall(f *frame, e *ir.ArrayCall) Value {
 	case "indexOf", "contains":
 		at := -1
 		for i, x := range a.Elems {
-			if compare("==", x, args[0]) {
+			if compare(ir.OpEqual, x, args[0]) {
 				at = i
 				break
 			}
@@ -1219,7 +1292,7 @@ func (in *interp) arrayCall(f *frame, e *ir.ArrayCall) Value {
 		}
 		return void
 	case "sort":
-		less := func(x, y Value) bool { return compare("<", x, y) }
+		less := func(x, y Value) bool { return compare(ir.OpLess, x, y) }
 		if len(args) == 1 {
 			fn := args[0].Fn
 			less = func(x, y Value) bool { return in.call(fn, []Value{x, y}, e.Site).Bool }

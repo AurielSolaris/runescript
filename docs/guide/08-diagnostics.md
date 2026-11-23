@@ -63,6 +63,9 @@ The parser stops at the first syntax error.
 | `ASX-USE-005` | Packages use each other in a cycle; the message shows the cycle |
 | `ASX-USE-006` | Not a valid package name, e.g. `"1abc"` or `"if.then"`, or a path written with `\` |
 | `ASX-USE-007` | A `.rsm` file in a package's directory declares a different package |
+| `ASX-USE-010` | Module metadata is missing, misplaced, duplicated, or invalid |
+| `ASX-USE-011` | A package version needs an unambiguous, existing module name |
+| `ASX-TARGET-003` | The package needs raylib on desktop or in a WebAssembly build |
 | `ASX-USE-008` | Two uses in one file would have the same qualifier; give one an alias with `as` |
 | `ASX-USE-009` | An extern names an unknown `rune:` module, or a function that module doesn't have |
 

@@ -82,6 +82,8 @@ func (a *analysis) describeIdent(n *ast.Ident, parent, grand node) string {
 	case *ast.CallExpr:
 		if n == p.Fn {
 			switch {
+			case info.MethodCalls[p] != nil && info.MethodCalls[p].Method != nil:
+				return code(funcSig(info.MethodCalls[p].Method))
 			case info.Callees[p] != nil:
 				return code(funcSig(info.Callees[p]))
 			case info.Natives[p] != nil:
@@ -385,6 +387,9 @@ func (a *analysis) identTargets(n *ast.Ident, parent, grand node) []ast.Span {
 	switch p := parent.(type) {
 	case *ast.CallExpr:
 		if n == p.Fn {
+			if call := info.MethodCalls[p]; call != nil && call.Method != nil {
+				return one(funcSpan(call.Method))
+			}
 			if f := info.Callees[p]; f != nil {
 				return one(funcSpan(f))
 			}
@@ -774,6 +779,12 @@ func (s *Server) documentSymbols(uri string) []documentSymbol {
 		for _, fl := range sd.Fields {
 			fsp, _ := spanOf(fl)
 			ds.Children = append(ds.Children, sym(fl.Name.Name, fl.Type.String(), symbolField, fsp, fl.Name.Span))
+		}
+		for _, ctor := range sd.Ctors {
+			ds.Children = append(ds.Children, sym(ctor.Name.Name, "constructor", symbolCtor, ctor.Span, ctor.Name.Span))
+		}
+		for _, method := range sd.Methods {
+			ds.Children = append(ds.Children, sym(method.Name.Name, declSig(method), symbolMethod, method.Span, method.Name.Span))
 		}
 		out = append(out, ds)
 	}

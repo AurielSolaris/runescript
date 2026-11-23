@@ -161,7 +161,7 @@ func RunInput(in Input, out io.Writer) (int, []*diagnostics.Diagnostic, error) {
 	}
 	env := stdlib.NewEnv(out, stderr, in.Stdin, in.Args)
 	env.Color = in.Color
-	code, err := runtime.RunEnv(p, env)
+	code, err := runtime.RunCompiledEnv(p, env)
 	return code, nil, err
 }
 
@@ -203,6 +203,9 @@ func BuildJSInput(in Input, opts jsgen.Options) ([]byte, []*diagnostics.Diagnost
 	if diags != nil || err != nil {
 		return nil, diags, err
 	}
+	if ds := needsNative(info); ds != nil {
+		return nil, ds, nil
+	}
 	js, diags, err := jsgen.Generate(ir.Lower(info), opts)
 	return js, sorted(diags), err
 }
@@ -214,8 +217,37 @@ func BuildJSMapInput(in Input, opts jsgen.Options) (jsgen.Output, []*diagnostics
 	if diags != nil || err != nil {
 		return jsgen.Output{}, diags, err
 	}
+	if ds := needsNative(info); ds != nil {
+		return jsgen.Output{}, ds, nil
+	}
 	out, diags, err := jsgen.GenerateMap(ir.Lower(info), opts)
 	return out, sorted(diags), err
+}
+
+func needsNative(info *checker.Info) []*diagnostics.Diagnostic {
+	var ds []*diagnostics.Diagnostic
+	for _, use := range info.NativeUses {
+		ds = append(ds, diagnostics.New(diagnostics.TargetNeedsNative, use.PathSpan,
+			"package %q needs the native graphics target", use.Path).
+			WithHelp("use a graphics-enabled build of runescript run, or build --target wasm for the browser"))
+	}
+	return sorted(ds)
+}
+
+// CheckWASMInput checks a program for the Go WebAssembly runtime. It uses
+// the same verified IR and packages as the native execution engine.
+func CheckWASMInput(in Input) (*loader.Program, []*diagnostics.Diagnostic, error) {
+	info, ds, err := CheckInput(in)
+	if ds != nil || err != nil {
+		return nil, ds, err
+	}
+	if ds := needsJS(info); ds != nil {
+		return nil, ds, nil
+	}
+	if err := ir.Verify(ir.Lower(info)); err != nil {
+		return nil, nil, err
+	}
+	return info.Program, nil, nil
 }
 
 // Check type-checks a single in-memory file.

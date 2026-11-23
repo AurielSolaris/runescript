@@ -282,6 +282,29 @@ use "go:<package>";           // Go package                 [planned]
   Standard library functions can still only be called (`ASX-NAME-004`);
   wrap them in a lambda.
 
+### 4.2a Module metadata **[v0.6]**
+
+A `.rsm` file must declare exactly one `public semver version = …;` or
+`public string version = "…";`. It may declare `public string author` and
+`public string license` with string literal initializers. Metadata follows
+all uses and precedes the other declarations. Other source files cannot
+declare module metadata.
+
+The contextual type `semver` is available only for the module version.
+Its initializer is a SemVer 2.0.0 literal or
+`semver(major, minor, patch, prerelease..., [build...])`. The first three
+arguments are nonnegative integer literals. Individual prerelease
+identifiers are integer or string literals. The optional final array
+contains one string literal per build identifier. The string declaration
+and both semver forms are validated at compile time.
+
+When a package's loaded modules have identical version strings,
+`pkg.version` reads that string. `pkg.version['basename']` selects a
+module by the exact file name without the extension, including when
+the versions differ. Version reads are compile-time constants of type
+`string`. Missing or ambiguous keys and unqualified selection among
+different versions are compile-time errors.
+
 ### 4.3 Functions
 - **[v0.2, decided]** Every function declaration, nested ones included,
   has the form `<access> <return type> <name>(<params>) { … }`. `<access>` is
@@ -517,7 +540,17 @@ StructLit  = [ Ident "." ] Ident "{" [ Ident ":" Expr { "," Ident ":" Expr } ] "
   with strings and chars quoted.
 - Arrays held in a struct stay references: copying the struct shares the
   array.
-- **[undecided]** Methods, constructors, field visibility, and passing
+- Struct methods use the class-style declaration and access modifiers.
+  `this` is read-only in a method. Assigning the receiver or any of its
+  value fields is an error. Array and class fields retain their reference
+  semantics.
+- A struct can declare one explicit constructor, `public Name(args) { … }`.
+  `new Name(args)` calls it. Inside it `this` is writable. Fields start at
+  their zero values where available. Fields without a zero value need a
+  direct assignment at the start of the constructor, before any other
+  access to `this`. Named-field literals remain available and initialize
+  the struct directly.
+- **[undecided]** Field visibility and passing
   structs across the JavaScript boundary.
 
 ### 5.1f Opaque standard library types **[decided 2026-10-20, details provisional]**
@@ -924,10 +957,11 @@ purpose:
 | Imports | `import a.b.C;` imports one definition | `use "a.b";` and `use "./file";` make a whole package callable as `b.f()` [v0.3]; `use "go:pkg";` [planned] |
 | `trace` | `trace(...args)`, space-separated | Same, written to stdout |
 
-**Games and graphics.** AS3 was used mostly for games and interactive
-media in Flash Player. RuneScript plans native (non-browser) graphics, input,
-and UI as a standard package brought in with `use` **[planned]**. The
-recommended backend is raylib; this is not yet confirmed.
+**Games and graphics.** AS3 was used for games and interactive media in
+Flash Player. RuneScript's graphics-enabled CLI runs desktop programs
+with `use "rune.gfx";` for graphics and input, and `use "rune.gui";` for
+immediate-mode widgets. The same program runs in a browser when packaged
+with `build --target wasm`. See the [graphics guide](guide/25-native-graphics.md).
 
 AS3 and Apache Royale features that are **[undecided]** for RuneScript:
 class inheritance and interfaces, `static`, abstract classes,

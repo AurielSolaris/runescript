@@ -50,6 +50,8 @@ type Package struct {
 	// Qualifier is the name used to call the package's functions, e.g.
 	// `string` in string.toUpper(s). It is the last segment of Path.
 	Qualifier string
+	// NativeOnly packages are imported by their full path without a std: prefix.
+	NativeOnly bool
 	// Funcs maps each name to its function, or to the first of its
 	// Overloads.
 	Funcs map[string]*Func
@@ -118,7 +120,9 @@ func Lookup(path string) *Package { return packages[path] }
 func Paths() []string {
 	var out []string
 	for p := range packages {
-		out = append(out, p)
+		if !packages[p].NativeOnly {
+			out = append(out, p)
+		}
 	}
 	return out
 }

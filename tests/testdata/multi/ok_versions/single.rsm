@@ -1,0 +1,2 @@
+package single;
+public semver version = 99999999999999999999.0.0-01a+003;

@@ -41,7 +41,9 @@ const (
 	Semicolon
 	Dot
 	Assign
-	Op // operator; Token.Text holds its spelling
+	Op        // operator; Token.Text holds its spelling
+	Version   // a raw SemVer literal in a module declaration
+	ModuleKey // a single-quoted module basename of multiple characters
 )
 
 var kindNames = map[Kind]string{
@@ -49,6 +51,7 @@ var kindNames = map[Kind]string{
 	String: "string literal", StrHead: "interpolated string", StrMid: "'}'", StrTail: "'}'", Char: "character literal", Keyword: "keyword", Reserved: "reserved word",
 	LParen: "'('", RParen: "')'", LBrace: "'{'", RBrace: "'}'", LBracket: "'['", RBracket: "']'", Comma: "','", Colon: "':'",
 	Semicolon: "';'", Dot: "'.'", Assign: "'='", Op: "operator",
+	Version: "version literal", ModuleKey: "module file name",
 }
 
 func (k Kind) String() string { return kindNames[k] }
@@ -197,6 +200,11 @@ func (l *lexer) token() {
 	start := l.pos()
 	c := l.src[l.off]
 	switch {
+	case isDigit(c) && l.afterVersionDecl():
+		for c := l.peek(0); isDigit(c) || isIdentStart(c) || c == '.' || c == '-' || c == '+'; c = l.peek(0) {
+			l.advance()
+		}
+		l.emit(Version, string(l.src[start.Offset:l.off]), start)
 	case isIdentStart(c):
 		l.ident(start)
 	case isDigit(c):
@@ -228,6 +236,19 @@ func (l *lexer) token() {
 		l.advance()
 		l.errorf(diagnostics.LexUnexpectedChar, start, "unexpected character %q", r)
 	}
+}
+
+func (l *lexer) afterVersionDecl() bool {
+	n := len(l.toks)
+	return n >= 4 && l.toks[n-4].Kind == Keyword && l.toks[n-4].Text == "public" &&
+		l.toks[n-3].Kind == Ident && l.toks[n-3].Text == "semver" &&
+		l.toks[n-2].Kind == Ident && l.toks[n-2].Text == "version" && l.toks[n-1].Kind == Assign
+}
+
+func (l *lexer) afterVersionBracket() bool {
+	n := len(l.toks)
+	return n >= 3 && l.toks[n-3].Kind == Dot && l.toks[n-2].Kind == Ident &&
+		l.toks[n-2].Text == "version" && l.toks[n-1].Kind == LBracket
 }
 
 func (l *lexer) skipSpaceAndComments() {
@@ -484,6 +505,10 @@ func (l *lexer) char(start diagnostics.Pos) {
 		case c == '\'':
 			l.advance()
 			if n := utf8.RuneCountInString(b.String()); n != 1 {
+				if l.afterVersionBracket() {
+					l.emit(ModuleKey, b.String(), start)
+					return
+				}
 				l.errorf(diagnostics.LexBadChar, start, "a character literal holds exactly one character, found %d", n).
 					WithHelp(`use a string, "…", for text`)
 				return

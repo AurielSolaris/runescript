@@ -253,8 +253,8 @@ func TestModulesAndUnsavedFiles(t *testing.T) {
 	a := filepath.Join(dir, "geom", "a.rsm")
 	b := filepath.Join(dir, "geom", "b.rsm")
 	main := filepath.Join(dir, "main.rsc")
-	aText := "package geom;\npublic int area(int w, int h) {\n    return scale(w * h);\n}\n"
-	bText := "package geom;\nprotected int scale(int x) {\n    return x;\n}\n"
+	aText := "package geom; public semver version = 1.0.0;\npublic int area(int w, int h) {\n    return scale(w * h);\n}\n"
+	bText := "package geom; public semver version = 1.0.0;\nprotected int scale(int x) {\n    return x;\n}\n"
 	mainText := "package main;\nuse \"geom\";\nprotected int main() {\n    trace(geom.area(2, 3));\n    return 0;\n}\n"
 	write(t, a, aText)
 	write(t, b, bText)

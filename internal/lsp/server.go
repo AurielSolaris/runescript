@@ -164,6 +164,40 @@ func (s *Server) handle(msg *message) error {
 				result = locs
 			}
 		}
+	case "textDocument/references":
+		var p referenceParams
+		if decode(&p) {
+			result = s.references(&p)
+		}
+	case "textDocument/prepareRename":
+		var p textDocumentPositionParams
+		if decode(&p) {
+			if r := s.prepareRename(&p); r != nil {
+				result = r
+			}
+		}
+	case "textDocument/rename":
+		var p renameParams
+		if decode(&p) {
+			result, rerr = s.rename(&p)
+		}
+	case "textDocument/signatureHelp":
+		var p textDocumentPositionParams
+		if decode(&p) {
+			if help := s.signatureHelp(&p); help != nil {
+				result = help
+			}
+		}
+	case "textDocument/formatting":
+		var p formattingParams
+		if decode(&p) {
+			result = s.formatting(&p)
+		}
+	case "textDocument/codeAction":
+		var p codeActionParams
+		if decode(&p) {
+			result = s.codeActions(&p)
+		}
 	case "textDocument/completion":
 		var p textDocumentPositionParams
 		if decode(&p) {
@@ -221,9 +255,14 @@ func (s *Server) initialize(p *initializeParams) any {
 				"change":    1, // full
 				"save":      true,
 			},
-			"hoverProvider":          true,
-			"definitionProvider":     true,
-			"documentSymbolProvider": true,
+			"hoverProvider":              true,
+			"definitionProvider":         true,
+			"referencesProvider":         true,
+			"renameProvider":             map[string]bool{"prepareProvider": true},
+			"signatureHelpProvider":      map[string]any{"triggerCharacters": []string{"(", ","}},
+			"documentFormattingProvider": true,
+			"codeActionProvider":         map[string]any{"codeActionKinds": []string{"quickfix"}},
+			"documentSymbolProvider":     true,
 			"completionProvider": map[string]any{
 				"triggerCharacters": []string{".", ":", "\""},
 			},

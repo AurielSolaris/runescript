@@ -1,0 +1,4 @@
+package geom;
+public string version = "1.2.3";
+public string author = "Geometry contributors";
+public string license = "MIT";

@@ -109,10 +109,12 @@ protected int main() {
 - Warnings for unused variables, parameters, and uses, unreachable code,
   discarded results, and shadowing, with `-Werror` and `--allow <code>`;
   errors in red and warnings in yellow on a terminal (`--color`)
-- Editor support: a language server, `runescript lsp`, with errors as you
-  type, hover, go to definition, completion, and an outline, plus packages
+- Editor support: a language server, `runescript lsp`, with diagnostics,
+  navigation, signature help, local rename, formatting, and quick fixes, plus packages
   for VS Code, Vim and Neovim, and Emacs ([guide](docs/guide/23-editors.md),
   [editors/](editors/README.md))
+- Graphics through `rune.gfx` and `rune.gui` on desktop and in the browser
+  with `build --target wasm`. [Graphics guide](docs/guide/25-native-graphics.md)
 - Live reload while you work: `runescript dev app.rsc` serves a web program
   and reloads the browser on every save; `runescript run --watch` re-runs a
   command-line program
@@ -125,8 +127,8 @@ implicit conversions, and no unchecked casts.
 
 **Not yet implemented:** class inheritance, interfaces, and `static`
 members, `go:` packages, `std:symrs`, objects, arrays, structs, and
-callbacks across the JavaScript boundary, component tags in templates, and
-the planned native graphics package. See the [roadmap](docs/ROADMAP.md).
+callbacks across the JavaScript boundary, and component tags in templates.
+See the [roadmap](docs/ROADMAP.md).
 
 ## Install
 

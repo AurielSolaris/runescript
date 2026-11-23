@@ -647,7 +647,7 @@ func (c *checker) call(e *ast.CallExpr) *types.Type {
 			if t.Kind == types.Array {
 				return c.arrayMethod(e, sel.Name, t)
 			}
-			if t.Kind == types.Class {
+			if c.info.Members[t] != nil {
 				return c.methodCall(e, sel.X, sel.Name, t)
 			}
 			ft := c.selectorOf(sel, t)
@@ -809,7 +809,7 @@ func (c *checker) qualifiedCall(e *ast.CallExpr) *types.Type {
 		if t.Kind == types.Array {
 			return c.arrayMethod(e, e.Fn, t)
 		}
-		if t.Kind == types.Class {
+		if c.info.Members[t] != nil {
 			return c.methodCall(e, e.Pkg, e.Fn, t)
 		}
 		c.errorf(diagnostics.TypeNoField, e.Fn.Span, "values of type '%s' have no methods", t).
@@ -1052,7 +1052,7 @@ func (c *checker) newExpr(e *ast.NewExpr) *types.Type {
 		c.exprs(e.Args)
 		return types.InvalidT
 	}
-	if t.Kind == types.Class {
+	if m := c.info.Members[t]; m != nil && m.Ctor != nil {
 		return c.newObject(e, t)
 	}
 	if t.Kind != types.Error {
@@ -1094,6 +1094,9 @@ func (c *checker) isPackageRef(e *ast.SelectorExpr) bool {
 // selector checks x.name: a field of an error value or an array, or a
 // package function used as a value.
 func (c *checker) selector(e *ast.SelectorExpr) *types.Type {
+	if pkg := c.versionPackage(e); pkg != nil {
+		return c.moduleVersion(pkg, e, nil)
+	}
 	if c.isPackageRef(e) {
 		id := e.X.(*ast.Ident)
 		c.quals[id.Name].used = true

@@ -11,12 +11,22 @@ type Node interface{ NodeSpan() Span }
 
 // File is one parsed source file.
 type File struct {
-	Package *PackageDecl
-	Uses    []*UseDecl
-	Funcs   []*FuncDecl
-	Externs []*ExternDecl
-	Structs []*StructDecl
-	Classes []*ClassDecl
+	Package  *PackageDecl
+	Uses     []*UseDecl
+	Metadata []*ModuleMetadata
+	Funcs    []*FuncDecl
+	Externs  []*ExternDecl
+	Structs  []*StructDecl
+	Classes  []*ClassDecl
+}
+
+// ModuleMetadata is a public version, author, or license declaration.
+type ModuleMetadata struct {
+	Name  string
+	Type  string
+	Value string
+	Args  []Expr // non-nil for the semver builder
+	Span  Span
 }
 
 // ClassDecl is `visibility class Name { members }` at the top level of a
@@ -51,6 +61,8 @@ type StructDecl struct {
 	Visibility Visibility
 	Name       *Ident
 	Fields     []*FieldDecl
+	Methods    []*FuncDecl
+	Ctors      []*FuncDecl
 	Span       Span
 }
 

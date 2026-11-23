@@ -198,7 +198,7 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [x] `std:json`: an opaque `json.Value` (the first opaque std type) read with checked functions, built with `from…` functions, and written with `json.stringify`/`stringifyIndent`; one parser on both targets, tested against random valid and broken texts (2026-10-20)
 - [x] `std:matrix`: functions over `Array<Array<float64>>` (owner chose a library, no new type): products, transpose, determinant, inverse, solve, bit-identical on both targets (2026-10-26)
 - [x] `struct`: value semantics (copy on assignment), named-field literals, nested field writes, `==` by field (2026-10-17)
-- [ ] Struct methods and constructors
+- [x] Struct methods and constructors, with read-only `this` in methods and writable `this` in constructors
 
 ### Next, in order (owner, 2026-10-22)
 
@@ -208,15 +208,15 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
    - [x] `compare`, `gt`, `lt`, `eq`, `satisfies` (and `neq`, `gte`, `lte`, `valid`, `validRange`, `major`, `minor`, `patch`, `prerelease`, `build`) on version strings, following SemVer 2.0.0 precedence and npm-style ranges (`^1.2.0`, `~1.2.0`, `>=1.2.0 <2.0.0`), checked against npm's semver package
    - [x] An invalid version string throws a catchable error (`ArgumentError`)
 4. Module versions
-   - [ ] Every `.rsm` file must declare `public semver version` or `public string version` (a compile error otherwise); `public string author` and `public string license` are optional
-   - [ ] The metadata goes at the top of the file, after the `use` lines
-   - [ ] The `semver` type: version literals (`1.2.3-rc.1+build.5`) and the builder form `semver(1, 2, 3, "rc", 1)`; usable only for `version`
-   - [ ] Programs read a version as a `string`: `geom.version`, or `geom.version['a']` (the file name without `.rsm`) when files of a package declare different versions
+   - [x] Every `.rsm` file must declare `public semver version` or `public string version`; `public string author` and `public string license` are optional
+   - [x] The metadata goes at the top of the file, after the `use` lines
+   - [x] Contextual `semver` literals and builder, including `semver(1, 2, 3, "rc", 1, ["build", "5"])`
+   - [x] Programs read a version as a `string` using `geom.version` or `geom.version['a']`
    - [ ] Versions for the `std:` modules, once the standard library is finished
 5. Performance
-   - [ ] Profile the interpreter on the `bench/` suite
-   - [ ] Cheap interpreter fixes: numbered variable slots instead of a map per call, operator codes instead of strings, no `defer` per call
-   - [ ] Compile the verified IR to typed Go closures as the `run` engine; keep the tree-walking interpreter as a reference for agreement tests
+   - [x] Profile the interpreter on the `bench/` suite
+   - [x] Numbered variable slots, reusable call frames, operator codes, and no `defer` per call
+   - [x] Compile verified IR control flow and common expressions to Go closures in `run`, with typed floating-point arithmetic and the tree-walking reference tested for agreement
    - Pure Go only: no `unsafe` and no hand-written machine code
 
 ### Editor support (owner request, 2026-10-26)
@@ -225,21 +225,21 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [x] VS Code extension (`editors/vscode`): TextMate grammar, language configuration, language client
 - [x] Vim and Neovim plugin (`editors/vim`): syntax, indentation, file type, Neovim 0.11 LSP configuration
 - [x] Emacs major mode (`editors/emacs`): highlighting, indentation, Eglot and lsp-mode registration (not yet tested in Emacs)
-- [ ] Rename, find references, signature help, formatting (needs a formatter), code actions
+- [x] Find references across loaded programs, signature help, local rename, block indentation, and a quick fix for unused standard-library imports
+- [ ] Workspace-wide rename for exported symbols
 - [ ] Publish the VS Code extension (Marketplace, Open VSX) and the Emacs mode (MELPA)
 
 ## v0.7: Graphics package (native window, drawing, input, UI)
 
-Games were AS3's main use, so native graphics are a first-class goal. These
-are native-desktop graphics: no browser, no Flash Player.
+Games were AS3's main use, so graphics are a first-class goal. RuneScript
+uses the same graphics API on desktop and in the browser with raylib's
+WebAssembly backend.
 
-- [ ] Confirm the backend (recommended: raylib via `raylib-go`)
-- [ ] Design a small RuneScript-facing API (window, frame loop, shapes,
-  text, textures, keyboard/mouse, audio later) instead of a 1:1 binding,
-  so the backend can be replaced later
-- [ ] Expose it as a standard package, e.g. `use "rune.gfx";` (name to be decided)
-- [ ] Immediate-mode UI widgets (raygui) as a follow-up package
-- [ ] Headless CI tests for the binding layer; example games in `examples/`
+- [x] Raylib via `raylib-go` as the desktop backend
+- [x] `use "rune.gfx";` for windows, frames, shapes, text, textures, keyboard, and mouse
+- [x] `use "rune.gui";` with raygui buttons, labels, and checkboxes
+- [x] Headless binding tests and two example games in `examples/native/`
+- [x] Browser build using raylib's WebAssembly backend with `build --target wasm`
 
 Depends on: `use` (v0.3), floats (v0.5), and structs for colours and vectors (v0.6).
 
@@ -268,6 +268,7 @@ Depends on: floats (v0.5), arrays (v0.6), classes or opaque native types (v0.8),
 
 ## Later
 
+- [ ] Audio in `rune.gfx`
 - [ ] A `runescript` flag to resolve uses from a directory other than the working directory, if wanted
 - [ ] Better parser error recovery (report more than one syntax error)
 - [ ] Further performance work (bytecode VM, a native-binary build mode) only if the closure compiler is measured and found not fast enough

@@ -1,4 +1,4 @@
-package one.util;
+package one.util; public semver version = 1.0.0;
 
 public int f() {
     return 1;

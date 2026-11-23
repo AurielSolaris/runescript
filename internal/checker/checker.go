@@ -38,6 +38,8 @@ type Info struct {
 	Callees map[*ast.CallExpr]*FuncSym
 	// FuncRefs maps identifiers that name a function used as a value.
 	FuncRefs map[*ast.Ident]*FuncSym
+	// FuncDecls associates prototypes and definitions for editor navigation.
+	FuncDecls map[*ast.FuncDecl]*FuncSym
 	// Natives maps calls to standard library functions to their
 	// implementation.
 	Natives map[*ast.CallExpr]*stdlib.Func
@@ -45,6 +47,8 @@ type Info struct {
 	// given a concrete float type, like Consts for integers. The value is
 	// exactly representable in that type.
 	FloatConsts map[ast.Expr]float64
+	// StringConsts holds compile-time module version reads.
+	StringConsts map[ast.Expr]string
 	// CatchTypes holds the error type each catch clause catches.
 	CatchTypes map[*ast.CatchClause]*types.Type
 	// Builtins maps calls of the built-in functions isNaN and isFinite to
@@ -57,10 +61,11 @@ type Info struct {
 	// DOM reports whether the program uses rune:dom; DOMUses are those
 	// use declarations. Signals maps calls that create, read, or set a
 	// rune; DOMCalls maps calls of rune:dom functions to their name.
-	DOM      bool
-	DOMUses  []*ast.UseDecl
-	Signals  map[*ast.CallExpr]SignalOp
-	DOMCalls map[*ast.CallExpr]string
+	DOM        bool
+	DOMUses    []*ast.UseDecl
+	NativeUses []*ast.UseDecl
+	Signals    map[*ast.CallExpr]SignalOp
+	DOMCalls   map[*ast.CallExpr]string
 	// QualRefs maps pkg.name used as a value to the function it names.
 	QualRefs map[*ast.SelectorExpr]*FuncSym
 	// TypeRefs holds the type every written type resolved to.
@@ -86,9 +91,9 @@ type Info struct {
 	VarRefs map[*ast.Ident]*ast.Ident
 	Structs map[*types.Type]*StructSym
 
-	// Classes maps each class type to its declaration, and MethodCalls
-	// maps calls on an object, x.name(args), to what they call.
-	Classes     map[*types.Type]*ClassSym
+	// Members maps aggregate types to their methods and constructor.
+	// MethodCalls records calls on an aggregate, x.name(args).
+	Members     map[*types.Type]*MemberSet
 	MethodCalls map[*ast.CallExpr]*MethodCall
 }
 
@@ -103,8 +108,6 @@ type FuncSym struct {
 	// for nested functions. Methods and constructors have them too.
 	File *loader.File
 	Pkg  *loader.Package
-	// Class is the class of a method or constructor, or nil.
-	Class *ClassSym
 }
 
 // TopLevel reports whether f is a top-level function.
@@ -121,7 +124,7 @@ type symbol struct {
 	fn      *FuncSym   // non-nil for named functions
 	ext     *ExternSym // non-nil for extern functions (typ is their type)
 	st      *StructSym // non-nil for struct types (typ is the struct type)
-	cl      *ClassSym  // non-nil for class types (typ is the class type)
+	cl      *MemberSet // non-nil for class types (typ is the class type)
 	decl    *ast.Ident // where a variable or parameter is declared
 	read    bool       // the variable's value is used somewhere
 	written bool       // the variable is assigned after its declaration
@@ -140,7 +143,7 @@ type checker struct {
 	// structs are the declared structs, in declaration order; fileQuals
 	// and fileBroken are each file's use qualifiers, bound once.
 	structs    []*StructSym
-	classes    []*ClassSym
+	aggregates []*MemberSet
 	fileQuals  map[*loader.File]map[string]*binding
 	fileBroken map[*loader.File]bool
 	info       *Info
@@ -150,7 +153,8 @@ type checker struct {
 	files      map[*loader.File]*scope    // private top-level functions of each file
 	// domUsed holds the files that use rune:dom's types or signal(), so
 	// their use "rune:dom" is not reported as unused.
-	domUsed map[*loader.File]bool
+	domUsed  map[*loader.File]bool
+	versions map[*loader.File]string
 
 	// state of the file being checked
 	file   *loader.File
@@ -165,8 +169,9 @@ type checker struct {
 	lastTemplate *ast.TemplateStmt // the template that may end this function's body
 	// this is the class of the method or constructor being checked, or
 	// nil; thisHidden is set inside a nested function or lambda of one.
-	this       *ClassSym
-	thisHidden bool
+	this         *MemberSet
+	thisHidden   bool
+	thisWritable bool
 }
 
 // operand is the checked form of an expression.
@@ -193,26 +198,28 @@ type binding struct {
 func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 	c := &checker{
 		info: &Info{
-			Program:  prog,
-			Types:    map[ast.Expr]*types.Type{},
-			Consts:   map[ast.Expr]int64{},
-			Callees:  map[*ast.CallExpr]*FuncSym{},
-			FuncRefs: map[*ast.Ident]*FuncSym{},
-			Natives:  map[*ast.CallExpr]*stdlib.Func{},
+			Program:   prog,
+			Types:     map[ast.Expr]*types.Type{},
+			Consts:    map[ast.Expr]int64{},
+			Callees:   map[*ast.CallExpr]*FuncSym{},
+			FuncRefs:  map[*ast.Ident]*FuncSym{},
+			FuncDecls: map[*ast.FuncDecl]*FuncSym{},
+			Natives:   map[*ast.CallExpr]*stdlib.Func{},
 
-			FloatConsts: map[ast.Expr]float64{},
-			CatchTypes:  map[*ast.CatchClause]*types.Type{},
-			Builtins:    map[*ast.CallExpr]string{},
-			Externs:     map[*ast.CallExpr]*ExternSym{},
-			Signals:     map[*ast.CallExpr]SignalOp{},
-			DOMCalls:    map[*ast.CallExpr]string{},
-			QualRefs:    map[*ast.SelectorExpr]*FuncSym{},
-			ArrayCalls:  map[*ast.CallExpr]string{},
-			TypeRefs:    map[*ast.TypeRef]*types.Type{},
-			VarRefs:     map[*ast.Ident]*ast.Ident{},
-			Structs:     map[*types.Type]*StructSym{},
-			Classes:     map[*types.Type]*ClassSym{},
-			MethodCalls: map[*ast.CallExpr]*MethodCall{},
+			FloatConsts:  map[ast.Expr]float64{},
+			StringConsts: map[ast.Expr]string{},
+			CatchTypes:   map[*ast.CatchClause]*types.Type{},
+			Builtins:     map[*ast.CallExpr]string{},
+			Externs:      map[*ast.CallExpr]*ExternSym{},
+			Signals:      map[*ast.CallExpr]SignalOp{},
+			DOMCalls:     map[*ast.CallExpr]string{},
+			QualRefs:     map[*ast.SelectorExpr]*FuncSym{},
+			ArrayCalls:   map[*ast.CallExpr]string{},
+			TypeRefs:     map[*ast.TypeRef]*types.Type{},
+			VarRefs:      map[*ast.Ident]*ast.Ident{},
+			Structs:      map[*types.Type]*StructSym{},
+			Members:      map[*types.Type]*MemberSet{},
+			MethodCalls:  map[*ast.CallExpr]*MethodCall{},
 
 			TemplateElems: map[*ast.MElement]*dom.Element{},
 			TemplateAttrs: map[*ast.MAttr]*dom.Attr{},
@@ -222,6 +229,7 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 		fileQuals:  map[*loader.File]map[string]*binding{},
 		fileBroken: map[*loader.File]bool{},
 		domUsed:    map[*loader.File]bool{},
+		versions:   map[*loader.File]string{},
 	}
 	for _, p := range prog.Packages {
 		c.pkgs[p] = &scope{syms: map[string]*symbol{}}
@@ -234,6 +242,7 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 	// struct fields may name another package's struct (geom.Point).
 	for _, f := range prog.Files {
 		c.enterFile(f)
+		c.checkMetadata(f)
 		c.useDecls(f)
 		c.fileQuals[f], c.fileBroken[f] = c.quals, c.broken
 	}
@@ -250,7 +259,7 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 		}
 	}
 	c.structFields()
-	c.classMembers()
+	c.aggregateMembers()
 	sigs := map[*ast.FuncDecl]*types.Type{}
 	for _, f := range prog.Files {
 		c.enterFile(f)
@@ -269,7 +278,7 @@ func Check(prog *loader.Program) (*Info, []*diagnostics.Diagnostic) {
 				c.funcBody(fn, sigs[fn])
 			}
 		}
-		c.classBodies()
+		c.aggregateBodies()
 		c.reportUnusedUses()
 	}
 	for _, f := range prog.Files {
@@ -315,12 +324,15 @@ func (c *checker) useDecls(f *loader.File) {
 		switch u.Kind {
 		case loader.UseStd:
 			pkg := stdlib.Lookup(u.Name)
-			if pkg == nil {
+			if pkg == nil || pkg.NativeOnly && pkg.Path != u.Decl.Path {
 				paths := stdlib.Paths()
 				sort.Strings(paths)
 				c.errorf(diagnostics.UseUnknownPackage, u.Decl.PathSpan, "unknown standard library package %q", u.Decl.Path).
 					WithHelp("available: std:" + strings.Join(paths, ", std:"))
 				continue
+			}
+			if pkg.NativeOnly {
+				c.info.NativeUses = append(c.info.NativeUses, u.Decl)
 			}
 			q := u.Qualifier
 			if q == "" {
@@ -628,6 +640,7 @@ func (c *checker) declareIn(s *scope, fn *ast.FuncDecl, topLevel bool) *types.Ty
 					name, t, f.Proto.Name.Span.Start.Where(c.file.Source), f.Type)
 			}
 			f.Def = fn
+			c.info.FuncDecls[fn] = f
 		case f != nil:
 			c.errorf(diagnostics.NameRedeclared, fn.Name.Span, "function '%s' is already declared at %s", name, firstDecl(f).Name.Span.Start.Where(c.file.Source)).
 				WithHelp("functions cannot be overloaded; a prototype may appear once, before the definition")
@@ -653,6 +666,7 @@ func (c *checker) declareIn(s *scope, fn *ast.FuncDecl, topLevel bool) *types.Ty
 		f.Proto = fn
 	}
 	s.add(name, &symbol{fn: f})
+	c.info.FuncDecls[fn] = f
 	return t
 }
 
@@ -681,11 +695,11 @@ func (c *checker) funcBody(fn *ast.FuncDecl, t *types.Type) {
 // saveFuncState saves the per-function state and returns a function that
 // restores it, for checking nested functions and lambdas.
 func (c *checker) saveFuncState() func() {
-	name, result, loops, tmpl, this, hidden := c.fnName, c.result, c.loopDepth, c.lastTemplate, c.this, c.thisHidden
+	name, result, loops, tmpl, this, hidden, writable := c.fnName, c.result, c.loopDepth, c.lastTemplate, c.this, c.thisHidden, c.thisWritable
 	c.loopDepth, c.lastTemplate = 0, nil
-	c.this, c.thisHidden = nil, this != nil || hidden // functions do not capture `this`
+	c.this, c.thisHidden, c.thisWritable = nil, this != nil || hidden, false // functions do not capture `this`
 	return func() {
-		c.fnName, c.result, c.loopDepth, c.lastTemplate, c.this, c.thisHidden = name, result, loops, tmpl, this, hidden
+		c.fnName, c.result, c.loopDepth, c.lastTemplate, c.this, c.thisHidden, c.thisWritable = name, result, loops, tmpl, this, hidden, writable
 	}
 }
 

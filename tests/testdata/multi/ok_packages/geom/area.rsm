@@ -1,4 +1,4 @@
-package geom;
+package geom; public semver version = 1.0.0;
 
 public int area(int w, int h) {
     return scale(w * h);

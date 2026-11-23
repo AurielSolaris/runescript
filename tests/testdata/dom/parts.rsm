@@ -1,6 +1,6 @@
 package parts;
 
-use "rune:dom";
+use "rune:dom"; public semver version = 1.0.0;
 
 public Element Header(string title) {
     template {

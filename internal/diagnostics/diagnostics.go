@@ -77,6 +77,8 @@ const (
 	UseBadName         Code = "USE-006"
 	UsePackageMismatch Code = "USE-007"
 	UseQualifierClash  Code = "USE-008"
+	UseModuleMetadata  Code = "USE-010"
+	UseModuleVersion   Code = "USE-011"
 
 	// NameNotVisible reports a use of a private or protected function from
 	// outside the file or package it belongs to.
@@ -100,6 +102,7 @@ const (
 	TypeExternMismatch Code = "TYPE-024" // a prototype that differs from the rune: function
 	UseExternUnknown   Code = "USE-009"  // an unknown rune: module or function
 	TargetNeedsJS      Code = "TARGET-002"
+	TargetNeedsNative  Code = "TARGET-003"
 
 	// Templates (rune:dom).
 	TmplPlacement       Code = "TMPL-001" // a template that does not end a function returning Element

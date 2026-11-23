@@ -57,12 +57,13 @@ type Extern struct {
 
 // Func is a named function (top-level or nested) or a lambda.
 type Func struct {
-	Name   string // "" for a lambda
-	Pkg    string // the package of a top-level function; "" otherwise
-	Type   *types.Type
-	Params []*Var
-	Body   *Block
-	Span   Span
+	Name       string // "" for a lambda
+	Pkg        string // the package of a top-level function; "" otherwise
+	Type       *types.Type
+	Params     []*Var
+	Body       *Block
+	Span       Span
+	FrameSlots int // one per parameter and local declared in the function
 }
 
 // Var is a parameter or local variable. Each declaration has its own Var,
@@ -71,6 +72,7 @@ type Var struct {
 	Name  string
 	Type  *types.Type
 	Param bool
+	Slot  int // index in its declaring function's native call frame
 }
 
 // Block is a sequence of statements that forms a scope.
@@ -120,6 +122,11 @@ type (
 	}
 	// Return returns Value, or nothing when Value is nil.
 	Return struct{ Value Expr }
+	// ConstructorBody runs a value constructor's statements. A bare
+	// return leaves this block after any intervening finally clauses;
+	// the function then reads the completed receiver.
+	ConstructorBody   struct{ Body *Block }
+	ConstructorReturn struct{}
 	// If runs Then when Cond holds, otherwise Else (nil, *Block, or *If).
 	If struct {
 		Cond Expr
@@ -174,21 +181,23 @@ type Catch struct {
 	Body *Block
 }
 
-func (*FuncStmt) stmt()  {}
-func (*Decl) stmt()      {}
-func (*Assign) stmt()    {}
-func (*Eval) stmt()      {}
-func (*IndexSet) stmt()  {}
-func (*ObjectSet) stmt() {}
-func (*Return) stmt()    {}
-func (*If) stmt()        {}
-func (*While) stmt()     {}
-func (*For) stmt()       {}
-func (*Break) stmt()     {}
-func (*Continue) stmt()  {}
-func (*Throw) stmt()     {}
-func (*Try) stmt()       {}
-func (*Block) stmt()     {}
+func (*FuncStmt) stmt()          {}
+func (*Decl) stmt()              {}
+func (*Assign) stmt()            {}
+func (*Eval) stmt()              {}
+func (*IndexSet) stmt()          {}
+func (*ObjectSet) stmt()         {}
+func (*Return) stmt()            {}
+func (*ConstructorBody) stmt()   {}
+func (*ConstructorReturn) stmt() {}
+func (*If) stmt()                {}
+func (*While) stmt()             {}
+func (*For) stmt()               {}
+func (*Break) stmt()             {}
+func (*Continue) stmt()          {}
+func (*Throw) stmt()             {}
+func (*Try) stmt()               {}
+func (*Block) stmt()             {}
 
 // Expr is any expression. Type is never invalid or untyped.
 type Expr interface{ Type() *types.Type }
@@ -336,7 +345,7 @@ type (
 	// it is an overflow too. The operands of any generic integer Arith may
 	// be wide.
 	Arith struct {
-		Op   string
+		Op   Operator
 		T    *types.Type
 		X, Y Expr
 		Site Span
@@ -345,7 +354,7 @@ type (
 	// Bits is the bitwise & | or ^ of X and Y, integers of type T. It
 	// cannot overflow.
 	Bits struct {
-		Op   string
+		Op   Operator
 		T    *types.Type
 		X, Y Expr
 	}
@@ -357,7 +366,7 @@ type (
 	// RangeError, and so does a << that loses bits (an overflow), both
 	// reported at Site. >> is arithmetic for signed types.
 	Shift struct {
-		Op       string
+		Op       Operator
 		X, Count Expr
 		Site     Span
 	}
@@ -366,12 +375,12 @@ type (
 	Concat struct{ Parts []Expr }
 	// Compare is == != < <= > >=. Its operands have identical types.
 	Compare struct {
-		Op   string
+		Op   Operator
 		X, Y Expr
 	}
 	// Logic is the short-circuit && or ||.
 	Logic struct {
-		Op   string
+		Op   Operator
 		X, Y Expr
 	}
 	Not struct{ X Expr }

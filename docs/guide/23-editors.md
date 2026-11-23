@@ -60,6 +60,11 @@ which talks on standard input and output, for `.rsc` and `.rsm` files.
 
 ## How your code is checked
 
+The server provides parameter hints for calls, references in loaded programs,
+and rename for local variables and parameters. Format Document adjusts
+brace-based indentation and preserves template contents. Quick Fix removes
+unused standard-library imports.
+
 The language server checks your program the way `runescript run` would,
 adjusted for code that is still being written:
 

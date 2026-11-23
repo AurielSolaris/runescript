@@ -137,7 +137,7 @@ func TestQualifiedFunctionValues(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "geom"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeFile(dir, "geom/a.rsm", "package geom;\npublic int area(int w, int h) { return w * h; }\nprotected int hidden() { return 0; }\n"); err != nil {
+	if err := writeFile(dir, "geom/a.rsm", "package geom; public semver version = 1.0.0;\npublic int area(int w, int h) { return w * h; }\nprotected int hidden() { return 0; }\n"); err != nil {
 		t.Fatal(err)
 	}
 	for src, want := range map[string]string{

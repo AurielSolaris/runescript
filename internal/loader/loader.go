@@ -291,6 +291,9 @@ func (l *loader) open(path, name string, span diagnostics.Span) (*File, bool) {
 // Classify reports what kind of thing a use path names. For Std and
 // Package it also returns the package name.
 func Classify(path string) (Kind, string) {
+	if path == "rune.gfx" || path == "rune.gui" {
+		return UseStd, path
+	}
 	if name, ok := strings.CutPrefix(path, "std:"); ok {
 		return UseStd, name
 	}

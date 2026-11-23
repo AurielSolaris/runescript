@@ -1,4 +1,4 @@
-package circles; // expect: ASX-USE-007 shapes/stray.rsm:1:1
+package circles; public semver version = 1.0.0; // expect: ASX-USE-007 shapes/stray.rsm:1:1
 
 public int circle() {
     return 0;

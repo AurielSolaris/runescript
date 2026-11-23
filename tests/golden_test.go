@@ -82,7 +82,7 @@ func expectDiagnostics(t *testing.T, src []byte) {
 	}
 }
 
-func read(t *testing.T, path string) []byte {
+func read(t testing.TB, path string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(path)
 	if err != nil {

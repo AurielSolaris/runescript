@@ -1,5 +1,5 @@
 package b;
-use "a"; // expect: ASX-USE-005 b/b.rsm:2:5
+use "a"; public semver version = 1.0.0; // expect: ASX-USE-005 b/b.rsm:2:5
 
 public int g(int n) {
     return n;

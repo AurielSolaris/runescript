@@ -28,6 +28,7 @@ complete program in these pages is compiled by the test suite
 22. [CSV, matrices, and versions](22-csv-matrix-semver.md): `std:csv`, `std:matrix`, and `std:semver`
 23. [Editors](23-editors.md): VS Code, Vim, Neovim, and Emacs, and the language server `runescript lsp`
 24. [Classes](24-classes.md): fields, methods, constructors, `this`, and objects as references
+25. [Native graphics](25-native-graphics.md): windows, drawing, input, textures, and widgets
 
 For the precise rules, see the [language specification](../LANGUAGE_SPEC.md).
 For what's coming next, see the [roadmap](../ROADMAP.md).

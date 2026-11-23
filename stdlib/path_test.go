@@ -26,6 +26,9 @@ const path = require("node:path");
 const fs = require("node:fs");
 const [input, cwd] = process.argv.slice(2);
 process.cwd = () => cwd;
+// Windows inherits per-drive working directories from the parent process.
+// Use the synthetic working directory as the only directory in this test.
+for (const drive of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") delete process.env["=" + drive + ":"];
 const cases = JSON.parse(fs.readFileSync(input, "utf8"));
 for (const c of cases) {
   const p = path[c.flavor];

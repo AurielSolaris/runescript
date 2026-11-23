@@ -537,6 +537,12 @@ func (g *gen) stmt(s ir.Stmt) {
 		} else {
 			g.line("return %s;", g.expr(s.Value, precLowest))
 		}
+	case *ir.ConstructorBody:
+		g.line("$constructorBody: {")
+		g.block(s.Body)
+		g.line("}")
+	case *ir.ConstructorReturn:
+		g.line("break $constructorBody;")
 	case *ir.If:
 		g.line("if (%s) {", g.expr(s.Cond, precLowest))
 		g.ifRest(s)
@@ -804,7 +810,7 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 	case *ir.Arith:
 		if e.T.Kind == types.Float {
 			// JavaScript's own IEEE arithmetic; float32 rounds the result.
-			op := g.expr(e.X, precUnary) + " " + e.Op + " " + g.expr(e.Y, precUnary)
+			op := g.expr(e.X, precUnary) + " " + e.Op.String() + " " + g.expr(e.Y, precUnary)
 			if e.T.Bits == 32 {
 				return "Math.fround(" + op + ")", precCall
 			}
@@ -815,7 +821,7 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 			if types.IsWide(e.T) {
 				h = "arW"
 			}
-			return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use(h), quote(e.Op), g.expr(e.X, precAssign), g.expr(e.Y, precAssign),
+			return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use(h), quote(e.Op.String()), g.expr(e.X, precAssign), g.expr(e.Y, precAssign),
 				quote(kindCode(e.T)), g.site(e.Site)), precCall
 		}
 		if e.Wide || isWide(e.X) || isWide(e.Y) {
@@ -824,20 +830,20 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 			if !e.Wide {
 				k = kindCode(e.T)
 			}
-			return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use("ga"), quote(e.Op), g.expr(e.X, precAssign), g.expr(e.Y, precAssign),
+			return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use("ga"), quote(e.Op.String()), g.expr(e.X, precAssign), g.expr(e.Y, precAssign),
 				quote(k), g.site(e.Site)), precCall
 		}
 		suffix := "I"
 		if e.T.Kind == types.Unsigned {
 			suffix = "U"
 		}
-		h := g.use(arithHelpers[e.Op] + suffix)
+		h := g.use(arithHelpers[e.Op.String()] + suffix)
 		return fmt.Sprintf("%s(%s, %s, %d)", h, g.expr(e.X, precAssign), g.expr(e.Y, precAssign), g.site(e.Site)), precCall
 	case *ir.Bits:
 		// & | ^ on numbers work on 32-bit two's complement, which keeps
 		// signed values of every width in range; unsigned 32-bit results
 		// need >>> 0. BigInts (64-bit) are exact.
-		s := g.expr(e.X, precUnary) + " " + e.Op + " " + g.expr(e.Y, precUnary)
+		s := g.expr(e.X, precUnary) + " " + e.Op.String() + " " + g.expr(e.Y, precUnary)
 		if e.T.Kind == types.Unsigned && types.IntBits(e.T) == 32 {
 			return "((" + s + ") >>> 0)", precCall
 		}
@@ -856,7 +862,7 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 			return fmt.Sprintf("(%s & 0x%X)", x, 1<<bits-1), precCall
 		}
 	case *ir.Shift:
-		return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use("shift"), quote(e.Op), g.expr(e.X, precAssign), g.expr(e.Count, precAssign),
+		return fmt.Sprintf("%s(%s, %s, %s, %s, %d)", g.use("shift"), quote(e.Op.String()), g.expr(e.X, precAssign), g.expr(e.Count, precAssign),
 			quote(kindCode(e.X.Type())), g.site(e.Site)), precCall
 	case *ir.Concat:
 		// Every part is a string, so JavaScript's + concatenates.
@@ -871,21 +877,21 @@ func (g *gen) exprPrec(e ir.Expr) (string, int) {
 	case *ir.Compare:
 		if e.X.Type().Kind == types.Struct {
 			eq := g.use("structEq") + "(" + g.expr(e.X, precAssign) + ", " + g.expr(e.Y, precAssign) + ")"
-			if e.Op == "!=" {
+			if e.Op == ir.OpNotEqual {
 				return "!" + eq, precUnary
 			}
 			return eq, precCall
 		}
-		op := compareOps[e.Op]
+		op := compareOps[e.Op.String()]
 		// Both sides use op.prec+1, so a chain such as a == b == c keeps
 		// explicit parentheses.
 		return g.expr(e.X, op.prec+1) + " " + op.js + " " + g.expr(e.Y, op.prec+1), op.prec
 	case *ir.Logic:
 		prec := precAnd
-		if e.Op == "||" {
+		if e.Op == ir.OpOr {
 			prec = precOr
 		}
-		return g.expr(e.X, prec) + " " + e.Op + " " + g.expr(e.Y, prec+1), prec
+		return g.expr(e.X, prec) + " " + e.Op.String() + " " + g.expr(e.Y, prec+1), prec
 	case *ir.Not:
 		return "!" + g.expr(e.X, precUnary), precUnary
 	case *ir.CallFunc:

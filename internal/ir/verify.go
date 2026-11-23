@@ -38,9 +38,10 @@ type verifyError struct{ msg string }
 func (e verifyError) Error() string { return "ir: internal compiler error: " + e.msg }
 
 type verifier struct {
-	seen   map[*Func]bool
-	result *types.Type // result type of the function being verified
-	loops  int
+	seen        map[*Func]bool
+	result      *types.Type // result type of the function being verified
+	loops       int
+	constructor bool
 	// wideOK is set while verifying an operand that may be a wide
 	// intermediate (Arith.Wide).
 	wideOK bool
@@ -67,10 +68,10 @@ func (v *verifier) fn(f *Func) {
 			v.fail("parameter %q of %q has type %s, signature says %s", p.Name, f.Name, p.Type, f.Type.Params[i])
 		}
 	}
-	savedResult, savedLoops := v.result, v.loops
-	v.result, v.loops = f.Type.Result, 0
+	savedResult, savedLoops, savedCtor := v.result, v.loops, v.constructor
+	v.result, v.loops, v.constructor = f.Type.Result, 0, false
 	v.block(f.Body)
-	v.result, v.loops = savedResult, savedLoops
+	v.result, v.loops, v.constructor = savedResult, savedLoops, savedCtor
 }
 
 // storable rejects types no value can have.
@@ -131,6 +132,17 @@ func (v *verifier) stmt(s Stmt) {
 			v.fail("void function returns a value")
 		}
 		v.same(v.result, s.Value, "return value")
+	case *ConstructorBody:
+		if v.result.Kind != types.Struct || v.constructor {
+			v.fail("constructor body outside a value constructor")
+		}
+		v.constructor = true
+		v.block(s.Body)
+		v.constructor = false
+	case *ConstructorReturn:
+		if !v.constructor {
+			v.fail("constructor return outside a value constructor")
+		}
 	case *If:
 		v.same(types.BoolT, s.Cond, "if condition")
 		v.block(s.Then)
@@ -283,8 +295,11 @@ func (v *verifier) expr(e Expr) *types.Type {
 	case *Lambda:
 		v.fn(e.Func)
 	case *Arith:
+		if e.Op < OpAdd || e.Op > OpMod {
+			v.fail("invalid arithmetic operator %s", e.Op)
+		}
 		switch {
-		case e.T.Kind == types.Float && e.Op == "%":
+		case e.T.Kind == types.Float && e.Op == OpMod:
 			v.fail("%% on %s", e.T)
 		case e.T.Kind != types.Signed && e.T.Kind != types.Unsigned && e.T.Kind != types.Float:
 			v.fail("arithmetic on %s", e.T)
@@ -292,20 +307,26 @@ func (v *verifier) expr(e Expr) *types.Type {
 			v.fail("wide arithmetic on %s", e.T)
 		}
 		v.wideOK = generic(e.T)
-		v.same(e.T, e.X, "left operand of "+e.Op)
+		v.same(e.T, e.X, "left operand of "+e.Op.String())
 		v.wideOK = generic(e.T)
-		v.same(e.T, e.Y, "right operand of "+e.Op)
+		v.same(e.T, e.Y, "right operand of "+e.Op.String())
 	case *Bits:
+		if e.Op < OpAndBits || e.Op > OpXor {
+			v.fail("invalid bitwise operator %s", e.Op)
+		}
 		if e.T.Kind != types.Signed && e.T.Kind != types.Unsigned {
 			v.fail("bitwise %s on %s", e.Op, e.T)
 		}
-		v.same(e.T, e.X, "left operand of "+e.Op)
-		v.same(e.T, e.Y, "right operand of "+e.Op)
+		v.same(e.T, e.X, "left operand of "+e.Op.String())
+		v.same(e.T, e.Y, "right operand of "+e.Op.String())
 	case *Complement:
 		if t := v.expr(e.X); t.Kind != types.Signed && t.Kind != types.Unsigned {
 			v.fail("~ on %s", t)
 		}
 	case *Shift:
+		if e.Op != OpShiftLeft && e.Op != OpShiftRight {
+			v.fail("invalid shift operator %s", e.Op)
+		}
 		if t := v.expr(e.X); t.Kind != types.Signed && t.Kind != types.Unsigned {
 			v.fail("shift of %s", t)
 		}
@@ -318,6 +339,9 @@ func (v *verifier) expr(e Expr) *types.Type {
 			v.same(types.StringT, p, "part of a string join")
 		}
 	case *Compare:
+		if e.Op < OpEqual || e.Op > OpGreaterEqual {
+			v.fail("invalid comparison operator %s", e.Op)
+		}
 		v.wideOK = true
 		x := v.expr(e.X)
 		v.wideOK = true
@@ -325,7 +349,7 @@ func (v *verifier) expr(e Expr) *types.Type {
 		if !types.Identical(x, y) {
 			v.fail("comparison %s of %s and %s", e.Op, x, y)
 		}
-		ordered := e.Op != "==" && e.Op != "!="
+		ordered := e.Op != OpEqual && e.Op != OpNotEqual
 		switch {
 		case x.Kind == types.Signed || x.Kind == types.Unsigned || x.Kind == types.Float || x.Kind == types.Char:
 		case !ordered && x.Kind == types.Struct && types.Comparable(x):
@@ -335,8 +359,11 @@ func (v *verifier) expr(e Expr) *types.Type {
 			v.fail("operator %s is not defined on %s", e.Op, x)
 		}
 	case *Logic:
-		v.same(types.BoolT, e.X, "operand of "+e.Op)
-		v.same(types.BoolT, e.Y, "operand of "+e.Op)
+		if e.Op != OpAnd && e.Op != OpOr {
+			v.fail("invalid logical operator %s", e.Op)
+		}
+		v.same(types.BoolT, e.X, "operand of "+e.Op.String())
+		v.same(types.BoolT, e.Y, "operand of "+e.Op.String())
 	case *Not:
 		v.same(types.BoolT, e.X, "operand of !")
 	case *CallFunc:

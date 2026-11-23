@@ -22,14 +22,19 @@ import (
 // There is no inheritance, no static member, and no nested class yet, and
 // no null: a variable of a class type must be initialized.
 
-// ClassSym is a declared class.
-type ClassSym struct {
-	Type *types.Type
-	Decl *ast.ClassDecl
-	File *loader.File
-	Pkg  *loader.Package
+// MemberSet holds the members of a declared struct or class.
+type MemberSet struct {
+	Type        *types.Type
+	Name        *ast.Ident
+	Span        ast.Span
+	Visibility  ast.Visibility
+	MethodDecls []*ast.FuncDecl
+	CtorDecls   []*ast.FuncDecl
+	File        *loader.File
+	Pkg         *loader.Package
 	// Fields are the field declarations, in the order of Type.Fields.
-	Fields []*ast.MemberField
+	Fields     []*ast.MemberField
+	FieldDecls []*ast.MemberField
 	// Methods are the methods by name. Each one's Type leaves out `this`.
 	Methods map[string]*FuncSym
 	// Ctor is the constructor; its Def is nil for the implicit one a
@@ -67,81 +72,92 @@ func (c *checker) declareClass(d *ast.ClassDecl) {
 		c.errorf(diagnostics.NameRedeclared, d.Name.Span, "'%s' is already declared in package %s", name, c.file.Package.Name)
 		return
 	}
-	cs := &ClassSym{Type: types.NewClass(name), Decl: d, File: c.file, Pkg: c.file.Package, Methods: map[string]*FuncSym{}}
-	c.info.Classes[cs.Type] = cs
+	cs := &MemberSet{Type: types.NewClass(name), Name: d.Name, Span: d.Span, Visibility: d.Visibility, MethodDecls: d.Methods, CtorDecls: d.Ctors, File: c.file, Pkg: c.file.Package, Methods: map[string]*FuncSym{}}
+	c.info.Members[cs.Type] = cs
 	s.add(name, &symbol{cl: cs, typ: cs.Type})
-	c.classes = append(c.classes, cs)
+	c.aggregates = append(c.aggregates, cs)
+	cs.FieldDecls = d.Fields
 }
 
-// classMembers resolves the field types and the method and constructor
-// signatures of every declared class.
-func (c *checker) classMembers() {
-	for _, cs := range c.classes {
+func (c *checker) classFields(cs *MemberSet) {
+	seen := map[string]bool{}
+
+	for _, fd := range cs.FieldDecls {
+		t := c.resolveType(fd.Type)
+		switch {
+		case t.Kind == types.Void:
+			c.errorf(diagnostics.TypeVoidValue, fd.Type.Span, "field '%s' cannot have type 'void'", fd.Name.Name)
+			t = types.InvalidT
+		case t.Kind != types.Invalid && !types.IsElemType(t):
+			c.errorf(diagnostics.TypeMismatch, fd.Type.Span, "a class cannot hold a value of type '%s'", t)
+			t = types.InvalidT
+		}
+		if seen[fd.Name.Name] {
+			c.errorf(diagnostics.NameRedeclared, fd.Name.Span, "class %s already has a field %q", cs.Type, fd.Name.Name)
+			continue
+		}
+		seen[fd.Name.Name] = true
+		cs.Type.Fields = append(cs.Type.Fields, &types.Field{Name: fd.Name.Name, Type: t})
+		cs.Fields = append(cs.Fields, fd)
+	}
+}
+
+// aggregateMembers resolves method and constructor signatures after fields.
+func (c *checker) aggregateMembers() {
+	for _, cs := range c.aggregates {
 		c.enterFile(cs.File)
-		d := cs.Decl
+		if cs.Type.Kind == types.Class {
+			c.classFields(cs)
+		}
 		names := map[string]diagnostics.Span{}
-		taken := func(id *ast.Ident, what string) bool {
-			if prev, ok := names[id.Name]; ok {
-				c.errorf(diagnostics.NameRedeclared, id.Span, "class %s already has a member '%s', at %s", cs.Type, id.Name, prev.Start.Where(c.file.Source)).
-					WithHelp("fields and methods share one set of names; methods cannot be overloaded")
-				return true
-			}
-			names[id.Name] = id.Span
-			return false
+		for _, fd := range cs.Fields {
+			names[fd.Name.Name] = fd.Name.Span
 		}
-		for _, fd := range d.Fields {
-			t := c.resolveType(fd.Type)
-			switch {
-			case t.Kind == types.Void:
-				c.errorf(diagnostics.TypeVoidValue, fd.Type.Span, "field '%s' cannot have type 'void'", fd.Name.Name)
-				t = types.InvalidT
-			case t.Kind != types.Invalid && !types.IsElemType(t):
-				c.errorf(diagnostics.TypeMismatch, fd.Type.Span, "a class cannot hold a value of type '%s'", t)
-				t = types.InvalidT
-			}
-			if taken(fd.Name, "field") {
-				continue
-			}
-			cs.Type.Fields = append(cs.Type.Fields, &types.Field{Name: fd.Name.Name, Type: t})
-			cs.Fields = append(cs.Fields, fd)
-		}
-		for _, md := range d.Methods {
+		for _, md := range cs.MethodDecls {
 			t := c.funcType(md)
 			if md.Name.Name == cs.Type.Name {
-				c.errorf(diagnostics.NameRedeclared, md.Name.Span, "a method cannot have the class's name").
+				c.errorf(diagnostics.NameRedeclared, md.Name.Span, "a method cannot have its type's name").
 					WithHelp(fmt.Sprintf("the constructor has no result type: `%s %s(...) { ... }`", md.Visibility, cs.Type.Name))
 				continue
 			}
-			if taken(md.Name, "method") {
+			if prev, ok := names[md.Name.Name]; ok {
+				c.errorf(diagnostics.NameRedeclared, md.Name.Span, "%s %s already has a member '%s', at %s", aggregateKind(cs.Type), cs.Type, md.Name.Name, prev.Start.Where(c.file.Source)).
+					WithHelp("fields and methods share one set of names; methods cannot be overloaded")
 				continue
 			}
-			cs.Methods[md.Name.Name] = &FuncSym{Name: md.Name.Name, Type: t, Def: md, File: cs.File, Pkg: cs.Pkg, Class: cs}
+			names[md.Name.Name] = md.Name.Span
+			cs.Methods[md.Name.Name] = &FuncSym{Name: md.Name.Name, Type: t, Def: md, File: cs.File, Pkg: cs.Pkg}
 		}
-		for _, extra := range d.Ctors[min(1, len(d.Ctors)):] {
-			c.errorf(diagnostics.NameRedeclared, extra.Name.Span, "class %s already has a constructor, at %s", cs.Type, d.Ctors[0].Name.Span.Start.Where(c.file.Source)).
-				WithHelp("a class has at most one constructor; constructors cannot be overloaded")
+		for _, extra := range cs.CtorDecls[min(1, len(cs.CtorDecls)):] {
+			c.errorf(diagnostics.NameRedeclared, extra.Name.Span, "%s %s already has a constructor, at %s", aggregateKind(cs.Type), cs.Type, cs.CtorDecls[0].Name.Span.Start.Where(c.file.Source)).
+				WithHelp("a type has at most one constructor; constructors cannot be overloaded")
 		}
-		if len(d.Ctors) == 0 {
-			cs.Ctor = &FuncSym{Name: cs.Type.Name, Type: types.NewFunc(nil, cs.Type), File: cs.File, Pkg: cs.Pkg, Class: cs}
-			cs.CtorVis = d.Visibility
+		if len(cs.CtorDecls) == 0 {
+			if cs.Type.Kind == types.Struct {
+				continue
+			}
+			cs.Ctor = &FuncSym{Name: cs.Type.Name, Type: types.NewFunc(nil, cs.Type), File: cs.File, Pkg: cs.Pkg}
+			cs.CtorVis = cs.Visibility
 			continue
 		}
-		ctor := d.Ctors[0]
+		ctor := cs.CtorDecls[0]
 		t := c.funcType(ctor)
-		cs.Ctor = &FuncSym{Name: cs.Type.Name, Type: types.NewFunc(t.Params, cs.Type), Def: ctor, File: cs.File, Pkg: cs.Pkg, Class: cs}
+		cs.Ctor = &FuncSym{Name: cs.Type.Name, Type: types.NewFunc(t.Params, cs.Type), Def: ctor, File: cs.File, Pkg: cs.Pkg}
 		cs.CtorVis = ctor.Visibility
 	}
-	for _, cs := range c.classes {
+	for _, cs := range c.aggregates {
 		c.enterFile(cs.File)
-		c.firstValues(cs)
+		if cs.Ctor != nil {
+			c.firstValues(cs)
+		}
 	}
 }
 
 // firstValues finds the constructor's prefix that sets fields before the
-// object is used (ClassSym.CtorPrefix), and reports every field that has
+// object is used (MemberSet.CtorPrefix), and reports every field that has
 // no value then: no initializer, no zero value, and not set there. There
 // is no null, so an object never has a field without a value.
-func (c *checker) firstValues(cs *ClassSym) {
+func (c *checker) firstValues(cs *MemberSet) {
 	set := map[string]bool{}
 	if def := cs.Ctor.Def; def != nil {
 		for _, st := range def.Body.Stmts {
@@ -218,8 +234,8 @@ func anyUsesThis(list []ast.Expr) bool {
 
 // classBodies checks the field initializers, the methods, and the
 // constructor of the current file's classes.
-func (c *checker) classBodies() {
-	for _, cs := range c.classes {
+func (c *checker) aggregateBodies() {
+	for _, cs := range c.aggregates {
 		if cs.File != c.file {
 			continue
 		}
@@ -239,12 +255,12 @@ func (c *checker) classBodies() {
 			c.pop()
 			restore()
 		}
-		for _, md := range cs.Decl.Methods {
+		for _, md := range cs.MethodDecls {
 			if m := cs.Methods[md.Name.Name]; m != nil && m.Def == md {
 				c.memberBody(md, m.Type, cs, fmt.Sprintf("method '%s.%s'", cs.Type, md.Name.Name))
 			}
 		}
-		if cs.Ctor.Def != nil {
+		if cs.Ctor != nil && cs.Ctor.Def != nil {
 			c.memberBody(cs.Ctor.Def, types.NewFunc(cs.Ctor.Type.Params, types.VoidT), cs, fmt.Sprintf("the constructor of %s", cs.Type))
 		}
 	}
@@ -252,11 +268,12 @@ func (c *checker) classBodies() {
 
 // memberBody checks the body of a method or constructor of cs, in which
 // `this` is the object.
-func (c *checker) memberBody(fn *ast.FuncDecl, t *types.Type, cs *ClassSym, what string) {
+func (c *checker) memberBody(fn *ast.FuncDecl, t *types.Type, cs *MemberSet, what string) {
 	defer c.saveFuncState()()
 	c.fnName = what
 	c.result = t.Result
 	c.this = cs
+	c.thisWritable = cs.Type.Kind == types.Struct && cs.Ctor != nil && cs.Ctor.Def == fn
 	c.push(true)
 	for i, p := range fn.Params {
 		c.declareVar(p.Name, t.Params[i], true)
@@ -275,21 +292,21 @@ func (c *checker) thisExpr(e *ast.ThisExpr) *types.Type {
 		c.errorf(diagnostics.NameAcrossBoundary, e.Span, "'this' is not visible in a nested function or lambda").
 			WithHelp("nested functions and lambdas do not capture; pass the object as a parameter")
 	default:
-		c.errorf(diagnostics.NameUndefined, e.Span, "'this' is only available in the methods and the constructor of a class")
+		c.errorf(diagnostics.NameUndefined, e.Span, "'this' is only available in the methods and the constructor of a class or struct")
 	}
 	return types.InvalidT
 }
 
 // memberVisible reports, at span, a member of cs that the current file
 // may not use, and reports whether it may.
-func (c *checker) memberVisible(cs *ClassSym, vis ast.Visibility, what, name string, span diagnostics.Span) bool {
+func (c *checker) memberVisible(cs *MemberSet, vis ast.Visibility, what, name string, span diagnostics.Span) bool {
 	switch {
 	case vis == ast.VisPrivate && c.file != cs.File:
-		c.errorf(diagnostics.NameNotVisible, span, "%s '%s' of class %s is private to %s", what, name, cs.Type, cs.File.Source.Name).
+		c.errorf(diagnostics.NameNotVisible, span, "%s '%s' of %s %s is private to %s", what, name, aggregateKind(cs.Type), cs.Type, cs.File.Source.Name).
 			WithHelp(fmt.Sprintf("declare it protected to share it within package %s, or public to share it with every package", cs.Pkg.Name))
 		return false
 	case vis == ast.VisProtected && c.file.Package != cs.Pkg:
-		c.errorf(diagnostics.NameNotVisible, span, "%s '%s' of class %s is protected: only package %s can use it", what, name, cs.Type, cs.Pkg.Name).
+		c.errorf(diagnostics.NameNotVisible, span, "%s '%s' of %s %s is protected: only package %s can use it", what, name, aggregateKind(cs.Type), cs.Type, cs.Pkg.Name).
 			WithHelp("declare it public to use it from other packages")
 		return false
 	}
@@ -298,7 +315,7 @@ func (c *checker) memberVisible(cs *ClassSym, vis ast.Visibility, what, name str
 
 // classField checks x.name on an object of class t: a field.
 func (c *checker) classField(e *ast.SelectorExpr, t *types.Type) *types.Type {
-	cs := c.info.Classes[t]
+	cs := c.info.Members[t]
 	i := types.FieldIndex(t, e.Name.Name)
 	if i < 0 {
 		if cs.Methods[e.Name.Name] != nil {
@@ -317,7 +334,7 @@ func (c *checker) classField(e *ast.SelectorExpr, t *types.Type) *types.Type {
 // methodCall checks recv.name(args) on an object of class t: a method, or
 // a field holding a function.
 func (c *checker) methodCall(e *ast.CallExpr, recv ast.Expr, name *ast.Ident, t *types.Type) *types.Type {
-	cs := c.info.Classes[t]
+	cs := c.info.Members[t]
 	if m := cs.Methods[name.Name]; m != nil {
 		c.memberVisible(cs, m.Def.Visibility, "method", name.Name, name.Span)
 		c.info.MethodCalls[e] = &MethodCall{Recv: recv, Method: m}
@@ -331,19 +348,19 @@ func (c *checker) methodCall(e *ast.CallExpr, recv ast.Expr, name *ast.Ident, t 
 			return c.checkArgs(ft, e, fmt.Sprintf("field '%s.%s'", t, name.Name))
 		}
 		if ft.Kind != types.Invalid {
-			c.errorf(diagnostics.TypeNotCallable, name.Span, "field '%s' of class %s has type '%s', not a function type", name.Name, t, ft)
+			c.errorf(diagnostics.TypeNotCallable, name.Span, "field '%s' of %s %s has type '%s', not a function type", name.Name, aggregateKind(t), t, ft)
 		}
 		c.exprs(e.Args)
 		return types.InvalidT
 	}
-	c.errorf(diagnostics.TypeNoField, name.Span, "class %s has no method '%s'", t, name.Name).WithHelp(memberHelp(cs))
+	c.errorf(diagnostics.TypeNoField, name.Span, "%s %s has no method '%s'", aggregateKind(t), t, name.Name).WithHelp(memberHelp(cs))
 	c.exprs(e.Args)
 	return types.InvalidT
 }
 
 // newObject checks `new Name(args)` for class t.
 func (c *checker) newObject(e *ast.NewExpr, t *types.Type) *types.Type {
-	cs := c.info.Classes[t]
+	cs := c.info.Members[t]
 	if cs.Ctor.Def != nil { // the implicit one is as visible as the class, already checked
 		c.memberVisible(cs, cs.CtorVis, "constructor", t.Name, e.Type.Span)
 	}
@@ -364,7 +381,7 @@ func (c *checker) newObject(e *ast.NewExpr, t *types.Type) *types.Type {
 }
 
 // memberHelp lists the members of cs that diagnostics can suggest.
-func memberHelp(cs *ClassSym) string {
+func memberHelp(cs *MemberSet) string {
 	var fields, methods []string
 	for _, f := range cs.Type.Fields {
 		fields = append(fields, f.Name)
@@ -410,4 +427,11 @@ func (c *checker) peekType(x ast.Expr) *types.Type {
 		}
 	}
 	return nil
+}
+
+func aggregateKind(t *types.Type) string {
+	if t.Kind == types.Struct {
+		return "struct"
+	}
+	return "class"
 }

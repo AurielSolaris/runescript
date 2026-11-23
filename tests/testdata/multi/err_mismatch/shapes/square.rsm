@@ -1,4 +1,4 @@
-package shapes;
+package shapes; public semver version = 1.0.0;
 
 public int square(int n) {
     return n * n;

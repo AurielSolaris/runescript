@@ -43,6 +43,10 @@ func (c *checker) declareStruct(d *ast.StructDecl) {
 	}
 	st := &StructSym{Type: types.NewStruct(name), Decl: d, File: c.file, Pkg: c.file.Package}
 	c.info.Structs[st.Type] = st
+	members := &MemberSet{Type: st.Type, Name: d.Name, Span: d.Span, Visibility: d.Visibility,
+		File: st.File, Pkg: st.Pkg, MethodDecls: d.Methods, CtorDecls: d.Ctors, Methods: map[string]*FuncSym{}}
+	c.info.Members[st.Type] = members
+	c.aggregates = append(c.aggregates, members)
 	s.add(name, &symbol{st: st, typ: st.Type})
 	c.structs = append(c.structs, st)
 }
@@ -68,6 +72,10 @@ func (c *checker) structFields() {
 			}
 			seen[fd.Name.Name] = true
 			st.Type.Fields = append(st.Type.Fields, &types.Field{Name: fd.Name.Name, Type: t})
+			members := c.info.Members[st.Type]
+			members.Fields = append(members.Fields, &ast.MemberField{
+				Visibility: ast.VisPublic, Type: fd.Type, Name: fd.Name, Span: fd.Name.Span,
+			})
 		}
 	}
 	// A struct that contains itself, directly or through other structs,
@@ -143,7 +151,7 @@ var invalidType = &symbol{typ: types.InvalidT}
 // access modifier, and where it is declared.
 func (s *symbol) userType() (kind string, vis ast.Visibility, file *loader.File, pkg *loader.Package) {
 	if s.cl != nil {
-		return "class", s.cl.Decl.Visibility, s.cl.File, s.cl.Pkg
+		return "class", s.cl.Visibility, s.cl.File, s.cl.Pkg
 	}
 	return "struct", s.st.Decl.Visibility, s.st.File, s.st.Pkg
 }
@@ -315,6 +323,16 @@ func (c *checker) setStmt(s *ast.SetStmt) {
 // change would be lost.
 func (c *checker) place(e ast.Expr) *types.Type {
 	switch e := unparen(e).(type) {
+	case *ast.ThisExpr:
+		t := c.expr(e).typ
+		if t.Kind == types.Invalid {
+			return t
+		}
+		if !c.thisWritable {
+			c.errorf(diagnostics.NameAssignToParam, e.Span, "'this' is read-only here")
+			return types.InvalidT
+		}
+		return t
 	case *ast.Ident:
 		v := c.target(e)
 		if v == nil {
@@ -323,6 +341,10 @@ func (c *checker) place(e ast.Expr) *types.Type {
 		c.info.Types[e] = v.typ
 		return v.typ
 	case *ast.IndexExpr:
+		if pkg := c.versionPackage(e.X); pkg != nil {
+			c.errorf(diagnostics.NameAssignToParam, e.Span, "module versions are read-only")
+			return types.InvalidT
+		}
 		t := c.index(e)
 		c.info.Types[e] = t
 		return t
@@ -333,7 +355,11 @@ func (c *checker) place(e ast.Expr) *types.Type {
 		}
 		var xt *types.Type
 		switch unparen(e.X).(type) {
-		case *ast.Ident, *ast.IndexExpr, *ast.SelectorExpr:
+		case *ast.Ident, *ast.IndexExpr, *ast.SelectorExpr, *ast.ThisExpr:
+			if _, isThis := unparen(e.X).(*ast.ThisExpr); isThis && c.this != nil && c.this.Type.Kind == types.Class {
+				xt = c.defaulted(e.X).typ
+				break
+			}
 			if pt := c.peekType(e.X); pt != nil && pt.Kind == types.Class {
 				xt = c.defaulted(e.X).typ // an object is a reference: changing its field changes no variable
 			} else {

@@ -1,12 +1,17 @@
 package tests
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/AurielSolaris/runescript/internal/driver"
+	"github.com/AurielSolaris/runescript/internal/ir"
+	"github.com/AurielSolaris/runescript/internal/runtime"
+	"github.com/AurielSolaris/runescript/stdlib"
 )
 
 // The benchmark suite (bench/, run with `go run ./bench/rsbench`) compares
@@ -24,7 +29,7 @@ type benchManifest struct {
 	Notes      string            `json:"notes"`
 }
 
-func benchDirs(t *testing.T) []string {
+func benchDirs(t testing.TB) []string {
 	t.Helper()
 	dirs, _ := filepath.Glob("../bench/suite/*")
 	if len(dirs) == 0 {
@@ -33,13 +38,76 @@ func benchDirs(t *testing.T) []string {
 	return dirs
 }
 
-func readManifest(t *testing.T, dir string) benchManifest {
+func readManifest(t testing.TB, dir string) benchManifest {
 	t.Helper()
 	var m benchManifest
 	if err := json.Unmarshal(read(t, filepath.Join(dir, "bench.json")), &m); err != nil {
 		t.Fatalf("bench.json: %v", err)
 	}
 	return m
+}
+
+// BenchmarkInterpreterSuite lets pprof sample execution separately from
+// parsing, lowering, JavaScript generation, and process startup.
+func BenchmarkInterpreterSuite(b *testing.B) {
+	benchmarkExecution(b, runtime.RunEnv)
+}
+
+func BenchmarkCompiledSuite(b *testing.B) {
+	benchmarkExecution(b, runtime.RunCompiledEnv)
+}
+
+func benchmarkExecution(b *testing.B, run func(*ir.Program, *stdlib.Env) (int, error)) {
+	for _, dir := range benchDirs(b) {
+		m := readManifest(b, dir)
+		if m.Sizes["small"] == "" {
+			continue
+		}
+		b.Run(filepath.Base(dir), func(b *testing.B) {
+			p := benchProgram(b, dir)
+			env := stdlib.NewEnv(io.Discard, io.Discard, nil, []string{m.Sizes["small"]})
+			b.ReportAllocs()
+			for b.Loop() {
+				if code, err := run(p, env); code != 0 || err != nil {
+					b.Fatalf("run: exit %d: %v", code, err)
+				}
+			}
+		})
+	}
+}
+
+func benchProgram(t testing.TB, dir string) *ir.Program {
+	t.Helper()
+	info, ds, err := driver.CheckInput(driver.Input{Path: filepath.Join(dir, "main.rsc"), Dir: dir})
+	if err != nil || len(ds) != 0 {
+		t.Fatalf("check: %v %v", ds, err)
+	}
+	p := ir.Lower(info)
+	if err := ir.Verify(p); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestBenchExecutionEnginesAgree(t *testing.T) {
+	for _, dir := range benchDirs(t) {
+		t.Run(filepath.Base(dir), func(t *testing.T) {
+			p := benchProgram(t, dir)
+			args := []string{readManifest(t, dir).Sizes["test"]}
+			var tree, compiled bytes.Buffer
+			code, err := runtime.RunEnv(p, stdlib.NewEnv(&tree, io.Discard, nil, args))
+			if code != 0 || err != nil {
+				t.Fatalf("reference: exit %d: %v", code, err)
+			}
+			code, err = runtime.RunCompiledEnv(p, stdlib.NewEnv(&compiled, io.Discard, nil, args))
+			if code != 0 || err != nil {
+				t.Fatalf("compiled: exit %d: %v", code, err)
+			}
+			if tree.String() != compiled.String() {
+				t.Fatalf("compiled output %q, reference %q", compiled.String(), tree.String())
+			}
+		})
+	}
 }
 
 func TestBenchSuiteWellFormed(t *testing.T) {

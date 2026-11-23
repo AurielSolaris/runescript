@@ -20,6 +20,7 @@ import (
 	"github.com/AurielSolaris/runescript/internal/lsp"
 	"github.com/AurielSolaris/runescript/internal/runtime"
 	"github.com/AurielSolaris/runescript/internal/term"
+	"github.com/AurielSolaris/runescript/internal/wasmbuild"
 )
 
 // Version is the language/implementation version.
@@ -33,6 +34,7 @@ const usage = `usage:
                              changes
   runescript check [flags] <file>   check a program without running it
   runescript build [flags] [--target js] [-o <out.js>] [--source-map] <file>
+  runescript build [flags] --target wasm [-o <directory>] [--asset <file>] <file>
                              compile a program to a JavaScript module
                              (default output: <file> with a .js extension);
                              --source-map also writes <out.js>.map
@@ -248,17 +250,35 @@ func build(args []string, stderr io.Writer) int {
 	target := fs.String("target", "js", "")
 	out := fs.String("o", "", "")
 	sourceMap := fs.Bool("source-map", false, "")
+	var assets []string
+	fs.Func("asset", "", func(path string) error {
+		assets = append(assets, path)
+		return nil
+	})
 	if err := fs.Parse(args); err != nil || fs.NArg() != 1 || policy.err != nil {
 		usageError(stderr, policy.err)
 		return exitUsage
 	}
-	if *target != "js" {
-		fmt.Fprintf(stderr, "runescript: unknown target %q (supported: js)\n", *target)
+	if *target != "js" && *target != "wasm" {
+		fmt.Fprintf(stderr, "runescript: unknown target %q (supported: js, wasm)\n", *target)
+		return exitUsage
+	}
+	if *target == "wasm" && *sourceMap {
+		fmt.Fprintln(stderr, "runescript: --source-map requires --target js")
+		return exitUsage
+	}
+	if *target == "js" && len(assets) > 0 {
+		fmt.Fprintln(stderr, "runescript: --asset requires --target wasm")
 		return exitUsage
 	}
 	path := fs.Arg(0)
 	if *out == "" {
-		*out = strings.TrimSuffix(path, filepath.Ext(path)) + ".js"
+		*out = strings.TrimSuffix(path, filepath.Ext(path))
+		if *target == "wasm" {
+			*out += "-web"
+		} else {
+			*out += ".js"
+		}
 	}
 	if same(path, *out) {
 		fmt.Fprintf(stderr, "runescript: the output file %s would overwrite the source; choose another with -o\n", *out)
@@ -269,6 +289,21 @@ func build(args []string, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "runescript: %v\n", err)
 		return exitUsage
+	}
+	if *target == "wasm" {
+		prog, diags, err := driver.CheckWASMInput(in)
+		if len(diags) > 0 {
+			report(stderr, diags)
+			return exitCompileError
+		}
+		if err == nil {
+			err = wasmbuild.Build(prog, *out, assets)
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "runescript: %v\n", err)
+			return exitUsage
+		}
+		return 0
 	}
 	opts := jsgen.Options{Version: Version}
 	if *sourceMap {

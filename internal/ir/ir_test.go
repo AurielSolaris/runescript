@@ -60,11 +60,11 @@ protected int main() {
 `)
 	f := p.Funcs[0]
 	add := f.Body.Stmts[1].(*Assign).Value.(*Arith)
-	if add.Op != "+" || add.T.Kind != types.Unsigned || add.Y.(*IntConst).Value != 5 || add.Site.Start.String() != "4:5" {
+	if add.Op != OpAdd || add.T.Kind != types.Unsigned || add.Y.(*IntConst).Value != 5 || add.Site.Start.String() != "4:5" {
 		t.Errorf("compound assignment lowered to %+v", add)
 	}
 	inc := f.Body.Stmts[2].(*Assign).Value.(*Arith)
-	if inc.Op != "+" || inc.Y.(*IntConst).Value != 1 {
+	if inc.Op != OpAdd || inc.Y.(*IntConst).Value != 1 {
 		t.Errorf("increment lowered to %+v", inc)
 	}
 	m := p.Entry
@@ -72,7 +72,7 @@ protected int main() {
 		t.Errorf("constant -3 lowered to %+v", c)
 	}
 	neg := m.Body.Stmts[1].(*Return).Value.(*Arith)
-	if neg.Op != "-" || neg.X.(*IntConst).Value != 0 {
+	if neg.Op != OpSub || neg.X.(*IntConst).Value != 0 {
 		t.Errorf("negation lowered to %+v", neg)
 	}
 }
@@ -97,18 +97,18 @@ func TestVerifyRejects(t *testing.T) {
 	s := &Var{Name: "s", Type: types.Int, Param: true}
 	cases := map[string]Stmt{
 		"signed to unsigned":  &Decl{Var: u, Init: &Load{Var: s}},
-		"mixed signedness":    &Eval{X: &Arith{Op: "+", T: types.Int, X: &Load{Var: s}, Y: &IntConst{T: types.Uint, Value: 1}}},
+		"mixed signedness":    &Eval{X: &Arith{Op: OpAdd, T: types.Int, X: &Load{Var: s}, Y: &IntConst{T: types.Uint, Value: 1}}},
 		"constant range":      &Decl{Var: u, Init: &IntConst{T: types.Uint, Value: -1}},
 		"condition not bool":  &If{Cond: &Load{Var: s}, Then: &Block{}},
 		"assign to parameter": &Assign{Var: s, Value: &IntConst{T: types.Int}},
 		"break outside loop":  &Break{},
-		"string arithmetic":   &Eval{X: &Arith{Op: "+", T: types.StringT, X: &StringConst{}, Y: &StringConst{}}},
-		"bitwise on bools":    &Eval{X: &Bits{Op: "&", T: types.BoolT, X: &BoolConst{}, Y: &BoolConst{}}},
-		"bitwise mixed widths": &Eval{X: &Bits{Op: "|", T: types.Int, X: &Load{Var: s},
+		"string arithmetic":   &Eval{X: &Arith{Op: OpAdd, T: types.StringT, X: &StringConst{}, Y: &StringConst{}}},
+		"bitwise on bools":    &Eval{X: &Bits{Op: OpAndBits, T: types.BoolT, X: &BoolConst{}, Y: &BoolConst{}}},
+		"bitwise mixed widths": &Eval{X: &Bits{Op: OpOrBits, T: types.Int, X: &Load{Var: s},
 			Y: &IntConst{T: types.Int8, Value: 1}}},
 		"complement a string":            &Eval{X: &Complement{X: &StringConst{}}},
-		"shift a float":                  &Eval{X: &Shift{Op: "<<", X: &FloatConst{T: types.FloatT, Value: 1}, Count: &IntConst{T: types.Int}}},
-		"shift by a string":              &Eval{X: &Shift{Op: ">>", X: &Load{Var: s}, Count: &StringConst{}}},
+		"shift a float":                  &Eval{X: &Shift{Op: OpShiftLeft, X: &FloatConst{T: types.FloatT, Value: 1}, Count: &IntConst{T: types.Int}}},
+		"shift by a string":              &Eval{X: &Shift{Op: OpShiftRight, X: &Load{Var: s}, Count: &StringConst{}}},
 		"struct literal missing a field": &Eval{X: &StructLit{T: pointT, Inits: []FieldInit{{Index: 0, Value: &IntConst{T: types.Int}}}}},
 		"struct field wrong type": &Eval{X: &StructLit{T: pointT, Inits: []FieldInit{{Index: 0, Value: &StringConst{}},
 			{Index: 1, Value: &IntConst{T: types.Int}}}}},
@@ -117,12 +117,12 @@ func TestVerifyRejects(t *testing.T) {
 			{Index: 1, Value: &IntConst{T: types.Int}}}}, Index: 2}},
 		"join of an int": &Eval{X: &Concat{Parts: []Expr{&StringConst{}, &Load{Var: s}}}},
 		"wide value stored": &Decl{Var: &Var{Name: "w", Type: types.Int},
-			Init: &Arith{Op: "*", T: types.Int, X: &Load{Var: s}, Y: &Load{Var: s}, Wide: true}},
-		"wide explicit width": &Eval{X: &Compare{Op: "<", X: &Arith{Op: "*", T: types.Int64, X: &IntConst{T: types.Int64},
+			Init: &Arith{Op: OpMul, T: types.Int, X: &Load{Var: s}, Y: &Load{Var: s}, Wide: true}},
+		"wide explicit width": &Eval{X: &Compare{Op: OpLess, X: &Arith{Op: OpMul, T: types.Int64, X: &IntConst{T: types.Int64},
 			Y: &IntConst{T: types.Int64}, Wide: true}, Y: &IntConst{T: types.Int64}}},
 		"empty join":        &Eval{X: &Concat{}},
 		"surrogate char":    &Eval{X: &CharConst{Value: 0xD800}},
-		"char arithmetic":   &Eval{X: &Arith{Op: "+", T: types.CharT, X: &CharConst{Value: 'a'}, Y: &CharConst{Value: 'b'}}},
+		"char arithmetic":   &Eval{X: &Arith{Op: OpAdd, T: types.CharT, X: &CharConst{Value: 'a'}, Y: &CharConst{Value: 'b'}}},
 		"char to float":     &Eval{X: &Convert{X: &CharConst{Value: 'a'}, To: types.FloatT}},
 		"mixed array":       &Eval{X: &ArrayLit{T: types.NewArray(types.Int), Elems: []Expr{&StringConst{}}}},
 		"index a string":    &Eval{X: &Index{X: &StringConst{}, I: &IntConst{T: types.Int}}},
@@ -151,7 +151,7 @@ func TestVerifyRejects(t *testing.T) {
 		"object field of a struct":       &Eval{X: &ObjectGet{X: &StructLit{T: pointT, Inits: []FieldInit{{Index: 0, Value: &IntConst{T: types.Int}}, {Index: 1, Value: &IntConst{T: types.Int}}}}, Index: 0}},
 		"object field out of range":      &Eval{X: &ObjectGet{X: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}}, Index: 1}},
 		"set object field to wrong type": &ObjectSet{X: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}}, Index: 0, Value: &BoolConst{}},
-		"order objects": &Eval{X: &Compare{Op: "<", X: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}},
+		"order objects": &Eval{X: &Compare{Op: OpLess, X: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}},
 			Y: &ObjectNew{T: counterT, Fields: []Expr{&IntConst{T: types.Int}}}}},
 		"foreach over a non-array": &Eval{X: &Template{Root: &TElement{Tag: "ul",
 			Children: []TNode{&TForEach{Var: &Var{Name: "x", Type: types.Int}, X: &Load{Var: s}}}}}},

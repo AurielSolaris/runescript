@@ -51,7 +51,7 @@ func TestRunWatch(t *testing.T) {
 	if err := os.WriteFile(path, []byte(src("first")), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(lib, []byte("package lib;\npublic int n() { return 1; }\n"), 0o644); err != nil {
+	if err := os.WriteFile(lib, []byte("package lib;\npublic semver version = 1.0.0;\npublic int n() { return 1; }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	in, err := input(path, nil)
@@ -87,7 +87,7 @@ func TestRunWatch(t *testing.T) {
 	}
 
 	// A used file changes; then a compile error is reported, not fatal.
-	write(lib, "package lib;\npublic int n() { return 2; }\n")
+	write(lib, "package lib;\npublic semver version = 1.0.0;\npublic int n() { return 2; }\n")
 	waitFor(t, "the run after the library changed", func() bool { return strings.Contains(stdout.String(), "second 2") })
 	later = later.Add(2 * time.Second)
 	write(path, "package main;\nprotected int main() { return x; }\n")

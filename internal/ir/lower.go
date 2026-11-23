@@ -17,10 +17,10 @@ import (
 func Lower(info *checker.Info) *Program {
 	p := &Program{EntrySite: info.Entry.Name.Span, Spans: map[Stmt]Span{}}
 	l := &lowerer{info: info, prog: p, funcs: map[*ast.FuncDecl]*Func{}, syms: map[*checker.FuncSym]*Func{},
-		externs: map[*checker.ExternSym]*Extern{}, classOf: map[*ast.ClassDecl]*checker.ClassSym{},
-		methodOf: map[*ast.FuncDecl]*checker.ClassSym{}, ctors: map[*checker.ClassSym]*Func{}}
-	for _, cs := range info.Classes {
-		l.classOf[cs.Decl] = cs
+		externs: map[*checker.ExternSym]*Extern{}, aggregateOf: map[*ast.Ident]*checker.MemberSet{},
+		methodOf: map[*ast.FuncDecl]*checker.MemberSet{}, ctors: map[*checker.MemberSet]*Func{}}
+	for _, cs := range info.Members {
+		l.aggregateOf[cs.Name] = cs
 		for _, m := range cs.Methods {
 			l.methodOf[m.Def] = cs
 		}
@@ -38,18 +38,10 @@ func Lower(info *checker.Info) *Program {
 	// first (methods) or returning it (constructors).
 	for _, file := range info.Program.Files {
 		for _, d := range file.AST.Classes {
-			cs := l.classOf[d]
-			for _, md := range d.Methods {
-				if m := cs.Methods[md.Name.Name]; m != nil && m.Def == md {
-					f := l.funcDecl(md)
-					f.Pkg = file.Package.Name
-					p.Funcs = append(p.Funcs, f)
-				}
-			}
-			f := l.ctor(cs)
-			l.buildCtor(cs, f)
-			f.Pkg = file.Package.Name
-			p.Funcs = append(p.Funcs, f)
+			l.lowerMembers(l.aggregateOf[d.Name])
+		}
+		for _, d := range file.AST.Structs {
+			l.lowerMembers(l.aggregateOf[d.Name])
 		}
 	}
 	p.Entry = l.funcs[info.Entry]
@@ -70,14 +62,15 @@ type lowerer struct {
 	// found in outer, the chains of the enclosing functions.
 	scopes []map[string]*Var
 	outer  [][]map[string]*Var
+	slots  int
 
 	// Classes: the class of each declaration and method, the constructor
 	// of each class, and, while lowering a constructor's body, its object
 	// (a bare return returns it).
-	classOf  map[*ast.ClassDecl]*checker.ClassSym
-	methodOf map[*ast.FuncDecl]*checker.ClassSym
-	ctors    map[*checker.ClassSym]*Func
-	ctorThis *Var
+	aggregateOf map[*ast.Ident]*checker.MemberSet
+	methodOf    map[*ast.FuncDecl]*checker.MemberSet
+	ctors       map[*checker.MemberSet]*Func
+	ctorThis    *Var
 }
 
 func (l *lowerer) ice(format string, args ...any) {
@@ -114,15 +107,31 @@ func (l *lowerer) declOf(fd *ast.FuncDecl) *Func {
 	return f
 }
 
+func (l *lowerer) lowerMembers(cs *checker.MemberSet) {
+	for _, md := range cs.MethodDecls {
+		if m := cs.Methods[md.Name.Name]; m != nil && m.Def == md {
+			f := l.funcDecl(md)
+			f.Pkg = cs.Pkg.Name
+			l.prog.Funcs = append(l.prog.Funcs, f)
+		}
+	}
+	if cs.Ctor != nil {
+		f := l.ctor(cs)
+		l.buildCtor(cs, f)
+		f.Pkg = cs.Pkg.Name
+		l.prog.Funcs = append(l.prog.Funcs, f)
+	}
+}
+
 // ctor returns the constructor function of class cs, creating it on first
 // use; buildCtor gives it its body. It creates the object with every field at its initial value (the
 // field's initializer, in declaration order, or its zero value), runs the
 // constructor's body, and returns the object.
-func (l *lowerer) ctor(cs *checker.ClassSym) *Func {
+func (l *lowerer) ctor(cs *checker.MemberSet) *Func {
 	if f, ok := l.ctors[cs]; ok {
 		return f
 	}
-	f := &Func{Name: cs.Type.Name + "$new", Type: types.NewFunc(cs.Ctor.Type.Params, cs.Type), Span: cs.Decl.Span}
+	f := &Func{Name: cs.Type.Name + "$new", Type: types.NewFunc(cs.Ctor.Type.Params, cs.Type), Span: cs.Span}
 	if cs.Ctor.Def != nil {
 		f.Span = cs.Ctor.Def.Span
 	}
@@ -131,8 +140,8 @@ func (l *lowerer) ctor(cs *checker.ClassSym) *Func {
 }
 
 // buildCtor lowers the body of f, the constructor of cs.
-func (l *lowerer) buildCtor(cs *checker.ClassSym, f *Func) {
-	defer l.boundary()()
+func (l *lowerer) buildCtor(cs *checker.MemberSet, f *Func) {
+	defer l.boundary(f)()
 	def := cs.Ctor.Def
 	if def != nil {
 		for i, p := range def.Params {
@@ -141,7 +150,7 @@ func (l *lowerer) buildCtor(cs *checker.ClassSym, f *Func) {
 	}
 	// The field values: initializers (or zero values) in declaration
 	// order, then the constructor's prefix that sets fields before the
-	// object is used (checker.ClassSym.CtorPrefix). With such a prefix,
+	// object is used (checker.MemberSet.CtorPrefix). With such a prefix,
 	// each value is computed into a hidden variable first, in that order.
 	body := &Block{}
 	values := make([]Expr, len(cs.Fields))
@@ -175,12 +184,25 @@ func (l *lowerer) buildCtor(cs *checker.ClassSym, f *Func) {
 		rest = def.Body.Stmts[cs.CtorPrefix:]
 	}
 	this := l.declare("this", cs.Type, false)
-	create := &Decl{Var: this, Init: &ObjectNew{T: cs.Type, Fields: values}}
-	l.prog.Spans[create] = cs.Decl.Name.Span
+	var init Expr = &ObjectNew{T: cs.Type, Fields: values}
+	if cs.Type.Kind == types.Struct {
+		fields := make([]FieldInit, len(values))
+		for i, value := range values {
+			fields[i] = FieldInit{Index: i, Value: value}
+		}
+		init = &StructLit{T: cs.Type, Inits: fields}
+	}
+	create := &Decl{Var: this, Init: init}
+	l.prog.Spans[create] = cs.Name.Span
 	body.Stmts = append(body.Stmts, create)
 	if def != nil {
 		l.ctorThis = this
-		body.Stmts = append(body.Stmts, l.block(&ast.Block{Stmts: rest, Span: def.Body.Span}))
+		block := l.block(&ast.Block{Stmts: rest, Span: def.Body.Span})
+		if cs.Type.Kind == types.Struct {
+			body.Stmts = append(body.Stmts, &ConstructorBody{Body: block})
+		} else {
+			body.Stmts = append(body.Stmts, block)
+		}
 		l.ctorThis = nil
 	}
 	body.Stmts = append(body.Stmts, &Return{Value: &Load{Var: this}})
@@ -191,7 +213,7 @@ func (l *lowerer) buildCtor(cs *checker.ClassSym, f *Func) {
 func (l *lowerer) funcDecl(fd *ast.FuncDecl) *Func {
 	f := l.declOf(fd)
 	var params []*types.Type
-	defer l.boundary()()
+	defer l.boundary(f)()
 	if cs := l.methodOf[fd]; cs != nil { // a method: the object comes first
 		f.Params = append(f.Params, l.declare("this", cs.Type, true))
 		params = append(params, cs.Type)
@@ -209,7 +231,7 @@ func (l *lowerer) funcDecl(fd *ast.FuncDecl) *Func {
 func (l *lowerer) lambda(e *ast.LambdaExpr) *Func {
 	t := l.concrete(e, l.info.Types[e])
 	f := &Func{Type: t, Span: e.Span}
-	defer l.boundary()()
+	defer l.boundary(f)()
 	for i, p := range e.Params {
 		f.Params = append(f.Params, l.declare(p.Name.Name, t.Params[i], true))
 	}
@@ -257,19 +279,22 @@ func (l *lowerer) typeOf(ref *ast.TypeRef) *types.Type {
 	return t
 }
 
-func (l *lowerer) boundary() (restore func()) {
-	saved, this := l.scopes, l.ctorThis
+func (l *lowerer) boundary(f *Func) (restore func()) {
+	saved, this, slots := l.scopes, l.ctorThis, l.slots
 	l.outer = append(l.outer, saved)
 	l.scopes = []map[string]*Var{{}}
 	l.ctorThis = nil // a return in a nested function returns from it
+	l.slots = 0
 	return func() {
-		l.scopes, l.ctorThis = saved, this
+		f.FrameSlots = l.slots
+		l.scopes, l.ctorThis, l.slots = saved, this, slots
 		l.outer = l.outer[:len(l.outer)-1]
 	}
 }
 
 func (l *lowerer) declare(name string, t *types.Type, param bool) *Var {
-	v := &Var{Name: name, Type: t, Param: param}
+	v := &Var{Name: name, Type: t, Param: param, Slot: l.slots}
+	l.slots++
 	l.scopes[len(l.scopes)-1][name] = v
 	return v
 }
@@ -348,11 +373,14 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 	case *ast.IncDecStmt:
 		v := l.lookup(s.Target.Name)
 		one := &IntConst{T: v.Type, Value: 1}
-		return &Assign{Var: v, Value: &Arith{Op: s.Op[:1], T: v.Type, X: &Load{Var: v}, Y: one, Site: s.Span}}
+		return &Assign{Var: v, Value: &Arith{Op: operator(s.Op[:1]), T: v.Type, X: &Load{Var: v}, Y: one, Site: s.Span}}
 	case *ast.ExprStmt:
 		return &Eval{X: l.expr(s.Call)}
 	case *ast.ReturnStmt:
 		if s.Value == nil && l.ctorThis != nil {
+			if l.ctorThis.Type.Kind == types.Struct {
+				return &ConstructorReturn{}
+			}
 			return &Return{Value: &Load{Var: l.ctorThis}} // a constructor returns its object
 		}
 		if s.Value == nil {
@@ -416,6 +444,9 @@ func (l *lowerer) stmt(s ast.Stmt) Stmt {
 // p = WithField(p, a, WithField(p.a, b, v)).
 func (l *lowerer) store(target ast.Expr, useOld bool, update func(old Expr) Expr, site Span) Stmt {
 	switch t := unparenAST(target).(type) {
+	case *ast.ThisExpr:
+		v := l.lookup("this")
+		return &Assign{Var: v, Value: update(&Load{Var: v})}
 	case *ast.Ident:
 		v := l.lookup(t.Name)
 		return &Assign{Var: v, Value: update(&Load{Var: v})}
@@ -481,6 +512,9 @@ func (l *lowerer) concrete(e ast.Expr, t *types.Type) *types.Type {
 }
 
 func (l *lowerer) expr(e ast.Expr) Expr {
+	if v, ok := l.info.StringConsts[e]; ok {
+		return &StringConst{Value: v, Span: e.NodeSpan()}
+	}
 	if v, ok := l.info.Consts[e]; ok {
 		return &IntConst{T: l.concrete(e, l.info.Types[e]), Value: v}
 	}
@@ -495,12 +529,12 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 	case *ast.ThisExpr:
 		return &Load{Var: l.lookup("this")}
 	case *ast.NewExpr:
-		if t := l.concrete(e, l.info.Types[e]); t.Kind == types.Class {
+		if t := l.concrete(e, l.info.Types[e]); t.Kind == types.Class || t.Kind == types.Struct {
 			args := make([]Expr, len(e.Args))
 			for i, a := range e.Args {
 				args[i] = l.expr(a)
 			}
-			return &CallFunc{Func: l.ctor(l.info.Classes[t]), Args: args, Site: e.Span}
+			return &CallFunc{Func: l.ctor(l.info.Members[t]), Args: args, Site: e.Span}
 		}
 		n := &NewError{T: l.concrete(e, l.info.Types[e])}
 		if len(e.Args) > 0 {
@@ -591,9 +625,9 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 		x, y := l.expr(e.X), l.expr(e.Y)
 		switch e.Op {
 		case "&&", "||":
-			return &Logic{Op: e.Op, X: x, Y: y}
+			return &Logic{Op: operator(e.Op), X: x, Y: y}
 		case "==", "!=", "<", "<=", ">", ">=":
-			return &Compare{Op: e.Op, X: widen(x), Y: widen(y)}
+			return &Compare{Op: operator(e.Op), X: widen(x), Y: widen(y)}
 		}
 		return binary(e.Op, l.concrete(e, l.info.Types[e]), x, y, e.OpPos)
 	}
@@ -606,9 +640,9 @@ func (l *lowerer) expr(e ast.Expr) Expr {
 func binary(op string, t *types.Type, x, y Expr, site Span) Expr {
 	switch op {
 	case "&", "|", "^":
-		return &Bits{Op: op, T: t, X: x, Y: y}
+		return &Bits{Op: operator(op), T: t, X: x, Y: y}
 	case "<<", ">>":
-		return &Shift{Op: op, X: x, Count: y, Site: site}
+		return &Shift{Op: operator(op), X: x, Count: y, Site: site}
 	case "+":
 		if t.Kind == types.String {
 			return concat(x, y)
@@ -617,7 +651,7 @@ func binary(op string, t *types.Type, x, y Expr, site Span) Expr {
 	if generic(t) {
 		x, y = widen(x), widen(y)
 	}
-	return &Arith{Op: op, T: t, X: x, Y: y, Site: site}
+	return &Arith{Op: operator(op), T: t, X: x, Y: y, Site: site}
 }
 
 // generic reports whether t is the generic int or uint, whose
@@ -677,6 +711,9 @@ func (l *lowerer) call(e *ast.CallExpr) Expr {
 		}
 		if mc.Method != nil {
 			return &CallFunc{Func: l.fn(mc.Method), Args: args, Site: e.Span}
+		}
+		if args[0].Type().Kind == types.Struct {
+			return &CallValue{Callee: &GetField{X: args[0], Index: mc.Field}, Args: args[1:], Site: e.Span}
 		}
 		return &CallValue{Callee: &ObjectGet{X: args[0], Index: mc.Field}, Args: args[1:], Site: e.Span}
 	}
@@ -865,8 +902,8 @@ func (l *lowerer) forEach(s *ast.ForEachStmt) Stmt {
 	get := &Decl{Var: elem, Init: &Index{X: &Load{Var: arr}, I: &Load{Var: i}, Site: s.Span}}
 	loop := &For{
 		Init: &Decl{Var: i, Init: &IntConst{T: types.Int, Value: 0}},
-		Cond: &Compare{Op: "<", X: &Load{Var: i}, Y: &ArrayLen{X: &Load{Var: arr}}},
-		Post: &Assign{Var: i, Value: &Arith{Op: "+", T: types.Int, X: &Load{Var: i}, Y: &IntConst{T: types.Int, Value: 1}, Site: s.Span}},
+		Cond: &Compare{Op: OpLess, X: &Load{Var: i}, Y: &ArrayLen{X: &Load{Var: arr}}},
+		Post: &Assign{Var: i, Value: &Arith{Op: OpAdd, T: types.Int, X: &Load{Var: i}, Y: &IntConst{T: types.Int, Value: 1}, Site: s.Span}},
 		Body: &Block{Stmts: []Stmt{get, l.block(s.Body)}},
 	}
 	init := &Decl{Var: arr, Init: x}
