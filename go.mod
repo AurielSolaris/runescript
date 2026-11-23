@@ -5,6 +5,8 @@ go 1.25
 require (
 	github.com/gen2brain/raylib-go/raygui v0.63.0
 	github.com/gen2brain/raylib-go/raylib v0.63.0
+	github.com/yuin/goldmark v1.8.7
+	go.yaml.in/yaml/v3 v3.0.6
 )
 
 require (

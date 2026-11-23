@@ -1,0 +1,15 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "../Layout.astro";
+import site from "../site.json";
+
+const { title, description } = site.docs;
+const chapters = (await getCollection("docs")).sort((a, b) =>
+  a.data.order - b.data.order || a.id.localeCompare(b.id));
+---
+<Layout {title} {description}>
+  <p>{description}</p>
+  <ol>{chapters.map(({ id, data }) => (
+    <li><a href={`/docs/${id}`}>{data.title}</a> — {data.summary}</li>
+  ))}</ol>
+</Layout>

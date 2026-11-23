@@ -32,6 +32,7 @@ commands:
   diag      diagnostics: paired invalid programs, first-error location,
             error count, and both compilers' messages side by side
   web       two-page payload sizes and DOM mount timings vs hand-written JavaScript
+  web-docs  static English Markdown build time and payload vs Astro
 
 A benchmark is selected by its directory name, ID (e.g. A03), or name.
 With none given, every benchmark in the command's category is used.
@@ -48,14 +49,15 @@ func cli(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	cmds := map[string]func(*flag.FlagSet, []string, io.Writer) error{
-		"list":    cmdList,
-		"verify":  cmdVerify,
-		"bless":   cmdBless,
-		"run":     cmdRun,
-		"size":    cmdSize,
-		"compile": cmdCompile,
-		"diag":    cmdDiag,
-		"web":     cmdWeb,
+		"list":     cmdList,
+		"verify":   cmdVerify,
+		"bless":    cmdBless,
+		"run":      cmdRun,
+		"size":     cmdSize,
+		"compile":  cmdCompile,
+		"diag":     cmdDiag,
+		"web":      cmdWeb,
+		"web-docs": cmdWebDocs,
 	}
 	run, ok := cmds[args[0]]
 	if !ok {

@@ -31,3 +31,30 @@ func cmdWeb(fs *flag.FlagSet, args []string, w io.Writer) error {
 	fmt.Fprint(w, string(out))
 	return err
 }
+
+func cmdWebDocs(fs *flag.FlagSet, args []string, w io.Writer) error {
+	runs := fs.Int("runs", 9, "number of timed samples per implementation")
+	astro := fs.String("astro", "../runescript.site", "project directory with Astro installed")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || *runs < 1 {
+		return fmt.Errorf("web-docs needs positive -runs and takes no benchmark names")
+	}
+	project, err := filepath.Abs(*astro)
+	if err != nil {
+		return err
+	}
+	tc, err := setup(true)
+	if err != nil {
+		return err
+	}
+	defer tc.Close()
+	fmt.Fprintln(w, tc.RSVersion)
+	cmd := exec.Command(tc.Node, filepath.Join(tc.BenchRoot, "tools", "static-docs.mjs"),
+		tc.RuneScript, tc.Work, project, strconv.Itoa(*runs))
+	cmd.Dir = tc.Root
+	out, err := cmd.CombinedOutput()
+	fmt.Fprint(w, string(out))
+	return err
+}

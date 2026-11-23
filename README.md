@@ -244,6 +244,20 @@ go test ./tests -run '^$' -bench 'BenchmarkCompilerStages' -benchmem -count=5
 
 ### Multi-page websites
 
+The [static docs example](examples/static-docs/) builds an English docs index
+and chapter. Both RuneScript and Astro used the same Markdown and shared
+stylesheet, with syntax highlighting disabled and no browser JavaScript.
+
+| Builder | Median build (ms) | HTML + CSS (bytes) | Gzip (bytes) |
+| --- | ---: | ---: | ---: |
+| RuneScript | 37.7 | 2,212 | 1,172 |
+| Astro 7.3.8 | 3,291.9 | 2,028 | 1,126 |
+
+Measured on Windows x64 with Go 1.25.11 and Node.js 24.16.0. Nine timed
+builds per tool include process startup and writes to fresh output
+directories. Run `go run ./bench/rsbench web-docs` to reproduce this
+[two-page comparison](bench/README.md#static-markdown-benchmark).
+
 Run `go run ./bench/rsbench web` to build the two-page example and compare
 its payload and mount time with hand-written JavaScript. The two-page
 payload counts identical runtime and CSS assets once. Mount timings use

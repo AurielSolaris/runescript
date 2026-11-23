@@ -1,0 +1,16 @@
+:root {
+  color-scheme: light dark;
+  font: 1rem/1.6 system-ui, sans-serif;
+}
+
+body {
+  max-width: 72ch;
+  margin: 2rem auto;
+  padding-inline: 1rem;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 1rem;
+  background: color-mix(in srgb, CanvasText 8%, Canvas);
+}

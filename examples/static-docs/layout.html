@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <meta name="description" content="{{.Description}}">
+  <link rel="stylesheet" href="/docs.css">
+</head>
+<body>
+  <a href="#main">Skip to content</a>
+  <nav aria-label="Documentation"><a href="/docs">RuneScript docs</a></nav>
+  <main id="main">
+    <h1>{{.Title}}</h1>
+    {{if .IsIndex}}
+      <p>{{.Description}}</p>
+      <ol>{{range .Chapters}}
+        <li><a href="{{.URL}}">{{.Title}}</a> — {{.Summary}}</li>
+      {{end}}</ol>
+    {{else}}
+      {{if .Headings}}<nav aria-label="On this page"><ul>{{range .Headings}}
+        <li><a href="#{{.ID}}">{{.Text}}</a></li>
+      {{end}}</ul></nav>{{end}}
+      <article>{{.Content}}</article>
+    {{end}}
+  </main>
+</body>
+</html>

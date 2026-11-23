@@ -1,0 +1,8 @@
+{
+  "docs": {
+    "content": "content",
+    "layout": "layout.html",
+    "title": "RuneScript documentation",
+    "description": "Learn to install RuneScript and run your first program."
+  }
+}

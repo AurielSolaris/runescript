@@ -77,6 +77,7 @@ go run ./bench/rsbench size                     # generated JS: raw, minified, g
 go run ./bench/rsbench compile [-large]         # runescript check/build vs tsc on generated projects
 go run ./bench/rsbench diag                     # the same mistakes in both languages
 go run ./bench/rsbench web                      # payload and DOM mounts vs hand-written JS
+go run ./bench/rsbench web-docs                 # static English Markdown site vs Astro
 go run ./bench/rsbench bless [benchmark...]     # record expected/test.out from the interpreter
 ```
 
@@ -106,6 +107,23 @@ It needs Go and Node.js on PATH.
 - The defaults are nine samples of 100,000 mounts per implementation.
   Use `-runs` and `-iterations` to change the sample sizes. The benchmark
   prints payload and timing results to stdout.
+
+## Static Markdown benchmark
+
+`go run ./bench/rsbench web-docs` compares the
+[English docs example](../examples/static-docs/) with an Astro fixture
+using the same Markdown, typed front matter, routes, heading links,
+and shared stylesheet. Both builds emit HTML and CSS without JavaScript.
+Syntax highlighting is disabled in this comparison.
+
+By default the command uses the Astro installation in
+`../runescript.site/node_modules`. Pass `-astro /path/to/astro-project` to
+use another installation and `-runs 9` to set the sample count.
+The benchmark alternates build order, discards two warm-ups per builder,
+and includes CLI startup and output writes. Building the RuneScript
+executable and installing packages are outside the timed samples.
+Sizes sum both HTML files and the shared CSS once, with gzip applied
+to each file individually at level 9.
 
 ## Layout
 

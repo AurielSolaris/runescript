@@ -66,6 +66,9 @@ with `tests/testdata/web/<name>.out`.
 RuneScript entry points. They share a runtime module and can share
 extracted CSS. [Web build guide](../docs/guide/11-javascript.md#build-a-multi-page-site)
 
+[`static-docs/`](static-docs/) builds an English docs index and chapter from
+Markdown, with a shared HTML layout and stylesheet.
+
 ## Native games
 
 The graphics-enabled CLI runs these examples in a desktop window.

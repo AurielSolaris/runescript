@@ -29,6 +29,7 @@ const (
 
 type manifest struct {
 	Pages map[string]string `json:"pages"`
+	Docs  *docsConfig       `json:"docs"`
 }
 
 type Options struct {
@@ -109,6 +110,11 @@ func Build(root, out string, opts Options) ([]*diagnostics.Diagnostic, error) {
 			return ds, err
 		}
 	}
+	if config.Docs != nil {
+		if err := buildDocs(root, stage, *config.Docs); err != nil {
+			return nil, err
+		}
+	}
 	return nil, os.Rename(stage, out)
 }
 
@@ -133,8 +139,8 @@ func readManifest(name string) (manifest, error) {
 	if err := d.Decode(new(json.RawMessage)); err != io.EOF {
 		return m, fmt.Errorf("%s: expected a single JSON object", name)
 	}
-	if len(m.Pages) == 0 {
-		return m, fmt.Errorf("%s: configure at least one page", name)
+	if len(m.Pages) == 0 && m.Docs == nil {
+		return m, fmt.Errorf("%s: configure pages or a docs collection", name)
 	}
 	return m, nil
 }
