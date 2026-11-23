@@ -38,7 +38,7 @@ irm https://raw.githubusercontent.com/AurielSolaris/runescript/main/install.ps1 
 
 ```text
 $ runescript version
-runescript 0.6.0-dev (commit 0fdbc61, go1.25.11 linux/amd64)
+runescript 0.7.0-dev (commit …, go1.25.11 linux/amd64)
 ```
 
 রিপোজিটরির একটি ক্লোন থেকে, সর্বশেষ সংস্করণের বদলে সেই সোর্স তৈরি করতে সেখানেই

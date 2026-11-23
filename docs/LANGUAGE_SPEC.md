@@ -1,6 +1,6 @@
 # RuneScript Language Specification
 
-**Version 0.6 (draft, in progress).** This is the formal companion to `CLAUDE.md`. If
+**Version 0.7 (draft, in progress).** This is the formal companion to `CLAUDE.md`. If
 the two disagree, the disagreement is flagged in §11 rather than silently
 resolved.
 

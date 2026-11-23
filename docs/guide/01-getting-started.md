@@ -34,7 +34,7 @@ Open a new terminal afterwards, then:
 
 ```text
 $ runescript version
-runescript 0.6.0-dev (commit 0fdbc61, go1.25.11 linux/amd64)
+runescript 0.7.0-dev (commit …, go1.25.11 linux/amd64)
 ```
 
 From a clone of the repository, run the installer there to build that

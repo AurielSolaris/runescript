@@ -189,7 +189,7 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [x] Literal forms: hex `0xFF`, binary `0b1010`, octal `0o17`, `_` separators (2026-10-17)
 - [x] `std:math`: Go's `math` on float64, int helpers, constants; transcendental functions from one shared implementation (`internal/fmath`), bit-identical on both targets (2026-10-17)
 
-## v0.6: Aggregates (current)
+## v0.6: Aggregates
 
 - [x] `Array<T>`: literals, bounds-checked indexing, `length`, `push`, `pop`, reference semantics (2026-10-16, details provisional)
 - [x] `for each (T x in a)` loops, nested arrays (`Array<Array<T>>`), and the methods `insert`, `removeAt`, `slice`, `indexOf`, `contains`, `reverse`, `sort()`, `sort(less)` (stable, same comparator calls on both targets) (2026-10-20)
@@ -229,7 +229,7 @@ with paths relative to the current working directory. (`std:` works since v0.2.)
 - [ ] Workspace-wide rename for exported symbols
 - [ ] Publish the VS Code extension (Marketplace, Open VSX) and the Emacs mode (MELPA)
 
-## v0.7: Graphics package (native window, drawing, input, UI)
+## v0.7: Graphics package (current)
 
 Games were AS3's main use, so graphics are a first-class goal. RuneScript
 uses the same graphics API on desktop and in the browser with raylib's

@@ -1,4 +1,4 @@
-# RuneScript Guide (v0.6)
+# RuneScript Guide (v0.7)
 
 A practical tour of the RuneScript features that exist **today**. Every
 complete program in these pages is compiled by the test suite

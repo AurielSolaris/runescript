@@ -37,7 +37,7 @@ protected int main() {
 }
 ```
 
-## Status: v0.6 in progress (early development)
+## Status: v0.7 in progress (early development)
 
 **Works now**, and is covered by tests:
 
